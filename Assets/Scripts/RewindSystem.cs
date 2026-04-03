@@ -240,8 +240,8 @@ public class RewindSystem : MonoBehaviour
     // 240° behind + 120° ahead = 360° = exactly one lap, no physical overlap.
     // Trail color ramp: bright near ball → dim far away.
     // Each segment gets a uniform tint based on its distance from the view angle.
-    private static readonly Color TRAIL_COLOR_NEAR = new Color(0.15f, 1.0f, 0.7f, 0.9f);
-    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.0f, 0.3f, 0.4f, 0.15f);
+    private static readonly Color TRAIL_COLOR_NEAR = new Color(1.0f, 0.7f, 0.2f, 0.9f);   // Warm gold near ball
+    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.5f, 0.15f, 0.3f, 0.15f); // Fades to warm purple
 
     void UpdateSegmentVisibility(float viewAngle, float aheadMargin = 5f)
     {

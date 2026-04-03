@@ -43,32 +43,49 @@ public class SceneSetup : MonoBehaviour
     Material obstacleTopMaterial;
     Material obstacleShadowMaterial;
     Material ballMaterial;
-    Material railMaterial;
+    Material railMaterialLeft;
+    Material railMaterialRight;
     Material trailMaterial;
 
     void CreateMaterials()
     {
-        // Track: dark charcoal, matte — dark mode
-        trackMaterial = new Material(Shader.Find("Standard"));
-        trackMaterial.color = new Color(0.18f, 0.18f, 0.2f);
-        trackMaterial.SetFloat("_Glossiness", 0.05f);
-        trackMaterial.SetFloat("_Metallic", 0.0f);
+        // Track: dark base with glowing grid lines
+        trackMaterial = new Material(Shader.Find("Loopfall/TrackGrid"));
+        trackMaterial.SetColor("_BaseColor", new Color(0.1f, 0.1f, 0.12f));
+        trackMaterial.SetColor("_GridColor1", new Color(0.0f, 0.45f, 0.7f, 0.55f));   // Cyan major
+        trackMaterial.SetColor("_GridColor2", new Color(0.8f, 0.15f, 0.5f, 0.5f));   // Pink minor (boosted alpha)
+        trackMaterial.SetColor("_GridColor3", new Color(0.85f, 0.65f, 0.1f, 0.35f)); // Warm yellow accent (boosted)
+        trackMaterial.SetFloat("_MajorGridU", 16);
+        trackMaterial.SetFloat("_MajorGridV", 8);
+        trackMaterial.SetFloat("_MinorGridU", 4);
+        trackMaterial.SetFloat("_MinorGridV", 2);
+        trackMaterial.SetFloat("_MajorLineWidth", 0.012f);
+        trackMaterial.SetFloat("_MinorLineWidth", 0.005f);
+        trackMaterial.SetFloat("_GlowIntensity", 1.0f);
+        trackMaterial.SetFloat("_GlowFalloff", 8f);
+        trackMaterial.SetFloat("_PulseSpeed", 0.4f);
+        trackMaterial.SetFloat("_PulseAmount", 0.12f);
+        trackMaterial.SetFloat("_Glossiness", 0.25f);
+        trackMaterial.SetFloat("_Metallic", 0.05f);
+        trackMaterial.SetFloat("_DepthFadeStart", 2.0f);
+        trackMaterial.SetFloat("_DepthFadeEnd", 18.0f);
+        trackMaterial.SetColor("_FarColor", new Color(0.2f, 0.05f, 0.3f, 0.25f)); // Muted purple at distance
 
-        // Obstacle front: vivid red-orange, slight glow feel against dark
+        // Obstacle front: warm amber-orange — contrasts against blue grid
         obstacleFrontMaterial = new Material(Shader.Find("Standard"));
-        obstacleFrontMaterial.color = new Color(0.95f, 0.15f, 0.1f);
-        obstacleFrontMaterial.SetFloat("_Glossiness", 0.15f);
-        obstacleFrontMaterial.SetFloat("_Metallic", 0.0f);
+        obstacleFrontMaterial.color = new Color(1.0f, 0.55f, 0.1f);
+        obstacleFrontMaterial.SetFloat("_Glossiness", 0.85f);
+        obstacleFrontMaterial.SetFloat("_Metallic", 0.5f);
         obstacleFrontMaterial.EnableKeyword("_EMISSION");
-        obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.3f, 0.03f, 0.02f));
+        obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.5f, 0.2f, 0.03f));
 
-        // Obstacle top: brighter red
+        // Obstacle top: bright gold — catches light, brightest element on track
         obstacleTopMaterial = new Material(Shader.Find("Standard"));
-        obstacleTopMaterial.color = new Color(1.0f, 0.25f, 0.15f);
-        obstacleTopMaterial.SetFloat("_Glossiness", 0.15f);
-        obstacleTopMaterial.SetFloat("_Metallic", 0.0f);
+        obstacleTopMaterial.color = new Color(1.0f, 0.7f, 0.2f);
+        obstacleTopMaterial.SetFloat("_Glossiness", 0.9f);
+        obstacleTopMaterial.SetFloat("_Metallic", 0.4f);
         obstacleTopMaterial.EnableKeyword("_EMISSION");
-        obstacleTopMaterial.SetColor("_EmissionColor", new Color(0.25f, 0.04f, 0.02f));
+        obstacleTopMaterial.SetColor("_EmissionColor", new Color(0.55f, 0.3f, 0.05f));
 
         // Obstacle shadow: double-sided, dark strip on track surface
         obstacleShadowMaterial = new Material(Shader.Find("Standard"));
@@ -88,19 +105,29 @@ public class SceneSetup : MonoBehaviour
         // Ball: bright with metallic sheen — visible against dark track
         ballMaterial = new Material(Shader.Find("Standard"));
         ballMaterial.color = new Color(0.95f, 0.95f, 1.0f);
-        ballMaterial.SetFloat("_Glossiness", 0.55f);
-        ballMaterial.SetFloat("_Metallic", 0.3f);
+        ballMaterial.SetFloat("_Glossiness", 0.9f);
+        ballMaterial.SetFloat("_Metallic", 0.2f);
         ballMaterial.EnableKeyword("_EMISSION");
-        ballMaterial.SetColor("_EmissionColor", new Color(0.15f, 0.15f, 0.2f));
+        ballMaterial.SetColor("_EmissionColor", new Color(0.4f, 0.4f, 0.5f));
 
         // Rail: glowing red edge, double-sided so visible from inside torus
-        railMaterial = new Material(Shader.Find("Standard"));
-        railMaterial.color = new Color(0.9f, 0.05f, 0.08f);
-        railMaterial.SetFloat("_Glossiness", 0.1f);
-        railMaterial.SetFloat("_Metallic", 0.0f);
-        railMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-        railMaterial.EnableKeyword("_EMISSION");
-        railMaterial.SetColor("_EmissionColor", new Color(0.4f, 0.02f, 0.02f));
+        // Edge rails: distance-fading opaque tubes
+        Shader railShader = Shader.Find("Loopfall/Rail");
+        railMaterialLeft = new Material(railShader);
+        railMaterialLeft.SetColor("_NearColor", new Color(0.95f, 0.1f, 0.55f));      // Magenta near
+        railMaterialLeft.SetColor("_FarColor", new Color(0.25f, 0.05f, 0.35f));       // Deep purple far
+        railMaterialLeft.SetColor("_NearEmission", new Color(0.55f, 0.03f, 0.3f));
+        railMaterialLeft.SetColor("_FarEmission", new Color(0.08f, 0.01f, 0.12f));
+        railMaterialLeft.SetFloat("_Glossiness", 0.7f);
+        railMaterialLeft.SetFloat("_Metallic", 0.3f);
+
+        railMaterialRight = new Material(railShader);
+        railMaterialRight.SetColor("_NearColor", new Color(0.2f, 0.9f, 0.4f));       // Green near
+        railMaterialRight.SetColor("_FarColor", new Color(0.05f, 0.2f, 0.35f));       // Teal-blue far
+        railMaterialRight.SetColor("_NearEmission", new Color(0.05f, 0.45f, 0.15f));
+        railMaterialRight.SetColor("_FarEmission", new Color(0.01f, 0.06f, 0.12f));
+        railMaterialRight.SetFloat("_Glossiness", 0.7f);
+        railMaterialRight.SetFloat("_Metallic", 0.3f);
 
         // Trail: additive glow — color/alpha set per-segment at runtime
         trailMaterial = new Material(Shader.Find("Loopfall/TrailGlow"));
@@ -156,11 +183,11 @@ public class SceneSetup : MonoBehaviour
         float minorAngleLeft = -Mathf.PI / 2.0f;
         float minorAngleRight = Mathf.PI / 2.0f;
 
-        CreateSingleRail(torusParent, minorAngleLeft);
-        CreateSingleRail(torusParent, minorAngleRight);
+        CreateSingleRail(torusParent, minorAngleLeft, railMaterialLeft);
+        CreateSingleRail(torusParent, minorAngleRight, railMaterialRight);
     }
 
-    void CreateSingleRail(GameObject parent, float minorAngle)
+    void CreateSingleRail(GameObject parent, float minorAngle, Material mat)
     {
         GameObject railObj = new GameObject("torusObstacle"); // Named so collision = death
         railObj.transform.parent = parent.transform;
@@ -171,7 +198,7 @@ public class SceneSetup : MonoBehaviour
         mf.mesh = railMesh;
 
         MeshRenderer mr = railObj.AddComponent<MeshRenderer>();
-        mr.material = railMaterial;
+        mr.material = mat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         MeshCollider mc = railObj.AddComponent<MeshCollider>();
@@ -439,11 +466,16 @@ public class SceneSetup : MonoBehaviour
         var tris = new System.Collections.Generic.List<int>();
         var normals = new System.Collections.Generic.List<Vector3>();
         var colors = new System.Collections.Generic.List<Color>();
+        var uvs = new System.Collections.Generic.List<Vector2>();
 
         for (int i = 0; i < majorSegments; i++)
         {
             float ma0 = ((float)i / majorSegments) * Mathf.PI * 2;
             float ma1 = ((float)(i + 1) / majorSegments) * Mathf.PI * 2;
+
+            // UV: U = major angle normalized to 0..1
+            float u0 = (float)i / majorSegments;
+            float u1 = (float)(i + 1) / majorSegments;
 
             for (int j = 0; j < minorSegments; j++)
             {
@@ -453,10 +485,14 @@ public class SceneSetup : MonoBehaviour
                 float mi0 = minStart + ((float)j / minorSegments) * minRange;
                 float mi1 = minStart + ((float)(j + 1) / minorSegments) * minRange;
 
-                Vector3 v00 = TorusPoint(ma0, mi0);
-                Vector3 v10 = TorusPoint(ma1, mi0);
-                Vector3 v01 = TorusPoint(ma0, mi1);
-                Vector3 v11 = TorusPoint(ma1, mi1);
+                // UV: V = minor angle normalized to 0..1
+                float v0 = (float)j / minorSegments;
+                float v1 = (float)(j + 1) / minorSegments;
+
+                Vector3 p00 = TorusPoint(ma0, mi0);
+                Vector3 p10 = TorusPoint(ma1, mi0);
+                Vector3 p01 = TorusPoint(ma0, mi1);
+                Vector3 p11 = TorusPoint(ma1, mi1);
 
                 // Per-tile color variation — visible shade differences
                 float variation = Random.Range(-0.15f, 0.15f);
@@ -465,33 +501,37 @@ public class SceneSetup : MonoBehaviour
                 Color tileColor = new Color(1f + variation + tintR, 1f + variation, 1f + variation + tintB);
 
                 // Flat shading: per-face normals
-                Vector3 faceNormal1 = Vector3.Cross(v10 - v00, v11 - v00).normalized;
-                Vector3 faceNormal2 = Vector3.Cross(v11 - v00, v01 - v00).normalized;
+                Vector3 faceNormal1 = Vector3.Cross(p10 - p00, p11 - p00).normalized;
+                Vector3 faceNormal2 = Vector3.Cross(p11 - p00, p01 - p00).normalized;
 
                 // Front side
                 int idx = verts.Count;
-                verts.Add(v00); verts.Add(v10); verts.Add(v11);
+                verts.Add(p00); verts.Add(p10); verts.Add(p11);
                 normals.Add(faceNormal1); normals.Add(faceNormal1); normals.Add(faceNormal1);
                 colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u1, v0)); uvs.Add(new Vector2(u1, v1));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
 
                 idx = verts.Count;
-                verts.Add(v00); verts.Add(v11); verts.Add(v01);
+                verts.Add(p00); verts.Add(p11); verts.Add(p01);
                 normals.Add(faceNormal2); normals.Add(faceNormal2); normals.Add(faceNormal2);
                 colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u1, v1)); uvs.Add(new Vector2(u0, v1));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
 
                 // Back side (inward facing) — reversed winding for double-sided collision
                 idx = verts.Count;
-                verts.Add(v00); verts.Add(v11); verts.Add(v10);
+                verts.Add(p00); verts.Add(p11); verts.Add(p10);
                 normals.Add(-faceNormal1); normals.Add(-faceNormal1); normals.Add(-faceNormal1);
                 colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u1, v1)); uvs.Add(new Vector2(u1, v0));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
 
                 idx = verts.Count;
-                verts.Add(v00); verts.Add(v01); verts.Add(v11);
+                verts.Add(p00); verts.Add(p01); verts.Add(p11);
                 normals.Add(-faceNormal2); normals.Add(-faceNormal2); normals.Add(-faceNormal2);
                 colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u0, v1)); uvs.Add(new Vector2(u1, v1));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
             }
         }
@@ -504,6 +544,7 @@ public class SceneSetup : MonoBehaviour
         mesh.triangles = tris.ToArray();
         mesh.normals = normals.ToArray();
         mesh.colors = colors.ToArray();
+        mesh.uv = uvs.ToArray();
         return mesh;
     }
 

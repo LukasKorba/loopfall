@@ -204,7 +204,7 @@ public class Obstacle
             float y = Mathf.Sin(from);
             float z = Mathf.Cos(from);
 
-            Vector3 upperVertex = new Vector3(0.0f, -10.0f - (y * 0.945f), -z * 0.945f);
+            Vector3 upperVertex = new Vector3(0.0f, -10.0f - (y * 0.92f), -z * 0.92f);
             vertices.Add(upperVertex);
             Vector3 bottomVertex = new Vector3(0.0f, -10.0f - y, -z);
             vertices.Add(bottomVertex);
@@ -224,7 +224,7 @@ public class Obstacle
             UVs.Add(new Vector2(0.0f, 0.0f));
 
             // CEIL
-            Vector3 farVertex = new Vector3(sizeofObstacle, -10.0f - (y * 0.922f), -z * 0.922f);
+            Vector3 farVertex = new Vector3(sizeofObstacle, -10.0f - (y * 0.895f), -z * 0.895f);
             verticesHelper.Add(farVertex);
             verticesHelper.Add(upperVertex);
 
