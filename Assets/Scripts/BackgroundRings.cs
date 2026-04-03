@@ -2,134 +2,177 @@ using UnityEngine;
 
 public class BackgroundRings : MonoBehaviour
 {
-    private Transform[] rings;
-    private Vector3[] rotationSpeeds;
+    private Transform[] stars;
+    private Vector3[] starBasePositions;
+    private float[] starTwinklePhase;
+    private float[] starBaseIntensity;
 
     public void Setup()
     {
-        int ringCount = 10;
-        rings = new Transform[ringCount];
-        rotationSpeeds = new Vector3[ringCount];
+        CreateNebula();
+        CreateStarfield();
+    }
 
-        // Color palette: purples, blues, reds, teals
-        Color[] palette = {
-            new Color(0.15f, 0.08f, 0.25f),  // Deep purple
-            new Color(0.08f, 0.15f, 0.25f),  // Dark blue
-            new Color(0.2f, 0.06f, 0.1f),    // Dark red
-            new Color(0.06f, 0.18f, 0.2f),   // Teal
-            new Color(0.2f, 0.1f, 0.02f),    // Amber
-            new Color(0.1f, 0.06f, 0.22f),   // Violet
-            new Color(0.05f, 0.1f, 0.2f),    // Navy
-            new Color(0.22f, 0.04f, 0.15f),  // Magenta
-            new Color(0.08f, 0.2f, 0.12f),   // Forest
-            new Color(0.18f, 0.12f, 0.06f),  // Bronze
-        };
+    void CreateNebula()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
 
-        for (int i = 0; i < ringCount; i++)
+        GameObject nebulaObj = new GameObject("Nebula");
+        nebulaObj.transform.SetParent(cam.transform, false);
+
+        MeshFilter mf = nebulaObj.AddComponent<MeshFilter>();
+        mf.mesh = CreateQuadMesh();
+
+        // Position just inside the far clip plane, scaled to overfill the FOV
+        float dist = cam.farClipPlane * 0.9f;
+        float height = 2f * dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        float width = height * (Screen.width > 0 ? (float)Screen.width / Screen.height : 1.78f);
+        nebulaObj.transform.localPosition = new Vector3(0, 0, dist);
+        nebulaObj.transform.localRotation = Quaternion.identity;
+        nebulaObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
+
+        Material mat = new Material(Shader.Find("Loopfall/Nebula"));
+        mat.SetFloat("_Speed", 0.05f);
+        mat.SetFloat("_Scale", 1.8f);
+        mat.SetFloat("_Brightness", 1.0f);
+        mat.SetColor("_Color1", new Color(0.15f, 0.03f, 0.35f));  // Vivid purple
+        mat.SetColor("_Color2", new Color(0.02f, 0.2f, 0.35f));   // Vivid teal
+        mat.SetColor("_Color3", new Color(0.3f, 0.03f, 0.15f));   // Vivid magenta
+        mat.renderQueue = 1000; // Background queue
+
+        MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
+        mr.material = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+    }
+
+    void CreateStarfield()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        int starCount = 250;
+        stars = new Transform[starCount];
+        starBasePositions = new Vector3[starCount];
+        starTwinklePhase = new float[starCount];
+        starBaseIntensity = new float[starCount];
+
+        Shader glowShader = Shader.Find("Loopfall/TrailGlow");
+
+        for (int i = 0; i < starCount; i++)
         {
-            float radius = Random.Range(16.0f, 40.0f);
-            float thickness = Random.Range(0.2f, 0.5f);
-            float alpha = Random.Range(0.2f, 0.45f);
-            Color baseColor = palette[i];
+            GameObject star = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            star.name = "Star" + i;
+            star.transform.parent = transform;
+            Object.Destroy(star.GetComponent<Collider>());
 
-            GameObject ringObj = new GameObject("BackgroundRing" + i);
-            ringObj.transform.parent = transform;
-            ringObj.transform.localPosition = Vector3.zero;
-            ringObj.transform.rotation = Quaternion.Euler(
-                Random.Range(-50f, 50f),
-                Random.Range(-180f, 180f),
-                Random.Range(-30f, 30f)
+            // Place stars at moderate depth (5–40 units) so they're actually visible
+            float depth = Random.Range(5f, 40f);
+            float halfAngle = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
+            float halfH = depth * Mathf.Tan(halfAngle) * 1.3f;
+            float halfW = halfH * (Screen.width > 0 ? (float)Screen.width / Screen.height : 1.78f) * 1.3f;
+
+            Vector3 localPos = new Vector3(
+                Random.Range(-halfW, halfW),
+                Random.Range(-halfH, halfH),
+                depth
             );
+            star.transform.position = cam.transform.TransformPoint(localPos);
+            star.transform.rotation = cam.transform.rotation;
 
-            Mesh mesh = GenerateFlatRingMesh(radius, thickness, 96);
+            float size;
+            float brightness;
+            float alpha;
 
-            MeshFilter mf = ringObj.AddComponent<MeshFilter>();
-            mf.mesh = mesh;
+            float roll = Random.value;
+            if (roll < 0.05f)
+            {
+                size = Random.Range(0.1f, 0.2f);
+                brightness = Random.Range(3.0f, 5.0f);
+                alpha = Random.Range(0.7f, 1.0f);
+            }
+            else if (roll < 0.2f)
+            {
+                size = Random.Range(0.05f, 0.1f);
+                brightness = Random.Range(1.5f, 3.0f);
+                alpha = Random.Range(0.4f, 0.7f);
+            }
+            else
+            {
+                size = Random.Range(0.02f, 0.05f);
+                brightness = Random.Range(0.8f, 1.5f);
+                alpha = Random.Range(0.15f, 0.4f);
+            }
+            star.transform.localScale = Vector3.one * size;
 
-            Material mat = new Material(Shader.Find("Standard"));
-            mat.SetFloat("_Mode", 3);
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.DisableKeyword("_ALPHATEST_ON");
-            mat.EnableKeyword("_ALPHABLEND_ON");
-            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            mat.renderQueue = 2900;
-            mat.color = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
-            mat.SetFloat("_Glossiness", 0.0f);
-            mat.SetFloat("_Metallic", 0.0f);
-            mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", baseColor * 0.4f);
+            Color starColor;
+            if (Random.value < 0.15f)
+            {
+                starColor = new Color(1.0f, 0.8f, 0.5f, alpha);
+            }
+            else
+            {
+                starColor = new Color(
+                    0.5f + Random.Range(0f, 0.2f),
+                    0.6f + Random.Range(0f, 0.2f),
+                    0.9f + Random.Range(0f, 0.1f),
+                    alpha
+                );
+            }
 
-            MeshRenderer mr = ringObj.AddComponent<MeshRenderer>();
+            Material mat = new Material(glowShader);
+            mat.SetColor("_Color", starColor);
+            mat.SetFloat("_Intensity", brightness);
+            mat.renderQueue = 2950;
+
+            MeshRenderer mr = star.GetComponent<MeshRenderer>();
             mr.material = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
 
-            rings[i] = ringObj.transform;
-
-            // Randomized rotation speed — some lazy, some faster
-            float speedScale = Random.Range(1.0f, 8.0f);
-            rotationSpeeds[i] = new Vector3(
-                Random.Range(-1f, 1f) * speedScale,
-                Random.Range(-1f, 1f) * speedScale,
-                Random.Range(-1f, 1f) * speedScale
-            );
+            stars[i] = star.transform;
+            starBasePositions[i] = star.transform.position;
+            starTwinklePhase[i] = Random.Range(0f, Mathf.PI * 2f);
+            starBaseIntensity[i] = brightness;
         }
     }
 
     void Update()
     {
-        if (rings == null) return;
+        if (stars == null) return;
 
-        for (int i = 0; i < rings.Length; i++)
+        float time = Time.time;
+
+        for (int i = 0; i < stars.Length; i++)
         {
-            rings[i].Rotate(rotationSpeeds[i] * Time.deltaTime);
+            if (stars[i] == null) continue;
+
+            // Twinkle
+            float twinkle = 0.7f + 0.3f * Mathf.Sin(time * (1.2f + (i % 7) * 0.4f) + starTwinklePhase[i]);
+            MeshRenderer mr = stars[i].GetComponent<MeshRenderer>();
+            if (mr != null && mr.material != null)
+                mr.material.SetFloat("_Intensity", starBaseIntensity[i] * twinkle);
         }
     }
 
-    Mesh GenerateFlatRingMesh(float radius, float tubeRadius, int segments)
+    Mesh CreateQuadMesh()
     {
-        int tubeSegs = 6;
-        var verts = new System.Collections.Generic.List<Vector3>();
-        var tris = new System.Collections.Generic.List<int>();
-
-        for (int i = 0; i < segments; i++)
-        {
-            float a0 = ((float)i / segments) * Mathf.PI * 2;
-            float a1 = ((float)(i + 1) / segments) * Mathf.PI * 2;
-
-            Vector3 c0 = new Vector3(Mathf.Cos(a0) * radius, Mathf.Sin(a0) * radius, 0);
-            Vector3 c1 = new Vector3(Mathf.Cos(a1) * radius, Mathf.Sin(a1) * radius, 0);
-
-            Vector3 radial0 = c0.normalized;
-            Vector3 radial1 = c1.normalized;
-            Vector3 fwd = (c1 - c0).normalized;
-            Vector3 up0 = Vector3.Cross(fwd, radial0).normalized;
-            Vector3 fwd1 = fwd; // approximate
-            Vector3 up1 = Vector3.Cross(fwd1, radial1).normalized;
-
-            for (int j = 0; j < tubeSegs; j++)
-            {
-                float t0 = ((float)j / tubeSegs) * Mathf.PI * 2;
-                float t1 = ((float)(j + 1) / tubeSegs) * Mathf.PI * 2;
-
-                Vector3 v00 = c0 + (radial0 * Mathf.Cos(t0) + up0 * Mathf.Sin(t0)) * tubeRadius;
-                Vector3 v10 = c1 + (radial1 * Mathf.Cos(t0) + up1 * Mathf.Sin(t0)) * tubeRadius;
-                Vector3 v01 = c0 + (radial0 * Mathf.Cos(t1) + up0 * Mathf.Sin(t1)) * tubeRadius;
-                Vector3 v11 = c1 + (radial1 * Mathf.Cos(t1) + up1 * Mathf.Sin(t1)) * tubeRadius;
-
-                int idx = verts.Count;
-                verts.Add(v00); verts.Add(v10); verts.Add(v11); verts.Add(v01);
-                tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
-                tris.Add(idx); tris.Add(idx + 2); tris.Add(idx + 3);
-            }
-        }
-
         Mesh mesh = new Mesh();
-        mesh.name = "BackgroundRing";
-        mesh.vertices = verts.ToArray();
-        mesh.triangles = tris.ToArray();
+        mesh.name = "NebulaQuad";
+        mesh.vertices = new Vector3[] {
+            new Vector3(-0.5f, -0.5f, 0),
+            new Vector3( 0.5f, -0.5f, 0),
+            new Vector3( 0.5f,  0.5f, 0),
+            new Vector3(-0.5f,  0.5f, 0)
+        };
+        mesh.uv = new Vector2[] {
+            new Vector2(0, 0),
+            new Vector2(1, 0),
+            new Vector2(1, 1),
+            new Vector2(0, 1)
+        };
+        mesh.triangles = new int[] { 0, 2, 1, 0, 3, 2 };
         mesh.RecalculateNormals();
         return mesh;
     }
