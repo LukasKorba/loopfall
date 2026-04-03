@@ -29,12 +29,14 @@ public class RewindSystem : MonoBehaviour
     private struct TrailSegment
     {
         public LineRenderer renderer;
-        public float startAngle;  // Torus angle where this segment begins
-        public float endAngle;    // Torus angle where this segment ends (grows during recording)
-        public List<Vector3> points;
+        public float startAngle;
+        public float endAngle;
+        public List<Vector3> controlPoints;  // Raw recorded positions
+        public List<Vector3> points;         // Smoothed display positions
     }
     private List<TrailSegment> segments = new List<TrailSegment>();
     private Material trailMaterial;
+    private const int SMOOTH_SUBDIVISIONS = 3; // Interpolated points between each pair
 
     // State machine
     public enum State
@@ -152,6 +154,7 @@ public class RewindSystem : MonoBehaviour
 
             case State.Pausing:
                 stateTimer += Time.deltaTime;
+                AnimateConeCollapse();
                 if (stateTimer >= PAUSE_DURATION)
                 {
                     currentState = State.Rewinding;
@@ -189,23 +192,24 @@ public class RewindSystem : MonoBehaviour
         TrailSegment seg;
         seg.startAngle = startAngle;
         seg.endAngle = startAngle;
+        seg.controlPoints = new List<Vector3>();
         seg.points = new List<Vector3>();
 
         GameObject segObj = new GameObject("TrailSeg_" + startAngle.ToString("F0"));
         segObj.transform.SetParent(torusTransform, false);
 
         LineRenderer lr = segObj.AddComponent<LineRenderer>();
-        lr.material = trailMaterial;
+        lr.material = new Material(trailMaterial); // Instance so we can tint per-segment
         lr.useWorldSpace = false;
-        lr.startWidth = 0.025f;
-        lr.endWidth = 0.025f;
         lr.positionCount = 0;
-        lr.numCapVertices = 2;
+        lr.numCapVertices = 0;  // No caps — segments overlap at boundaries
         lr.numCornerVertices = 2;
         lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         lr.receiveShadows = false;
-        lr.startColor = new Color(0.2f, 0.9f, 0.3f, 0.5f);
-        lr.endColor = new Color(0.2f, 0.9f, 0.3f, 0.5f);
+        lr.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
+        lr.widthMultiplier = 1f;
+        lr.startColor = Color.white;
+        lr.endColor = Color.white;
         seg.renderer = lr;
 
         return seg;
@@ -234,6 +238,11 @@ public class RewindSystem : MonoBehaviour
     //   Gameplay: 5° (trail ahead doesn't exist yet)
     //   Rewind: 120° (trail already drawn, camera sees ~90° ahead)
     // 240° behind + 120° ahead = 360° = exactly one lap, no physical overlap.
+    // Trail color ramp: bright near ball → dim far away.
+    // Each segment gets a uniform tint based on its distance from the view angle.
+    private static readonly Color TRAIL_COLOR_NEAR = new Color(0.15f, 1.0f, 0.7f, 0.9f);
+    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.0f, 0.3f, 0.4f, 0.15f);
+
     void UpdateSegmentVisibility(float viewAngle, float aheadMargin = 5f)
     {
         for (int i = 0; i < segments.Count; i++)
@@ -246,7 +255,15 @@ public class RewindSystem : MonoBehaviour
             bool visible = distBehind > -aheadMargin && distBehind < TRAIL_VIEW_RANGE;
             seg.renderer.enabled = visible;
             if (visible)
+            {
                 seg.renderer.positionCount = seg.points.Count;
+
+                // Tint via material color — leaves LineRenderer colorGradient
+                // free for the cone fade effect on the active segment
+                float t = Mathf.Clamp01(distBehind / TRAIL_VIEW_RANGE);
+                Color c = Color.Lerp(TRAIL_COLOR_NEAR, TRAIL_COLOR_FAR, t);
+                seg.renderer.material.SetColor("_Color", c);
+            }
         }
     }
 
@@ -266,6 +283,12 @@ public class RewindSystem : MonoBehaviour
 
     // ── RECORDING ────────────────────────────────────────────
 
+    // Taper: trail starts at ball diameter and narrows to trail width
+    private const float TRAIL_WIDTH = 0.035f;
+    private const float TAPER_WIDTH = 0.18f;   // ≈ ball diameter (scale 0.2)
+    private const int TAPER_POINTS = 18 * (SMOOTH_SUBDIVISIONS + 1);  // Scaled for smoothed points
+    private const int FADE_POINTS = 10 * (SMOOTH_SUBDIVISIONS + 1);  // Scaled for smoothed points
+
     void RecordFrame()
     {
         if (ballTransform == null || torusTransform == null) return;
@@ -283,18 +306,170 @@ public class RewindSystem : MonoBehaviour
 
         if (segments.Count == 0 || segments[segments.Count - 1].startAngle != segStart)
         {
-            // Need a new segment
+            // Flatten the previous segment — it's no longer touching the ball
+            if (segments.Count > 0)
+            {
+                TrailSegment prev = segments[segments.Count - 1];
+                prev.renderer.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
+                prev.renderer.widthMultiplier = 1f;
+                Gradient flat = new Gradient();
+                flat.SetKeys(
+                    new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+                    new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f) }
+                );
+                prev.renderer.colorGradient = flat;
+                segments[segments.Count - 1] = prev;
+            }
+
+            // New segment — seed with overlap control points from previous
             TrailSegment newSeg = CreateSegment(segStart);
+            if (segments.Count > 0)
+            {
+                TrailSegment prev = segments[segments.Count - 1];
+                int overlapCount = Mathf.Min(prev.controlPoints.Count, 3);
+                int startFrom = prev.controlPoints.Count - overlapCount;
+                for (int oi = startFrom; oi < prev.controlPoints.Count; oi++)
+                    newSeg.controlPoints.Add(prev.controlPoints[oi]);
+            }
             segments.Add(newSeg);
         }
 
-        // Add point to the current (last) segment
+        // Add control point to the current (last) segment
         TrailSegment current = segments[segments.Count - 1];
-        current.points.Add(localPos);
+        current.controlPoints.Add(localPos);
         current.endAngle = angle;
+
+        // Rebuild smoothed display points via Catmull-Rom
+        RebuildSmoothedPoints(ref current);
+
         current.renderer.positionCount = current.points.Count;
-        current.renderer.SetPosition(current.points.Count - 1, localPos);
+        current.renderer.SetPositions(current.points.ToArray());
+
+        UpdateTaper(current.renderer, current.points.Count);
         segments[segments.Count - 1] = current;
+    }
+
+    void UpdateTaper(LineRenderer lr, int pointCount)
+    {
+        if (pointCount < 2)
+        {
+            lr.startWidth = TAPER_WIDTH;
+            lr.endWidth = TAPER_WIDTH;
+            return;
+        }
+
+        // Width: flat at TRAIL_WIDTH, ramp to ball diameter over last TAPER_POINTS
+        // t=0 is first point (oldest), t=1 is last point (near ball)
+        float taperStart = 1f - (float)TAPER_POINTS / pointCount;
+        taperStart = Mathf.Clamp01(taperStart);
+
+        lr.widthCurve = new AnimationCurve(
+            new Keyframe(0f, TRAIL_WIDTH),
+            new Keyframe(taperStart, TRAIL_WIDTH),
+            new Keyframe(1f, TAPER_WIDTH)
+        );
+        lr.widthMultiplier = 1f;
+
+        // Alpha: fully opaque everywhere, then fade to transparent over last
+        // FADE_POINTS — so the cone dissolves like wind behind the ball
+        float fadeStart = 1f - (float)FADE_POINTS / pointCount;
+        fadeStart = Mathf.Clamp01(fadeStart);
+
+        Gradient grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+            new GradientAlphaKey[] {
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, fadeStart),
+                new GradientAlphaKey(0f, 1f)
+            }
+        );
+        lr.colorGradient = grad;
+    }
+
+    // ── CATMULL-ROM SMOOTHING ──────────────────────────────────
+
+    void RebuildSmoothedPoints(ref TrailSegment seg)
+    {
+        List<Vector3> cp = seg.controlPoints;
+        seg.points.Clear();
+
+        if (cp.Count < 2)
+        {
+            if (cp.Count == 1) seg.points.Add(cp[0]);
+            return;
+        }
+
+        // First point
+        seg.points.Add(cp[0]);
+
+        for (int i = 0; i < cp.Count - 1; i++)
+        {
+            Vector3 p0 = cp[Mathf.Max(i - 1, 0)];
+            Vector3 p1 = cp[i];
+            Vector3 p2 = cp[i + 1];
+            Vector3 p3 = cp[Mathf.Min(i + 2, cp.Count - 1)];
+
+            for (int s = 1; s <= SMOOTH_SUBDIVISIONS; s++)
+            {
+                float t = (float)s / (SMOOTH_SUBDIVISIONS + 1);
+                seg.points.Add(CatmullRom(p0, p1, p2, p3, t));
+            }
+            seg.points.Add(p2);
+        }
+    }
+
+    static Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    {
+        float t2 = t * t;
+        float t3 = t2 * t;
+        return 0.5f * (
+            2f * p1 +
+            (-p0 + p2) * t +
+            (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+            (-p0 + 3f * p1 - 3f * p2 + p3) * t3
+        );
+    }
+
+    // ── CONE COLLAPSE (death → cone shrinks over a few frames) ────────
+
+    private const float CONE_COLLAPSE_DURATION = 0.25f;
+
+    void AnimateConeCollapse()
+    {
+        if (segments.Count == 0) return;
+        TrailSegment active = segments[segments.Count - 1];
+        if (active.renderer == null || active.points.Count < 2) return;
+
+        float t = Mathf.Clamp01(stateTimer / CONE_COLLAPSE_DURATION);
+        int pointCount = active.points.Count;
+
+        // Width: lerp taper peak from TAPER_WIDTH → TRAIL_WIDTH
+        float currentTaper = Mathf.Lerp(TAPER_WIDTH, TRAIL_WIDTH, t);
+        float taperStart = 1f - (float)TAPER_POINTS / pointCount;
+        taperStart = Mathf.Clamp01(taperStart);
+
+        active.renderer.widthCurve = new AnimationCurve(
+            new Keyframe(0f, TRAIL_WIDTH),
+            new Keyframe(taperStart, TRAIL_WIDTH),
+            new Keyframe(1f, currentTaper)
+        );
+
+        // Alpha: expand the fade zone as cone collapses, ending fully opaque flat
+        float fadeStart = 1f - (float)FADE_POINTS / pointCount;
+        fadeStart = Mathf.Clamp01(fadeStart);
+        float currentFadeStart = Mathf.Lerp(fadeStart, 1f, t);
+
+        Gradient grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+            new GradientAlphaKey[] {
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, currentFadeStart),
+                new GradientAlphaKey(Mathf.Lerp(0f, 1f, t), 1f)
+            }
+        );
+        active.renderer.colorGradient = grad;
     }
 
     // ── REWIND (trail stays intact, ball moves back) ──────────
@@ -392,7 +567,6 @@ public class RewindSystem : MonoBehaviour
             }
             else
             {
-                // Off-screen — hide instantly
                 segments[i].renderer.enabled = false;
             }
         }
@@ -432,21 +606,18 @@ public class RewindSystem : MonoBehaviour
 
             if (eraseRemaining >= fullCount)
             {
-                // Entire segment erased
                 seg.renderer.positionCount = 0;
                 seg.renderer.enabled = false;
                 eraseRemaining -= fullCount;
             }
             else if (eraseRemaining > 0)
             {
-                // Partially erased — shrink positionCount from end
                 seg.renderer.positionCount = fullCount - eraseRemaining;
                 seg.renderer.enabled = true;
                 eraseRemaining = 0;
             }
             else
             {
-                // Not reached yet — full
                 seg.renderer.positionCount = fullCount;
                 seg.renderer.enabled = true;
             }

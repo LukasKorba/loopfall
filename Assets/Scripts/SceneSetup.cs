@@ -102,19 +102,11 @@ public class SceneSetup : MonoBehaviour
         railMaterial.EnableKeyword("_EMISSION");
         railMaterial.SetColor("_EmissionColor", new Color(0.4f, 0.02f, 0.02f));
 
-        // Trail: subtle glowing line on the torus floor
-        trailMaterial = new Material(Shader.Find("Standard"));
-        trailMaterial.SetFloat("_Mode", 3); // Transparent
-        trailMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        trailMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        trailMaterial.SetInt("_ZWrite", 0);
-        trailMaterial.DisableKeyword("_ALPHATEST_ON");
-        trailMaterial.EnableKeyword("_ALPHABLEND_ON");
-        trailMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        // Trail: additive glow — color/alpha set per-segment at runtime
+        trailMaterial = new Material(Shader.Find("Loopfall/TrailGlow"));
+        trailMaterial.SetColor("_Color", Color.white);
+        trailMaterial.SetFloat("_Intensity", 2.0f);
         trailMaterial.renderQueue = 3000;
-        trailMaterial.color = new Color(0.2f, 0.9f, 0.3f, 0.5f);
-        trailMaterial.EnableKeyword("_EMISSION");
-        trailMaterial.SetColor("_EmissionColor", new Color(0.05f, 0.3f, 0.08f));
     }
 
     void CreateTorus()
