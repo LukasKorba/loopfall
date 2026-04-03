@@ -10,6 +10,7 @@ public class BackgroundRings : MonoBehaviour
     public void Setup()
     {
         CreateNebula();
+        CreateGodRays();
         CreateStarfield();
     }
 
@@ -42,6 +43,45 @@ public class BackgroundRings : MonoBehaviour
         mat.renderQueue = 1000; // Background queue
 
         MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
+        mr.material = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+    }
+
+    void CreateGodRays()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        GameObject raysObj = new GameObject("GodRays");
+        raysObj.transform.SetParent(cam.transform, false);
+
+        MeshFilter mf = raysObj.AddComponent<MeshFilter>();
+        mf.mesh = CreateQuadMesh();
+
+        // Slightly in front of the nebula
+        float dist = cam.farClipPlane * 0.85f;
+        float height = 2f * dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        float width = height * (Screen.width > 0 ? (float)Screen.width / Screen.height : 1.78f);
+        raysObj.transform.localPosition = new Vector3(0, 0, dist);
+        raysObj.transform.localRotation = Quaternion.identity;
+        raysObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
+
+        Material mat = new Material(Shader.Find("Loopfall/GodRays"));
+        mat.SetFloat("_RayCount", 8);
+        mat.SetFloat("_RaySharpness", 5);
+        mat.SetFloat("_RayLength", 0.75f);
+        mat.SetFloat("_Intensity", 0.4f);
+        mat.SetFloat("_RotationSpeed", 0.025f);
+        mat.SetColor("_Color1", new Color(0.2f, 0.05f, 0.4f));   // Purple rays
+        mat.SetColor("_Color2", new Color(0.03f, 0.2f, 0.3f));   // Teal rays
+        mat.SetFloat("_CenterX", 0.5f);
+        mat.SetFloat("_CenterY", 0.42f);  // Slightly below center — where the track converges
+        mat.SetFloat("_PulseSpeed", 0.3f);
+        mat.SetFloat("_PulseAmount", 0.12f);
+        mat.renderQueue = 2900; // After nebula (1000), before stars (2950)
+
+        MeshRenderer mr = raysObj.AddComponent<MeshRenderer>();
         mr.material = mat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
