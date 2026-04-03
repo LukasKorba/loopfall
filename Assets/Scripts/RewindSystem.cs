@@ -361,23 +361,17 @@ public class RewindSystem : MonoBehaviour
     }
 
     // ── TRAIL DISMISS ────────────────────────────────────────
-    // Fully independent system. Captures loop-0 segments (to avoid physical
-    // overlap with other laps). Erases point-by-point from the farthest
-    // segment back toward the ball. No UpdateSegmentVisibility interference.
+    // After rewind lands at angle 0, the camera can only see ~60-90° ahead.
+    // We only animate dismiss for segments within DISMISS_RANGE (60°).
+    // Everything else is hidden instantly — it's off-screen anyway.
 
+    private const float DISMISS_RANGE = 90f;  // Only animate dismiss for this range
     private List<int> dismissSegIndices = new List<int>();   // ordered oldest→newest
     private List<int> dismissSegCounts = new List<int>();
     private int dismissTotalPoints = 0;
 
     void BeginTrailDismiss()
     {
-        // Scale dismiss duration based on how much trail we're actually dismissing
-        // (first lap only, max 360°), not the entire run
-        float runAngle = frames.Count > 0 ? frames[frames.Count - 1].torusAngle : 0f;
-        float dismissAngle = Mathf.Min(runAngle, 360f);
-        float approxScore = dismissAngle / 10f;
-        trailDismissDuration = Mathf.Min(TRAIL_DISMISS_BASE + approxScore * TRAIL_DISMISS_PER_POINT, TRAIL_DISMISS_MAX);
-
         dismissSegIndices.Clear();
         dismissSegCounts.Clear();
         dismissTotalPoints = 0;
@@ -386,9 +380,9 @@ public class RewindSystem : MonoBehaviour
         {
             if (segments[i].renderer == null) continue;
 
-            // Only keep loop-0 segments (startAngle 0–359°) to avoid
-            // physical overlap with later laps on the torus surface.
-            if (segments[i].startAngle < 360f)
+            // Only animate dismiss for segments within DISMISS_RANGE of start (0°).
+            // These are the only ones visible to the camera after rewind.
+            if (segments[i].startAngle < DISMISS_RANGE)
             {
                 segments[i].renderer.enabled = true;
                 segments[i].renderer.positionCount = segments[i].points.Count;
@@ -398,9 +392,14 @@ public class RewindSystem : MonoBehaviour
             }
             else
             {
+                // Off-screen — hide instantly
                 segments[i].renderer.enabled = false;
             }
         }
+
+        // Duration scales with visible points only (much shorter now)
+        float approxScore = DISMISS_RANGE / 10f; // ~6 points worth
+        trailDismissDuration = Mathf.Min(TRAIL_DISMISS_BASE + approxScore * TRAIL_DISMISS_PER_POINT, TRAIL_DISMISS_MAX);
     }
 
     void AnimateTrailDismiss()
