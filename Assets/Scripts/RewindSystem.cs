@@ -176,6 +176,7 @@ public class RewindSystem : MonoBehaviour
                     currentState = State.Rewinding;
                     stateTimer = 0f;
                     ballRigidbody.isKinematic = true;
+                    FlattenAllSegments();
                     if (cameraTransform != null)
                     {
                         cameraDeathPos = cameraTransform.position;
@@ -239,6 +240,27 @@ public class RewindSystem : MonoBehaviour
                 Destroy(segments[i].renderer.gameObject);
         }
         segments.Clear();
+    }
+
+    // Strip all taper/cone effects so trail looks uniform during rewind.
+    // Handles the case where death occurs at a segment boundary and the
+    // fadingTaper animation never completed (RecordFrame stops on death).
+    void FlattenAllSegments()
+    {
+        fadingTaper = null;
+
+        Gradient flat = new Gradient();
+        flat.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f) }
+        );
+
+        for (int i = 0; i < segments.Count; i++)
+        {
+            if (segments[i].renderer == null) continue;
+            segments[i].renderer.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
+            segments[i].renderer.colorGradient = flat;
+        }
     }
 
     // ── VISIBILITY ──────────────────────────────────────────────

@@ -357,7 +357,7 @@ public class SceneSetup : MonoBehaviour
         // Camera slightly below tube center for best view of track ahead
         mainCam.transform.position = new Vector3(-1.727f, -10.205f, 0);
         mainCam.transform.rotation = new Quaternion(0, 0.707106829f, 0, 0.707106709f);
-        mainCam.fieldOfView = 50.0f;
+        mainCam.fieldOfView = 55.0f;
         mainCam.nearClipPlane = 0.3f;
         mainCam.allowHDR = true; // Emission values >1.0 render without clamping
         mainCam.backgroundColor = new Color(0.05f, 0.05f, 0.08f); // Near black
