@@ -225,7 +225,10 @@ public class Sphere : MonoBehaviour
 
         CameraSwing swing = mCamera.GetComponent<CameraSwing>();
         if (swing != null)
+        {
             swing.mDiff = Vector3.zero;
+            swing.ResetSpring();
+        }
     }
 
     public bool IsWaiting() { return mWaitingToStart; }

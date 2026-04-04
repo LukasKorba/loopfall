@@ -289,6 +289,11 @@ public class RewindSystem : MonoBehaviour
     private const int TAPER_POINTS = 18 * (SMOOTH_SUBDIVISIONS + 1);  // Scaled for smoothed points
     private const int FADE_POINTS = 10 * (SMOOTH_SUBDIVISIONS + 1);  // Scaled for smoothed points
 
+    // Smooth transition: previous segment's taper fades out gradually
+    private LineRenderer fadingTaper = null;
+    private float fadingTaperTimer = 0f;
+    private const float TAPER_FADE_DURATION = 0.25f;
+
     void RecordFrame()
     {
         if (ballTransform == null || torusTransform == null) return;
@@ -301,24 +306,63 @@ public class RewindSystem : MonoBehaviour
         f.ballLocalPos = localPos;
         frames.Add(f);
 
-        // Determine which segment this point belongs to
-        float segStart = Mathf.Floor(angle / SEGMENT_DEGREES) * SEGMENT_DEGREES;
-
-        if (segments.Count == 0 || segments[segments.Count - 1].startAngle != segStart)
+        // Animate previous segment's taper fade-out
+        if (fadingTaper != null)
         {
-            // Flatten the previous segment — it's no longer touching the ball
-            if (segments.Count > 0)
+            fadingTaperTimer += Time.deltaTime;
+            float fadeT = Mathf.Clamp01(fadingTaperTimer / TAPER_FADE_DURATION);
+            float endWidth = Mathf.Lerp(TAPER_WIDTH, TRAIL_WIDTH, fadeT);
+            int pc = fadingTaper.positionCount;
+            if (pc >= 2)
             {
-                TrailSegment prev = segments[segments.Count - 1];
-                prev.renderer.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
-                prev.renderer.widthMultiplier = 1f;
+                float taperStart = 1f - (float)TAPER_POINTS / pc;
+                taperStart = Mathf.Clamp01(taperStart);
+                fadingTaper.widthCurve = new AnimationCurve(
+                    new Keyframe(0f, TRAIL_WIDTH),
+                    new Keyframe(taperStart, TRAIL_WIDTH),
+                    new Keyframe(1f, endWidth)
+                );
+                // Fade alpha at the end too
+                float endAlpha = 1f - fadeT;
+                float fadeStart = 1f - (float)FADE_POINTS / pc;
+                fadeStart = Mathf.Clamp01(fadeStart);
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+                    new GradientAlphaKey[] {
+                        new GradientAlphaKey(1f, 0f),
+                        new GradientAlphaKey(1f, fadeStart),
+                        new GradientAlphaKey(endAlpha * 0.5f, 1f)
+                    }
+                );
+                fadingTaper.colorGradient = grad;
+            }
+
+            if (fadeT >= 1f)
+            {
+                // Fully faded — flatten for good
+                fadingTaper.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
                 Gradient flat = new Gradient();
                 flat.SetKeys(
                     new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
                     new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f) }
                 );
-                prev.renderer.colorGradient = flat;
-                segments[segments.Count - 1] = prev;
+                fadingTaper.colorGradient = flat;
+                fadingTaper = null;
+            }
+        }
+
+        // Determine which segment this point belongs to
+        float segStart = Mathf.Floor(angle / SEGMENT_DEGREES) * SEGMENT_DEGREES;
+
+        if (segments.Count == 0 || segments[segments.Count - 1].startAngle != segStart)
+        {
+            // Start fading the previous segment's taper instead of snapping it off
+            if (segments.Count > 0)
+            {
+                TrailSegment prev = segments[segments.Count - 1];
+                fadingTaper = prev.renderer;
+                fadingTaperTimer = 0f;
             }
 
             // New segment — seed with overlap control points from previous

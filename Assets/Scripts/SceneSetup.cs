@@ -361,8 +361,12 @@ public class SceneSetup : MonoBehaviour
         // Death effect (shake + particles)
         mainCam.gameObject.AddComponent<DeathEffect>();
 
+        // Depth-based hue shift — rainbow color variation over distance
+        mainCam.gameObject.AddComponent<DepthHueShift>();
+
         // Wire camera to ball
         GameObject ball = GameObject.Find("Ball");
+        swing.ballTransform = ball.transform;
         Sphere sphereScript = ball.GetComponent<Sphere>();
         sphereScript.mCamera = mainCam;
     }
