@@ -204,7 +204,7 @@ public class SceneSetup : MonoBehaviour
         GameObject railObj = new GameObject("torusObstacle"); // Named so collision = death
         railObj.transform.parent = parent.transform;
 
-        Mesh railMesh = GenerateRailMesh(minorAngle, 0.06f);
+        Mesh railMesh = GenerateRailMesh(minorAngle, 0.09f);
 
         MeshFilter mf = railObj.AddComponent<MeshFilter>();
         mf.mesh = railMesh;
@@ -220,52 +220,70 @@ public class SceneSetup : MonoBehaviour
     Mesh GenerateRailMesh(float minorAngle, float railRadius)
     {
         int railSegs = 128;
-        int tubeSegs = 8;
+        int tubeSegs = 16;
 
-        Vector3[] vertices = new Vector3[railSegs * tubeSegs * 6];
-        int[] triangles = new int[railSegs * tubeSegs * 6];
+        // Shared vertex grid: (railSegs+1) rings x tubeSegs verts each
+        // Ring 0 and ring railSegs are the same position (loop closed via indices)
+        int ringCount = railSegs; // Closed loop — last ring wraps to first
+        int vertCount = ringCount * tubeSegs;
+        Vector3[] verts = new Vector3[vertCount];
+        Vector3[] normals = new Vector3[vertCount];
 
-        var verts = new System.Collections.Generic.List<Vector3>();
-        var tris = new System.Collections.Generic.List<int>();
-
-        for (int i = 0; i < railSegs; i++)
+        for (int i = 0; i < ringCount; i++)
         {
-            float ma0 = ((float)i / railSegs) * Mathf.PI * 2;
-            float ma1 = ((float)(i + 1) / railSegs) * Mathf.PI * 2;
+            float ma = ((float)i / railSegs) * Mathf.PI * 2;
+            float maNext = ((float)(i + 1) / railSegs) * Mathf.PI * 2;
+            Vector3 center = RailCenter(ma, minorAngle);
+            Vector3 centerNext = RailCenter(maNext, minorAngle);
+            Vector3 fwd = (centerNext - center).normalized;
 
-            Vector3 c0 = RailCenter(ma0, minorAngle);
-            Vector3 c1 = RailCenter(ma1, minorAngle);
-            Vector3 fwd = (c1 - c0).normalized;
+            Vector3 tubeCenter = new Vector3(
+                torusMajorRadius * Mathf.Cos(ma),
+                torusMajorRadius * Mathf.Sin(ma),
+                0
+            );
+            Vector3 radialOut = (center - tubeCenter).normalized;
+            Vector3 binormal = Vector3.Cross(fwd, radialOut).normalized;
 
             for (int j = 0; j < tubeSegs; j++)
             {
-                float ta0 = ((float)j / tubeSegs) * Mathf.PI * 2;
-                float ta1 = ((float)(j + 1) / tubeSegs) * Mathf.PI * 2;
+                float ta = ((float)j / tubeSegs) * Mathf.PI * 2;
+                Vector3 localDir = radialOut * Mathf.Cos(ta) + binormal * Mathf.Sin(ta);
+                int idx = i * tubeSegs + j;
+                verts[idx] = center + localDir * railRadius;
+                normals[idx] = localDir;
+            }
+        }
 
-                Vector3 v00 = RailTubePoint(c0, fwd, ma0, ta0, railRadius);
-                Vector3 v10 = RailTubePoint(c1, fwd, ma1, ta0, railRadius);
-                Vector3 v01 = RailTubePoint(c0, fwd, ma0, ta1, railRadius);
-                Vector3 v11 = RailTubePoint(c1, fwd, ma1, ta1, railRadius);
+        // Triangles: front + back faces (double-sided)
+        int[] tris = new int[railSegs * tubeSegs * 12];
+        int t = 0;
+        for (int i = 0; i < railSegs; i++)
+        {
+            int iNext = (i + 1) % ringCount;
+            for (int j = 0; j < tubeSegs; j++)
+            {
+                int jNext = (j + 1) % tubeSegs;
+                int v00 = i * tubeSegs + j;
+                int v10 = iNext * tubeSegs + j;
+                int v01 = i * tubeSegs + jNext;
+                int v11 = iNext * tubeSegs + jNext;
 
                 // Front face
-                int idx = verts.Count;
-                verts.Add(v00); verts.Add(v10); verts.Add(v11); verts.Add(v01);
-                tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
-                tris.Add(idx); tris.Add(idx + 2); tris.Add(idx + 3);
+                tris[t++] = v00; tris[t++] = v10; tris[t++] = v11;
+                tris[t++] = v00; tris[t++] = v11; tris[t++] = v01;
 
                 // Back face (reversed winding)
-                idx = verts.Count;
-                verts.Add(v00); verts.Add(v11); verts.Add(v10); verts.Add(v01);
-                tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
-                tris.Add(idx); tris.Add(idx + 3); tris.Add(idx + 1);
+                tris[t++] = v00; tris[t++] = v11; tris[t++] = v10;
+                tris[t++] = v00; tris[t++] = v01; tris[t++] = v11;
             }
         }
 
         Mesh mesh = new Mesh();
         mesh.name = "rail";
-        mesh.vertices = verts.ToArray();
-        mesh.triangles = tris.ToArray();
-        mesh.RecalculateNormals();
+        mesh.vertices = verts;
+        mesh.normals = normals;
+        mesh.triangles = tris;
         return mesh;
     }
 

@@ -85,6 +85,17 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text goScoreMagentaText;
     private TMP_Text goScoreYellowText;
 
+    // ── VHS GLITCH ────────────────────────────────────────────
+    private float glitchTimer = 0f;          // Countdown to next burst
+    private float glitchBurstTimer = -1f;    // Active burst timer
+    private float glitchBurstDuration = 0f;  // How long current burst lasts
+    private float glitchIntensity = 0f;      // 0-1 severity of current burst
+    private float glitchSeed = 0f;           // Random seed per burst
+    private const float GLITCH_MIN_INTERVAL = 2.5f;
+    private const float GLITCH_MAX_INTERVAL = 7.0f;
+    private const float GLITCH_MIN_DURATION = 0.06f;
+    private const float GLITCH_MAX_DURATION = 0.25f;
+
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
     private Sprite circleSprite;
@@ -485,12 +496,35 @@ public class ScoreSync : MonoBehaviour
 
     void AnimateState()
     {
+        TickGlitch();
+
         switch (state)
         {
             case State.Title: AnimateTitle(); break;
             case State.Playing: AnimatePlaying(); break;
             case State.Rewinding: AnimateRewinding(); break;
             case State.GameOver: AnimateGameOver(); break;
+        }
+
+        // VHS glitch pass — applied after normal animation
+        if (IsGlitching())
+        {
+            if (state == State.Title)
+            {
+                ApplyGlitchToText(titleText);
+                ApplyGlitchToText(subtitleText);
+                ApplyGlitchToText(bestScoreText);
+                ApplyGlitchToText(tapToStartText);
+            }
+            else if (state == State.GameOver)
+            {
+                ApplyGlitchToText(goScoreText);
+                ApplyGlitchToText(goNewBestText);
+                ApplyGlitchToText(goTapText);
+                for (int i = 0; i < LEADERBOARD_SHOW; i++)
+                    ApplyGlitchToText(goLeaderboardTexts[i]);
+            }
+            ApplyGlitchToBackdrop();
         }
     }
 
@@ -1112,6 +1146,132 @@ public class ScoreSync : MonoBehaviour
         topScores.Clear();
         PlayerPrefs.DeleteKey(SCORES_KEY);
         PlayerPrefs.Save();
+    }
+
+    // ── VHS GLITCH ENGINE ─────────────────────────────────────
+
+    void TickGlitch()
+    {
+        // Only glitch during Title and GameOver (UI-heavy states)
+        if (state != State.Title && state != State.GameOver) return;
+
+        if (glitchBurstTimer >= 0f)
+        {
+            // Active burst
+            glitchBurstTimer += Time.deltaTime;
+            if (glitchBurstTimer >= glitchBurstDuration)
+                glitchBurstTimer = -1f;
+        }
+        else
+        {
+            // Countdown to next burst
+            glitchTimer -= Time.deltaTime;
+            if (glitchTimer <= 0f)
+            {
+                glitchBurstTimer = 0f;
+                glitchBurstDuration = Random.Range(GLITCH_MIN_DURATION, GLITCH_MAX_DURATION);
+                glitchIntensity = Random.Range(0.3f, 1.0f);
+                glitchSeed = Random.Range(0f, 1000f);
+                glitchTimer = Random.Range(GLITCH_MIN_INTERVAL, GLITCH_MAX_INTERVAL);
+            }
+        }
+    }
+
+    bool IsGlitching()
+    {
+        return glitchBurstTimer >= 0f;
+    }
+
+    // Per-character horizontal tear + color corruption on a TMP_Text
+    void ApplyGlitchToText(TMP_Text text)
+    {
+        if (text == null || !text.gameObject.activeInHierarchy) return;
+        if (text.color.a < 0.01f) return;
+
+        text.ForceMeshUpdate();
+        TMP_TextInfo textInfo = text.textInfo;
+        if (textInfo.characterCount == 0) return;
+
+        float burstP = glitchBurstTimer / glitchBurstDuration;
+        // Intensity envelope: sharp in, sharp out
+        float envelope = Mathf.Sin(burstP * Mathf.PI);
+        float strength = glitchIntensity * envelope;
+
+        // Pick a "tear line" — a random character index where the split happens
+        float tearHash = Mathf.PerlinNoise(glitchSeed, burstP * 5f);
+        int tearIndex = Mathf.FloorToInt(tearHash * textInfo.characterCount);
+
+        for (int i = 0; i < textInfo.characterCount; i++)
+        {
+            if (!textInfo.characterInfo[i].isVisible) continue;
+
+            int matIdx = textInfo.characterInfo[i].materialReferenceIndex;
+            int vertIdx = textInfo.characterInfo[i].vertexIndex;
+            Vector3[] verts = textInfo.meshInfo[matIdx].vertices;
+            Color32[] colors = textInfo.meshInfo[matIdx].colors32;
+
+            // Horizontal tear: characters on one side of the tear shift sideways
+            float xShift = 0f;
+            if (i >= tearIndex)
+            {
+                float shiftNoise = Mathf.PerlinNoise(glitchSeed + 3.7f, burstP * 8f);
+                xShift = (shiftNoise - 0.5f) * 60f * strength;
+            }
+
+            // Vertical jitter — smaller, random per character
+            float yJitter = (Mathf.PerlinNoise(glitchSeed + i * 0.5f, burstP * 12f) - 0.5f)
+                          * 9f * strength;
+
+            for (int v = 0; v < 4; v++)
+            {
+                verts[vertIdx + v].x += xShift;
+                verts[vertIdx + v].y += yJitter;
+
+                // Color corruption: randomly shift color channels
+                if (strength > 0.5f)
+                {
+                    float colorNoise = Mathf.PerlinNoise(glitchSeed + i * 1.3f, burstP * 6f);
+                    if (colorNoise > 0.6f)
+                    {
+                        Color32 c = colors[vertIdx + v];
+                        // Shift toward cyan or magenta
+                        if (colorNoise > 0.8f)
+                            c = new Color32((byte)Mathf.Max(0, c.r - 120), c.g, c.b, c.a);
+                        else
+                            c = new Color32(c.r, (byte)Mathf.Max(0, c.g - 120), c.b, c.a);
+                        colors[vertIdx + v] = c;
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < textInfo.meshInfo.Length; i++)
+        {
+            textInfo.meshInfo[i].mesh.vertices = textInfo.meshInfo[i].vertices;
+            textInfo.meshInfo[i].mesh.colors32 = textInfo.meshInfo[i].colors32;
+            text.UpdateGeometry(textInfo.meshInfo[i].mesh, i);
+        }
+    }
+
+    // Scanline + overlay flicker during glitch
+    void ApplyGlitchToBackdrop()
+    {
+        if (!IsGlitching()) return;
+        float burstP = glitchBurstTimer / glitchBurstDuration;
+        float envelope = Mathf.Sin(burstP * Mathf.PI) * glitchIntensity;
+
+        // Scanline UV jump — shifts the scanline pattern vertically
+        float uvJump = Mathf.PerlinNoise(glitchSeed + 7f, burstP * 10f) * 0.45f * envelope;
+        Rect uvRect = scanlinesImage.uvRect;
+        uvRect.y += uvJump;
+        scanlinesImage.uvRect = uvRect;
+
+        // Brief brightness flicker on overlay
+        Color oc = overlayImage.color;
+        float flicker = 1f + (Mathf.PerlinNoise(glitchSeed + 11f, burstP * 15f) - 0.5f)
+                       * 0.6f * envelope;
+        oc.a *= flicker;
+        overlayImage.color = oc;
     }
 
     // ── DROP SHADOW ──────────────────────────────────────────
