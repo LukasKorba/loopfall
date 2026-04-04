@@ -73,6 +73,10 @@ Shader "Loopfall/TrackGrid"
         float _ScorePulseTime;
         float4 _ScorePulsePos;
 
+        // Death pulse — dual shockwave rings
+        float _DeathPulseTime;
+        float4 _DeathPulsePos;
+
         void vert(inout appdata_full v, out Input o)
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
@@ -188,6 +192,35 @@ Shader "Loopfall/TrackGrid"
                 float onGrid = saturate(totalGrid * 3.0);
                 float3 pulseColor = lerp(_GridColor1.rgb, float3(1, 1, 1), 0.3);
                 gridCol += pulseColor * ringGlow * fade * fade * onGrid * 1.6;
+            }
+
+            // ── DEATH PULSE WAVES ─────────────────────────────────
+            float timeSinceDeath = _Time.y - _DeathPulseTime;
+            if (timeSinceDeath > 0.0 && timeSinceDeath < 1.5)
+            {
+                float dDist = distance(IN.worldPos, _DeathPulsePos.xyz);
+                float onGridD = saturate(totalGrid * 3.0);
+
+                // Ring 1: fast outward blast
+                float r1Radius = timeSinceDeath * 12.0;
+                float r1Dist = abs(dDist - r1Radius);
+                float r1Glow = exp(-r1Dist * r1Dist * 30.0);
+                float r1Fade = smoothstep(0.0, 0.05, timeSinceDeath)
+                             * (1.0 - saturate(timeSinceDeath / 1.0));
+
+                // Ring 2: slower, delayed, wider
+                float r2Time = timeSinceDeath - 0.12;
+                float r2Radius = max(0.0, r2Time) * 6.0;
+                float r2Dist = abs(dDist - r2Radius);
+                float r2Glow = exp(-r2Dist * r2Dist * 20.0);
+                float r2Fade = smoothstep(0.0, 0.1, r2Time)
+                             * (1.0 - saturate(r2Time / 1.2));
+
+                float3 deathColor1 = float3(1.0, 0.15, 0.4);  // Hot magenta
+                float3 deathColor2 = float3(0.8, 0.05, 0.2);  // Deep red
+
+                gridCol += deathColor1 * r1Glow * r1Fade * r1Fade * onGridD * 2.0;
+                gridCol += deathColor2 * r2Glow * r2Fade * r2Fade * onGridD * 1.5;
             }
 
             // Base color with per-tile vertex color variation

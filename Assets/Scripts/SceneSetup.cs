@@ -43,7 +43,7 @@ public class SceneSetup : MonoBehaviour
         // Force high quality rendering on all platforms
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
-        QualitySettings.shadowDistance = 50.0f; // Well beyond visible range to prevent edge blinking
+        QualitySettings.shadowDistance = 15.0f; // Tight range — shadow map texels focused on visible area
         QualitySettings.shadowCascades = 1;
         QualitySettings.shadowProjection = ShadowProjection.StableFit; // Prevents cascade shifting
         QualitySettings.pixelLightCount = 4;
@@ -63,7 +63,7 @@ public class SceneSetup : MonoBehaviour
     {
         // Track: dark base with glowing grid lines
         trackMaterial = new Material(Shader.Find("Loopfall/TrackGrid"));
-        trackMaterial.SetColor("_BaseColor", new Color(0.1f, 0.1f, 0.12f));
+        trackMaterial.SetColor("_BaseColor", new Color(0.14f, 0.13f, 0.15f));
         trackMaterial.SetColor("_GridColor1", new Color(0.0f, 0.45f, 0.7f, 0.55f));   // Cyan major
         trackMaterial.SetColor("_GridColor2", new Color(0.8f, 0.15f, 0.5f, 0.5f));   // Pink minor (boosted alpha)
         trackMaterial.SetColor("_GridColor3", new Color(0.85f, 0.65f, 0.1f, 0.35f)); // Warm yellow accent (boosted)
@@ -403,8 +403,8 @@ public class SceneSetup : MonoBehaviour
         keyLight.intensity = 0.7f;
         keyLight.shadows = LightShadows.Soft;
         keyLight.shadowStrength = 0.8f;
-        keyLight.shadowBias = 0.02f;
-        keyLight.shadowNormalBias = 0.3f;
+        keyLight.shadowBias = 0.005f;
+        keyLight.shadowNormalBias = 0.05f;
         keyLight.shadowResolution = UnityEngine.Rendering.LightShadowResolution.VeryHigh;
         keyObj.transform.rotation = Quaternion.Euler(90, 0, 0);
 

@@ -10,9 +10,9 @@ public class ScoreSync : MonoBehaviour
     // ── COLOR PALETTE ────────────────────────────────────────
     static readonly Color NEON_CYAN = new Color(0.0f, 0.75f, 1.0f);
     static readonly Color NEON_MAGENTA = new Color(1.0f, 0.15f, 0.55f);
-    static readonly Color NEON_GOLD = new Color(1.0f, 0.85f, 0.1f);
+    static readonly Color NEON_GOLD = new Color(1.0f, 0.92f, 0.2f);
     static readonly Color DEEP_PURPLE = new Color(0.08f, 0.03f, 0.14f);
-    static readonly Color DIM_TEXT = new Color(0.4f, 0.42f, 0.5f);
+    static readonly Color DIM_TEXT = new Color(0.55f, 0.58f, 0.65f);
 
     // ── LEADERBOARD ──────────────────────────────────────────
     private List<int> topScores = new List<int>();
@@ -23,6 +23,7 @@ public class ScoreSync : MonoBehaviour
     private enum State { Title, Playing, Rewinding, GameOver }
     private State state = State.Title;
     private float stateTimer = 0f;
+    private State prevState = State.Title;
     private string lastScoreText = "0";
     private bool isNewBest = false;
     private int goFinalScore = 0;
@@ -32,11 +33,14 @@ public class ScoreSync : MonoBehaviour
     private Canvas canvas;
     private Image overlayImage;
     private RawImage vignetteImage;
+    private RawImage scanlinesImage;
 
     // ── TITLE ────────────────────────────────────────────────
     private RectTransform titleGroup;
     private TMP_Text titleText;
-    private TMP_Text titleGlowText;
+    private TMP_Text titleCyanText;
+    private TMP_Text titleMagentaText;
+    private TMP_Text titleYellowText;
     private TMP_Text subtitleText;
     private TMP_Text bestScoreText;
     private Image bestScoreLine;
@@ -71,6 +75,16 @@ public class ScoreSync : MonoBehaviour
     private Button goSettingsBtn;
     private TMP_Text goSettingsLabel;
 
+    // ── TITLE FADE ───────────────────────────────────────────
+    private CanvasGroup titleCanvasGroup;
+    private float titleFadeOutTimer = -1f;
+    private const float TITLE_FADE_DURATION = 0.5f;
+
+    // ── GAME OVER CHROMATIC ──────────────────────────────────
+    private TMP_Text goScoreCyanText;
+    private TMP_Text goScoreMagentaText;
+    private TMP_Text goScoreYellowText;
+
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
     private Sprite circleSprite;
@@ -102,6 +116,7 @@ public class ScoreSync : MonoBehaviour
 
         if (newState != state)
         {
+            State fromState = state;
             state = newState;
             stateTimer = 0f;
 
@@ -115,9 +130,34 @@ public class ScoreSync : MonoBehaviour
                 scoreGlowTimer = -1f;
                 currentStreak = 0;
                 streakFlashTimer = -1f;
+                titleFadeOutTimer = 0f;
             }
 
-            ShowGroup(state);
+            // Skip title screen on restart — fade game over overlay straight to gameplay
+            bool skipTitle = (state == State.Title && fromState == State.GameOver);
+
+            if (skipTitle)
+            {
+                // Hide all groups, fade overlays from current values
+                SetGroupActive(titleGroup, false);
+                SetGroupActive(playingGroup, false);
+                SetGroupActive(gameOverGroup, false);
+                titleFadeOutTimer = 0f;
+            }
+            else
+            {
+                ShowGroup(state);
+            }
+
+            // Keep title visible during fade-out (only from actual title screen)
+            if (state == State.Playing && titleCanvasGroup != null
+                && fromState == State.Title && prevState != State.GameOver)
+            {
+                titleGroup.gameObject.SetActive(true);
+                titleCanvasGroup.alpha = 1f;
+            }
+
+            prevState = fromState;
         }
 
         stateTimer += Time.deltaTime;
@@ -166,14 +206,17 @@ public class ScoreSync : MonoBehaviour
 
         canvasObj.AddComponent<GraphicRaycaster>();
 
-        // Dark overlay
+        // Purple-tinted overlay — retro color grading
         overlayImage = CreateImage(canvasObj.transform, "Overlay",
-            new Color(0.02f, 0.02f, 0.04f, 0f));
+            new Color(0.06f, 0.02f, 0.10f, 0f));
         StretchFull(overlayImage.rectTransform);
         overlayImage.raycastTarget = false;
 
         // Vignette overlay (procedural radial gradient)
         vignetteImage = CreateVignette(canvasObj.transform);
+
+        // CRT scanlines — retro horizontal bands
+        scanlinesImage = CreateScanlines(canvasObj.transform);
 
         BuildTitleGroup(canvasObj.transform);
         BuildPlayingGroup(canvasObj.transform);
@@ -185,27 +228,37 @@ public class ScoreSync : MonoBehaviour
     void BuildTitleGroup(Transform parent)
     {
         titleGroup = CreateGroup(parent, "TitleGroup");
+        titleCanvasGroup = titleGroup.gameObject.AddComponent<CanvasGroup>();
 
-        // Glow layer behind title — colored halo
-        titleGlowText = CreateText(titleGroup, "TitleGlow", "LOOPFALL",
-            148, FontStyles.Bold, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
-        SetAnchored(titleGlowText.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(1000, 180));
+        // Chromatic aberration layers — CMYK channel separation
+        // Order: yellow (back), magenta, cyan, white (front)
+        titleYellowText = CreateText(titleGroup, "TitleYellow", "LOOPFALL",
+            140, FontStyles.Bold, new Color(1f, 0.95f, 0.1f, 0f));
+        SetAnchored(titleYellowText.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(1000, 160));
 
-        // Main title — per-character animation driven in AnimateTitle
+        titleMagentaText = CreateText(titleGroup, "TitleMagenta", "LOOPFALL",
+            140, FontStyles.Bold, new Color(1f, 0.15f, 0.55f, 0f));
+        SetAnchored(titleMagentaText.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(1000, 160));
+
+        titleCyanText = CreateText(titleGroup, "TitleCyan", "LOOPFALL",
+            140, FontStyles.Bold, new Color(0f, 0.85f, 1f, 0f));
+        SetAnchored(titleCyanText.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(1000, 160));
+
+        // Main title (white) — per-character animation driven in AnimateTitle
         titleText = CreateText(titleGroup, "Title", "LOOPFALL",
             140, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
         SetAnchored(titleText.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(1000, 160));
 
         // Subtitle — different parallax speed
         subtitleText = CreateText(titleGroup, "Subtitle", "ENDLESS TUNNEL RUNNER",
-            28, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
-        SetAnchored(subtitleText.rectTransform, new Vector2(0.5f, 0.64f), new Vector2(800, 50));
+            32, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
+        SetAnchored(subtitleText.rectTransform, new Vector2(0.5f, 0.64f), new Vector2(900, 55));
         subtitleText.characterSpacing = 14f;
 
         // Best score
         bestScoreText = CreateText(titleGroup, "BestScore", "",
-            28, FontStyles.Bold, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
-        SetAnchored(bestScoreText.rectTransform, new Vector2(0.5f, 0.42f), new Vector2(400, 40));
+            38, FontStyles.Bold, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
+        SetAnchored(bestScoreText.rectTransform, new Vector2(0.5f, 0.42f), new Vector2(500, 50));
         bestScoreText.characterSpacing = 6f;
 
         // Thin gold line under best score — expands from center
@@ -220,9 +273,15 @@ public class ScoreSync : MonoBehaviour
 
         // Tap to start — pulsing in neon cyan
         tapToStartText = CreateText(titleGroup, "TapToStart", "TAP TO START",
-            34, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
-        SetAnchored(tapToStartText.rectTransform, new Vector2(0.5f, 0.32f), new Vector2(600, 50));
+            40, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
+        SetAnchored(tapToStartText.rectTransform, new Vector2(0.5f, 0.32f), new Vector2(700, 55));
         tapToStartText.characterSpacing = 8f;
+
+        // Drop shadows on main labels
+        ApplyDropShadow(titleText);
+        ApplyDropShadow(subtitleText);
+        ApplyDropShadow(bestScoreText);
+        ApplyDropShadow(tapToStartText);
     }
 
     void BuildPlayingGroup(Transform parent)
@@ -236,6 +295,8 @@ public class ScoreSync : MonoBehaviour
         playingScoreTextOut = CreateText(playingGroup, "ScoreOut", "",
             100, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
         SetAnchored(playingScoreTextOut.rectTransform, new Vector2(0.5f, 0.93f), new Vector2(600, 120));
+
+        ApplyDropShadow(playingScoreText);
 
         // Streak dots — fill up on each gate, flash and reset at STREAK_COUNT
         streakDots = new Image[STREAK_COUNT];
@@ -268,6 +329,19 @@ public class ScoreSync : MonoBehaviour
             230, FontStyles.Bold, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(goScoreGlowText.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(800, 260));
 
+        // Chromatic aberration layers for score (behind main text)
+        goScoreYellowText = CreateText(gameOverGroup, "GOScoreYellow", "0",
+            220, FontStyles.Bold, new Color(1f, 0.95f, 0.1f, 0f));
+        SetAnchored(goScoreYellowText.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(800, 250));
+
+        goScoreMagentaText = CreateText(gameOverGroup, "GOScoreMagenta", "0",
+            220, FontStyles.Bold, new Color(1f, 0.15f, 0.55f, 0f));
+        SetAnchored(goScoreMagentaText.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(800, 250));
+
+        goScoreCyanText = CreateText(gameOverGroup, "GOScoreCyan", "0",
+            220, FontStyles.Bold, new Color(0f, 0.85f, 1f, 0f));
+        SetAnchored(goScoreCyanText.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(800, 250));
+
         // Main score — counts up from 0
         goScoreText = CreateText(gameOverGroup, "GOScore", "0",
             220, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
@@ -275,8 +349,8 @@ public class ScoreSync : MonoBehaviour
 
         // "NEW BEST" — gold shimmer
         goNewBestText = CreateText(gameOverGroup, "GONewBest", "NEW BEST",
-            30, FontStyles.Normal, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
-        SetAnchored(goNewBestText.rectTransform, new Vector2(0.5f, 0.475f), new Vector2(400, 40));
+            38, FontStyles.Bold, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
+        SetAnchored(goNewBestText.rectTransform, new Vector2(0.5f, 0.475f), new Vector2(500, 50));
         goNewBestText.characterSpacing = 10f;
 
         // Leaderboard rows — staggered slide-in
@@ -284,16 +358,16 @@ public class ScoreSync : MonoBehaviour
         for (int i = 0; i < LEADERBOARD_SHOW; i++)
         {
             TMP_Text row = CreateText(gameOverGroup, "LB" + i, "",
-                24, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
-            SetAnchored(row.rectTransform, new Vector2(0.5f, 0.38f - i * 0.035f), new Vector2(300, 35));
+                28, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
+            SetAnchored(row.rectTransform, new Vector2(0.5f, 0.38f - i * 0.038f), new Vector2(350, 40));
             row.characterSpacing = 2f;
             goLeaderboardTexts[i] = row;
         }
 
         // Tap to play again
         goTapText = CreateText(gameOverGroup, "GOTap", "TAP TO PLAY",
-            28, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
-        SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(500, 45));
+            36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
+        SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         goTapText.characterSpacing = 8f;
 
         // Settings button — top right corner
@@ -312,6 +386,11 @@ public class ScoreSync : MonoBehaviour
         goSettingsLabel = CreateText(settingsRT, "Lbl", "\u2699",
             40, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
         StretchFull(goSettingsLabel.rectTransform);
+
+        // Drop shadows on main labels
+        ApplyDropShadow(goScoreText);
+        ApplyDropShadow(goNewBestText);
+        ApplyDropShadow(goTapText);
     }
 
     // ── PROCEDURAL TEXTURES ──────────────────────────────────
@@ -345,6 +424,30 @@ public class ScoreSync : MonoBehaviour
         return img;
     }
 
+    RawImage CreateScanlines(Transform parent)
+    {
+        // 4-pixel repeating pattern: 2 clear + 2 dark
+        Texture2D tex = new Texture2D(1, 4, TextureFormat.RGBA32, false);
+        tex.SetPixel(0, 0, new Color(0f, 0f, 0f, 0f));
+        tex.SetPixel(0, 1, new Color(0f, 0f, 0f, 0f));
+        tex.SetPixel(0, 2, new Color(0f, 0f, 0f, 0.15f));
+        tex.SetPixel(0, 3, new Color(0f, 0f, 0f, 0.15f));
+        tex.Apply();
+        tex.filterMode = FilterMode.Point;
+        tex.wrapMode = TextureWrapMode.Repeat;
+
+        GameObject obj = new GameObject("Scanlines");
+        obj.transform.SetParent(parent, false);
+        RawImage img = obj.AddComponent<RawImage>();
+        img.texture = tex;
+        img.color = new Color(1f, 1f, 1f, 0f);
+        img.raycastTarget = false;
+        // Tile to match physical screen pixels
+        img.uvRect = new Rect(0, 0, 1, Screen.height / 4f);
+        StretchFull(img.rectTransform);
+        return img;
+    }
+
     Sprite CreateCircleSprite(int size)
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
@@ -370,17 +473,13 @@ public class ScoreSync : MonoBehaviour
         SetGroupActive(playingGroup, s == State.Playing);
         SetGroupActive(gameOverGroup, s == State.GameOver);
 
-        // Clear overlays when entering non-overlay states
-        if (s == State.Playing)
+        // Playing: overlays fade out via titleFadeOutTimer, not cleared instantly
+        // Title + GameOver: overlays animate in via their animate methods
+        if (s == State.Title)
         {
-            overlayImage.color = new Color(0.02f, 0.02f, 0.04f, 0f);
+            overlayImage.color = new Color(0.06f, 0.02f, 0.10f, 0f);
             vignetteImage.color = new Color(1f, 1f, 1f, 0f);
-        }
-        else if (s == State.Title)
-        {
-            overlayImage.color = new Color(0.02f, 0.02f, 0.04f, 0f);
-            // Vignette will fade in via AnimateTitle
-            vignetteImage.color = new Color(1f, 1f, 1f, 0f);
+            scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
         }
     }
 
@@ -399,24 +498,62 @@ public class ScoreSync : MonoBehaviour
 
     void AnimateTitle()
     {
+        // Restart skip: fade overlays out without showing title UI
+        if (titleFadeOutTimer >= 0f && !titleGroup.gameObject.activeSelf)
+        {
+            titleFadeOutTimer += Time.deltaTime;
+            float fp = Mathf.Clamp01(titleFadeOutTimer / TITLE_FADE_DURATION);
+            float fadeAlpha = 1f - EaseOutCubic(fp);
+            overlayImage.color = new Color(0.06f, 0.02f, 0.10f, fadeAlpha * 0.9f);
+            vignetteImage.color = new Color(1f, 1f, 1f, fadeAlpha * 0.55f);
+            scanlinesImage.color = new Color(1f, 1f, 1f, fadeAlpha * 0.9f);
+            if (fp >= 1f)
+            {
+                titleFadeOutTimer = -1f;
+                overlayImage.color = new Color(0.06f, 0.02f, 0.10f, 0f);
+                vignetteImage.color = new Color(1f, 1f, 1f, 0f);
+                scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
+            }
+            return;
+        }
+
         // Per-character staggered elastic entrance
         AnimateTitleCharacters();
 
-        // Glow layer — breathes with slow cyan/magenta color shift
-        // Delayed until most letters are visible
-        float glowFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.7f);
-        float glowBreath = 0.10f + Mathf.Sin(Time.time * 1.2f) * 0.04f;
-        Color glowColor = Color.Lerp(NEON_CYAN, NEON_MAGENTA,
-            Mathf.Sin(Time.time * 0.5f) * 0.5f + 0.5f);
-        titleGlowText.color = new Color(glowColor.r, glowColor.g, glowColor.b,
-            glowBreath * glowFade);
-        // Glow drifts at slower parallax
-        float glowFloat = Mathf.Sin(Time.time * 0.5f) * 2f;
-        titleGlowText.rectTransform.anchoredPosition = new Vector2(0, glowFloat);
+        // ── RETRO BACKDROP: heavy overlay + vignette + scanlines ──
+        float backdropFade = Mathf.Clamp01(stateTimer / 1.2f);
+        overlayImage.color = new Color(0.06f, 0.02f, 0.10f, backdropFade * 0.9f);
+        vignetteImage.color = new Color(1f, 1f, 1f, backdropFade * 0.55f);
+        scanlinesImage.color = new Color(1f, 1f, 1f, backdropFade * 0.9f);
+
+        // ── CHROMATIC ABERRATION — bold CMYK separation ──
+        float chromaFade = Mathf.Clamp01((stateTimer - 0.4f) / 0.6f);
+        float chromaAlpha = chromaFade * 0.65f;
+
+        float t = Time.time;
+        float spread = 7f + Mathf.Sin(t * 0.7f) * 3f; // 4-10px spread
+
+        Vector2 cyanOff = new Vector2(
+            Mathf.Cos(t * 0.4f) * spread,
+            Mathf.Sin(t * 0.55f) * spread * 0.6f);
+        Vector2 magentaOff = new Vector2(
+            Mathf.Cos(t * 0.4f + 2.09f) * spread,
+            Mathf.Sin(t * 0.55f + 2.09f) * spread * 0.6f);
+        Vector2 yellowOff = new Vector2(
+            Mathf.Cos(t * 0.4f + 4.19f) * spread,
+            Mathf.Sin(t * 0.55f + 4.19f) * spread * 0.6f);
+
+        titleCyanText.rectTransform.anchoredPosition = cyanOff;
+        titleMagentaText.rectTransform.anchoredPosition = magentaOff;
+        titleYellowText.rectTransform.anchoredPosition = yellowOff;
+
+        SetAlpha(titleCyanText, chromaAlpha);
+        SetAlpha(titleMagentaText, chromaAlpha);
+        SetAlpha(titleYellowText, chromaAlpha);
 
         // Subtitle — delayed fade, different parallax speed
         float subFade = Mathf.Clamp01((stateTimer - 0.5f) / 0.8f);
-        SetAlpha(subtitleText, subFade * 0.5f);
+        SetAlpha(subtitleText, subFade * 0.9f);
         float subFloat = Mathf.Sin(Time.time * 0.6f) * 2f;
         subtitleText.rectTransform.anchoredPosition = new Vector2(0, subFloat);
 
@@ -425,12 +562,12 @@ public class ScoreSync : MonoBehaviour
         {
             float bestFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
             bestScoreText.text = "BEST  " + topScores[0];
-            SetAlpha(bestScoreText, bestFade * 0.6f);
+            SetAlpha(bestScoreText, bestFade);
 
-            float lineWidth = Mathf.Lerp(0f, 120f, EaseOutCubic(bestFade));
-            bestScoreLine.rectTransform.sizeDelta = new Vector2(lineWidth, 1.5f);
+            float lineWidth = Mathf.Lerp(0f, 200f, EaseOutCubic(bestFade));
+            bestScoreLine.rectTransform.sizeDelta = new Vector2(lineWidth, 2.5f);
             Color lc = bestScoreLine.color;
-            lc.a = bestFade * 0.4f;
+            lc.a = bestFade * 0.8f;
             bestScoreLine.color = lc;
         }
         else
@@ -441,20 +578,16 @@ public class ScoreSync : MonoBehaviour
             bestScoreLine.color = lc;
         }
 
-        // Tap to start — pulsing cyan
+        // Tap to start — pulsing cyan, brighter
         if (stateTimer > 1.2f)
         {
-            float pulse = 0.3f + Mathf.Sin(Time.time * 2.5f) * 0.2f;
+            float pulse = 0.65f + Mathf.Sin(Time.time * 2.5f) * 0.3f;
             SetAlpha(tapToStartText, pulse);
         }
         else
         {
             SetAlpha(tapToStartText, 0f);
         }
-
-        // Subtle vignette on title for atmosphere
-        float vigFade = Mathf.Clamp01(stateTimer / 2f);
-        vignetteImage.color = new Color(1f, 1f, 1f, vigFade * 0.25f);
     }
 
     void AnimateTitleCharacters()
@@ -490,7 +623,7 @@ public class ScoreSync : MonoBehaviour
             Color32[] colors = textInfo.meshInfo[materialIndex].colors32;
             Vector3[] verts = textInfo.meshInfo[materialIndex].vertices;
 
-            byte alpha = (byte)(Mathf.Clamp01(charAlpha) * 230);
+            byte alpha = (byte)(Mathf.Clamp01(charAlpha) * 255);
             for (int v = 0; v < 4; v++)
             {
                 colors[vertexIndex + v].a = alpha;
@@ -511,6 +644,30 @@ public class ScoreSync : MonoBehaviour
 
     void AnimatePlaying()
     {
+        // Title fade-out (smooth transition from title screen)
+        if (titleFadeOutTimer >= 0f && titleCanvasGroup != null)
+        {
+            titleFadeOutTimer += Time.deltaTime;
+            float fp = Mathf.Clamp01(titleFadeOutTimer / TITLE_FADE_DURATION);
+            float fadeAlpha = 1f - EaseOutCubic(fp);
+            titleCanvasGroup.alpha = fadeAlpha;
+
+            // Fade overlays with title
+            overlayImage.color = new Color(0.06f, 0.02f, 0.10f, fadeAlpha * 0.9f);
+            vignetteImage.color = new Color(1f, 1f, 1f, fadeAlpha * 0.55f);
+            scanlinesImage.color = new Color(1f, 1f, 1f, fadeAlpha * 0.9f);
+
+            if (fp >= 1f)
+            {
+                titleFadeOutTimer = -1f;
+                titleGroup.gameObject.SetActive(false);
+                titleCanvasGroup.alpha = 1f;
+                overlayImage.color = new Color(0.06f, 0.02f, 0.10f, 0f);
+                vignetteImage.color = new Color(1f, 1f, 1f, 0f);
+                scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
+            }
+        }
+
         if (source == null) return;
         string text = source.text;
         string scoreOnly = text.Contains("\n") ? text.Split('\n')[0] : text;
@@ -656,13 +813,11 @@ public class ScoreSync : MonoBehaviour
         if (goScoreText == null) return;
         float t = stateTimer;
 
-        // Vignette: fade in
-        float vigAlpha = Mathf.Clamp01(t / 0.6f) * 0.8f;
-        vignetteImage.color = new Color(1f, 1f, 1f, vigAlpha);
-
-        // Overlay: subtle dark fill
-        float overlayAlpha = Mathf.Clamp01(t / 0.5f) * 0.45f;
-        overlayImage.color = new Color(0.02f, 0.02f, 0.04f, overlayAlpha);
+        // Retro backdrop: heavy vignette + purple overlay + scanlines
+        float backdropP = Mathf.Clamp01(t / 0.6f);
+        vignetteImage.color = new Color(1f, 1f, 1f, backdropP * 0.55f);
+        overlayImage.color = new Color(0.06f, 0.02f, 0.10f, backdropP * 0.9f);
+        scanlinesImage.color = new Color(1f, 1f, 1f, backdropP * 0.9f);
 
         // Score count-up from 0 to final value
         if (t > 0.3f)
@@ -701,18 +856,53 @@ public class ScoreSync : MonoBehaviour
             float scale = Mathf.Lerp(1.2f, 1.0f, EaseOutBack(scaleP));
             goScoreText.rectTransform.localScale = new Vector3(scale, scale, 1f);
             goScoreGlowText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+
+            // Chromatic aberration on score
+            if (goScoreCyanText != null)
+            {
+                goScoreCyanText.text = displayScore.ToString();
+                goScoreMagentaText.text = displayScore.ToString();
+                goScoreYellowText.text = displayScore.ToString();
+
+                float ct = Time.time;
+                float chromaSpread = 4f + Mathf.Sin(ct * 0.8f) * 2f;
+                goScoreCyanText.rectTransform.anchoredPosition = new Vector2(
+                    Mathf.Cos(ct * 0.5f) * chromaSpread,
+                    Mathf.Sin(ct * 0.6f) * chromaSpread * 0.5f);
+                goScoreMagentaText.rectTransform.anchoredPosition = new Vector2(
+                    Mathf.Cos(ct * 0.5f + 2.09f) * chromaSpread,
+                    Mathf.Sin(ct * 0.6f + 2.09f) * chromaSpread * 0.5f);
+                goScoreYellowText.rectTransform.anchoredPosition = new Vector2(
+                    Mathf.Cos(ct * 0.5f + 4.19f) * chromaSpread,
+                    Mathf.Sin(ct * 0.6f + 4.19f) * chromaSpread * 0.5f);
+
+                float chromaAlpha = fadeEased * 0.4f;
+                SetAlpha(goScoreCyanText, chromaAlpha);
+                SetAlpha(goScoreMagentaText, chromaAlpha);
+                SetAlpha(goScoreYellowText, chromaAlpha);
+
+                goScoreCyanText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+                goScoreMagentaText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+                goScoreYellowText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+            }
         }
         else
         {
             SetAlpha(goScoreText, 0f);
             goScoreGlowText.color = new Color(0, 0, 0, 0f);
+            if (goScoreCyanText != null)
+            {
+                SetAlpha(goScoreCyanText, 0f);
+                SetAlpha(goScoreMagentaText, 0f);
+                SetAlpha(goScoreYellowText, 0f);
+            }
         }
 
         // "NEW BEST" — gold with double-frequency shimmer
         if (isNewBest && t > 1.0f)
         {
             float p = Mathf.Clamp01((t - 1.0f) / 0.4f);
-            float shimmer = 0.6f + Mathf.Sin(Time.time * 3f) * 0.2f
+            float shimmer = 0.8f + Mathf.Sin(Time.time * 3f) * 0.15f
                           + Mathf.Sin(Time.time * 7f) * 0.05f;
             SetAlpha(goNewBestText, EaseOutCubic(p) * shimmer);
         }
@@ -738,7 +928,7 @@ public class ScoreSync : MonoBehaviour
         // Tap to play — pulsing cyan
         if (t > 1.8f)
         {
-            float pulse = 0.25f + Mathf.Sin(Time.time * 2.5f) * 0.18f;
+            float pulse = 0.45f + Mathf.Sin(Time.time * 2.5f) * 0.25f;
             SetAlpha(goTapText, pulse);
         }
         else
@@ -781,17 +971,17 @@ public class ScoreSync : MonoBehaviour
             if (isCurrent)
             {
                 rowColor = NEON_CYAN;
-                maxAlpha = 0.85f;
+                maxAlpha = 0.95f;
             }
             else if (i == 0)
             {
                 rowColor = NEON_GOLD;
-                maxAlpha = 0.5f;
+                maxAlpha = 0.7f;
             }
             else
             {
                 rowColor = DIM_TEXT;
-                maxAlpha = 0.35f;
+                maxAlpha = 0.5f;
             }
 
             goLeaderboardTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
@@ -922,6 +1112,18 @@ public class ScoreSync : MonoBehaviour
         topScores.Clear();
         PlayerPrefs.DeleteKey(SCORES_KEY);
         PlayerPrefs.Save();
+    }
+
+    // ── DROP SHADOW ──────────────────────────────────────────
+
+    void ApplyDropShadow(TMP_Text text)
+    {
+        Material mat = text.fontMaterial;
+        mat.EnableKeyword("UNDERLAY_ON");
+        mat.SetColor("_UnderlayColor", new Color(0f, 0f, 0f, 0.4f));
+        mat.SetFloat("_UnderlayOffsetX", 0.8f);
+        mat.SetFloat("_UnderlayOffsetY", -0.8f);
+        mat.SetFloat("_UnderlaySoftness", 0.3f);
     }
 
     // ── EASING ───────────────────────────────────────────────
