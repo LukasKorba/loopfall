@@ -41,6 +41,7 @@ Shader "Loopfall/TrackGrid"
             float2 gridUV;
             float4 vertColor;
             float camDist;
+            float3 worldPos;
         };
 
         fixed4 _BaseColor;
@@ -68,13 +69,18 @@ Shader "Loopfall/TrackGrid"
         fixed4 _SparkColor2;
         fixed4 _SparkColor3;
 
+        // Score pulse — set via Shader.SetGlobal from C#
+        float _ScorePulseTime;
+        float4 _ScorePulsePos;
+
         void vert(inout appdata_full v, out Input o)
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.gridUV = v.texcoord;
             o.vertColor = v.color;
-            float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.camDist = distance(worldPos, _WorldSpaceCameraPos);
+            float3 wp = mul(unity_ObjectToWorld, v.vertex).xyz;
+            o.camDist = distance(wp, _WorldSpaceCameraPos);
+            o.worldPos = wp;
         }
 
         float gridLine(float coord, float width, float falloff)
@@ -167,6 +173,21 @@ Shader "Loopfall/TrackGrid"
             // Blend near → far based on distance
             float3 gridCol = lerp(nearCol, farCol, depthT);
             float intensity = lerp(_GlowIntensity, 0.0, depthT);
+
+            // ── SCORE PULSE WAVE ──────────────────────────────────
+            float timeSincePulse = _Time.y - _ScorePulseTime;
+            if (timeSincePulse > 0.0 && timeSincePulse < 1.0)
+            {
+                float dist = distance(IN.worldPos, _ScorePulsePos.xyz);
+                float ringRadius = timeSincePulse * 8.0; // Expand at 8 units/sec
+                float ringDist = abs(dist - ringRadius);
+                float ringGlow = exp(-ringDist * ringDist * 40.0); // Sharp ring
+                float fade = 1.0 - timeSincePulse; // Fade out over 1 second
+                // Only glow on grid lines — multiply by existing grid presence
+                float onGrid = saturate(totalGrid * 3.0);
+                float3 pulseColor = lerp(_GridColor1.rgb, float3(1, 1, 1), 0.5);
+                gridCol += pulseColor * ringGlow * fade * fade * onGrid * 2.0;
+            }
 
             // Base color with per-tile vertex color variation
             float3 base = _BaseColor.rgb * IN.vertColor.rgb;

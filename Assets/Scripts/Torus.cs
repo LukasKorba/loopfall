@@ -1,8 +1,23 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 public class Torus : MonoBehaviour
 {
+    // Ball reference for score pulse position
+    public Transform mBallTransform;
+
+#if UNITY_IOS && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern void AudioServicesPlaySystemSound(uint soundID);
+#endif
+
+    static void LightHaptic()
+    {
+#if UNITY_IOS && !UNITY_EDITOR
+        AudioServicesPlaySystemSound(1519); // Peek — light tap
+#endif
+    }
     private float mAngle = 0.0f;
     private float mAngleScore = 0.0f;
     // MANUAL PARAM: Rotation speed — original constant speed from the version you loved
@@ -70,6 +85,16 @@ public class Torus : MonoBehaviour
             mScoreLbl.text = mScore.ToString();
             mCurrentObstacle = mCurrentObstacle.mNextOne;
             mScoreWithoutInteraction++;
+
+            // Grid pulse wave — expanding ring from ball position
+            if (mBallTransform != null)
+            {
+                Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
+                Shader.SetGlobalVector("_ScorePulsePos", mBallTransform.position);
+            }
+
+            // Haptic feedback
+            LightHaptic();
         }
 
         // Update obstacles

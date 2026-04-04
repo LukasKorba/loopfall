@@ -53,10 +53,22 @@ public class RewindSystem : MonoBehaviour
     private float stateTimer = 0f;
 
     private const float PAUSE_DURATION = 0.6f;
-    private const float REWIND_BASE_DURATION = 1.5f;  // For scores ~0-5
-    private const float REWIND_PER_POINT = 0.08f;     // Extra seconds per score point
-    private const float REWIND_MAX_DURATION = 8.0f;    // Cap so it doesn't get absurd
-    private float rewindDuration = REWIND_BASE_DURATION;
+
+    // Rewind speed: angle-based, scales with distance traveled
+    // Short runs (< 50°): gentle 30°/s so player sees their path
+    // Medium runs (50-200°): ramps up to 60°/s
+    // Long runs (200°+): ramps up to max speed
+    // Cap: max degrees/second — player must still recognize gates/trail
+    private const float REWIND_MIN_SPEED = 30f;   // °/s for short runs
+    private const float REWIND_MAX_SPEED = 90f;    // °/s cap — still recognizable
+    private const float REWIND_RAMP_START = 50f;   // Angle where speedup begins
+    private const float REWIND_RAMP_END = 300f;    // Angle where max speed is reached
+    private const float REWIND_MIN_DURATION = 1.2f; // Never shorter than this
+
+    // DEBUG: uncomment to test constant speed rewind
+    // private const float DEBUG_REWIND_SPEED = 20f; // °/s constant
+
+    private float rewindDuration = 1.5f;
     private const float LANDED_PAUSE_BASE = 0.3f;
     private const float LANDED_PAUSE_PER_POINT = 0.04f;
     private const float LANDED_PAUSE_MAX = 2.0f;
@@ -107,11 +119,15 @@ public class RewindSystem : MonoBehaviour
         currentState = State.Pausing;
         stateTimer = 0f;
 
-        // Compute rewind duration based on how far we traveled (death angle as proxy)
+        // Compute rewind speed based on distance traveled
         float deathAngle = frames.Count > 0 ? frames[frames.Count - 1].torusAngle : 0f;
-        // ~10° per obstacle ≈ 1 point, so deathAngle/10 approximates score
-        float approxScore = deathAngle / 10f;
-        rewindDuration = Mathf.Min(REWIND_BASE_DURATION + approxScore * REWIND_PER_POINT, REWIND_MAX_DURATION);
+
+        // Lerp speed from min to max based on how far we got
+        float speedT = Mathf.Clamp01((deathAngle - REWIND_RAMP_START) / (REWIND_RAMP_END - REWIND_RAMP_START));
+        float speed = Mathf.Lerp(REWIND_MIN_SPEED, REWIND_MAX_SPEED, speedT);
+
+        // Duration = angle / speed, with a minimum floor
+        rewindDuration = Mathf.Max(deathAngle / speed, REWIND_MIN_DURATION);
     }
 
     public void ResetSystem()
@@ -240,8 +256,8 @@ public class RewindSystem : MonoBehaviour
     // 240° behind + 120° ahead = 360° = exactly one lap, no physical overlap.
     // Trail color ramp: bright near ball → dim far away.
     // Each segment gets a uniform tint based on its distance from the view angle.
-    private static readonly Color TRAIL_COLOR_NEAR = new Color(1.0f, 0.7f, 0.2f, 0.9f);   // Warm gold near ball
-    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.5f, 0.15f, 0.3f, 0.15f); // Fades to warm purple
+    private static readonly Color TRAIL_COLOR_NEAR = new Color(0.2f, 0.85f, 1.0f, 0.9f);   // Bright cyan near ball
+    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.1f, 0.25f, 0.6f, 0.15f); // Fades to deep blue
 
     void UpdateSegmentVisibility(float viewAngle, float aheadMargin = 5f)
     {
@@ -527,22 +543,16 @@ public class RewindSystem : MonoBehaviour
             return;
         }
 
-        // DEBUG: constant speed rewind — 20°/s
-        bool debugConstantSpeed = true;
-        float deathAngle = frames[frames.Count - 1].torusAngle;
-        float debugDuration = deathAngle / 20f; // 20° per second
+        // DEBUG: uncomment for constant speed testing
+        // float deathAngle = frames[frames.Count - 1].torusAngle;
+        // float debugDuration = deathAngle / DEBUG_REWIND_SPEED;
+        // float progress = Mathf.Clamp01(stateTimer / debugDuration);
+        // float eased = progress;
 
-        float progress, eased;
-        if (debugConstantSpeed)
-        {
-            progress = Mathf.Clamp01(stateTimer / debugDuration);
-            eased = progress; // Linear — no easing
-        }
-        else
-        {
-            progress = Mathf.Clamp01(stateTimer / rewindDuration);
-            eased = EaseInOutCubic(progress);
-        }
+        // Ease in-out: starts gentle (player sees where they died),
+        // accelerates through the middle, decelerates to land smoothly
+        float progress = Mathf.Clamp01(stateTimer / rewindDuration);
+        float eased = EaseInOutCubic(progress);
 
         float frameF = (1f - eased) * (frames.Count - 1);
         int idx = Mathf.FloorToInt(frameF);

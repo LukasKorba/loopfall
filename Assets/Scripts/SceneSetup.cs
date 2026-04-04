@@ -330,6 +330,7 @@ public class SceneSetup : MonoBehaviour
         torusScript.mObstacleFront = obstacleFrontMaterial;
         torusScript.mObstacleTop = obstacleTopMaterial;
         torusScript.mObstacleShadow = obstacleShadowMaterial;
+        torusScript.mBallTransform = ball.transform;
     }
 
     void CreateCamera()

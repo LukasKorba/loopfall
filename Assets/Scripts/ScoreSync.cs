@@ -40,6 +40,9 @@ public class ScoreSync : MonoBehaviour
     private float scoreAnimTimer = -1f;
     private const float SCORE_ANIM_DURATION = 0.25f;
     private const float SCORE_SLIDE_DISTANCE = 60f;
+    private float scorePopTimer = -1f;
+    private const float SCORE_POP_DURATION = 0.3f;
+    private const float SCORE_POP_SCALE = 1.35f;
 
     // Game Over elements
     private RectTransform gameOverGroup;
@@ -90,6 +93,7 @@ public class ScoreSync : MonoBehaviour
             {
                 lastPlayingScore = "0";
                 scoreAnimTimer = -1f;
+                scorePopTimer = -1f;
             }
 
             ShowGroup(state);
@@ -313,7 +317,7 @@ public class ScoreSync : MonoBehaviour
         string text = source.text;
         string scoreOnly = text.Contains("\n") ? text.Split('\n')[0] : text;
 
-        // Detect score change — trigger crossfade
+        // Detect score change — trigger crossfade + pop
         if (scoreOnly != lastPlayingScore)
         {
             // Old score starts sliding down + fading out
@@ -324,6 +328,7 @@ public class ScoreSync : MonoBehaviour
             playingScoreText.text = scoreOnly;
 
             scoreAnimTimer = 0f;
+            scorePopTimer = 0f;
             lastPlayingScore = scoreOnly;
         }
 
@@ -352,6 +357,19 @@ public class ScoreSync : MonoBehaviour
             float alpha = scoreOnly == "0" ? 0.2f : 0.8f;
             SetAlpha(playingScoreText, alpha);
             SetAlpha(playingScoreTextOut, 0f);
+        }
+
+        // Scale pop — punchy overshoot then settle
+        if (scorePopTimer >= 0f && scorePopTimer < SCORE_POP_DURATION)
+        {
+            scorePopTimer += Time.deltaTime;
+            float p = Mathf.Clamp01(scorePopTimer / SCORE_POP_DURATION);
+            float scale = Mathf.Lerp(SCORE_POP_SCALE, 1f, EaseOutBack(p));
+            playingScoreText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+        }
+        else
+        {
+            playingScoreText.rectTransform.localScale = Vector3.one;
         }
     }
 
