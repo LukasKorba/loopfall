@@ -21,17 +21,36 @@ public class DepthHueShift : MonoBehaviour
 
     private Material mat;
 
+    [HideInInspector]
+    public Shader depthShader;
+
+    private Camera cam;
+
     void OnEnable()
     {
-        GetComponent<Camera>().depthTextureMode |= DepthTextureMode.Depth;
+        cam = GetComponent<Camera>();
+        cam.depthTextureMode |= DepthTextureMode.Depth;
+    }
 
-        Shader shader = Shader.Find("Loopfall/DepthHueShift");
-        if (shader != null)
-            mat = new Material(shader);
+    void OnPreRender()
+    {
+        cam.depthTextureMode |= DepthTextureMode.Depth;
+    }
+
+    void EnsureMaterial()
+    {
+        if (mat != null) return;
+
+        if (depthShader == null)
+            depthShader = Shader.Find("Loopfall/DepthHueShift");
+
+        if (depthShader != null)
+            mat = new Material(depthShader);
     }
 
     void OnRenderImage(RenderTexture src, RenderTexture dst)
     {
+        EnsureMaterial();
         if (mat == null)
         {
             Graphics.Blit(src, dst);

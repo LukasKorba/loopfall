@@ -16,8 +16,15 @@ public class SceneSetup : MonoBehaviour
     // MANUAL PARAM: Only render bottom hemisphere of tube (the U-shape)
     public bool halfTubeOnly = true;
 
+    // Direct references — ensures shaders are included in iOS builds
+    public Shader depthHueShiftRef;
+    public Shader gateShaderRef;
+
     void Awake()
     {
+        // Force highest graphics tier — Tier2 on iOS disables HDR, killing emission glow
+        Graphics.activeTier = UnityEngine.Rendering.GraphicsTier.Tier3;
+
         // Force Ultra quality on all platforms (iOS defaults to Medium otherwise)
         QualitySettings.SetQualityLevel(5, true);
 
@@ -50,6 +57,7 @@ public class SceneSetup : MonoBehaviour
     Material railMaterialLeft;
     Material railMaterialRight;
     Material trailMaterial;
+    Shader depthHueShiftShader;
 
     void CreateMaterials()
     {
@@ -75,22 +83,18 @@ public class SceneSetup : MonoBehaviour
         trackMaterial.SetFloat("_DepthFadeEnd", 14.0f);
         trackMaterial.SetColor("_FarColor", new Color(0.2f, 0.05f, 0.3f, 0.25f)); // Muted purple at distance
 
-        // Obstacle front: warm amber-orange — contrasts against blue grid
-        // Linear color space: boost emission to compensate for gamma→linear conversion
-        obstacleFrontMaterial = new Material(Shader.Find("Standard"));
-        obstacleFrontMaterial.color = new Color(1.0f, 0.6f, 0.15f);
-        obstacleFrontMaterial.SetFloat("_Glossiness", 0.85f);
-        obstacleFrontMaterial.SetFloat("_Metallic", 0.5f);
-        obstacleFrontMaterial.EnableKeyword("_EMISSION");
+        // Obstacle front: custom shader — identical rendering on all platforms
+        Shader gateShader = gateShaderRef != null ? gateShaderRef : Shader.Find("Loopfall/Gate");
+        obstacleFrontMaterial = new Material(gateShader);
+        obstacleFrontMaterial.SetColor("_Color", new Color(1.0f, 0.6f, 0.15f));
         obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.9f, 0.4f, 0.08f));
+        obstacleFrontMaterial.SetFloat("_EmissionIntensity", 1.0f);
 
-        // Obstacle top: bright gold — catches light, brightest element on track
-        obstacleTopMaterial = new Material(Shader.Find("Standard"));
-        obstacleTopMaterial.color = new Color(1.0f, 0.75f, 0.25f);
-        obstacleTopMaterial.SetFloat("_Glossiness", 0.9f);
-        obstacleTopMaterial.SetFloat("_Metallic", 0.4f);
-        obstacleTopMaterial.EnableKeyword("_EMISSION");
+        // Obstacle top: brighter gold
+        obstacleTopMaterial = new Material(gateShader);
+        obstacleTopMaterial.SetColor("_Color", new Color(1.0f, 0.75f, 0.25f));
         obstacleTopMaterial.SetColor("_EmissionColor", new Color(1.0f, 0.55f, 0.1f));
+        obstacleTopMaterial.SetFloat("_EmissionIntensity", 1.0f);
 
         // Obstacle shadow: double-sided, dark strip on track surface
         obstacleShadowMaterial = new Material(Shader.Find("Standard"));
@@ -139,6 +143,9 @@ public class SceneSetup : MonoBehaviour
         trailMaterial.SetColor("_Color", Color.white);
         trailMaterial.SetFloat("_Intensity", 2.0f);
         trailMaterial.renderQueue = 3000;
+
+        // Use direct scene reference (Shader.Find gets stripped on iOS)
+        depthHueShiftShader = depthHueShiftRef;
     }
 
     void CreateTorus()
@@ -352,6 +359,7 @@ public class SceneSetup : MonoBehaviour
         mainCam.transform.rotation = new Quaternion(0, 0.707106829f, 0, 0.707106709f);
         mainCam.fieldOfView = 50.0f;
         mainCam.nearClipPlane = 0.3f;
+        mainCam.allowHDR = true; // Emission values >1.0 render without clamping
         mainCam.backgroundColor = new Color(0.05f, 0.05f, 0.08f); // Near black
         mainCam.clearFlags = CameraClearFlags.SolidColor;
 
@@ -363,7 +371,8 @@ public class SceneSetup : MonoBehaviour
         mainCam.gameObject.AddComponent<DeathEffect>();
 
         // Depth-based hue shift — rainbow color variation over distance
-        mainCam.gameObject.AddComponent<DepthHueShift>();
+        DepthHueShift depthHue = mainCam.gameObject.AddComponent<DepthHueShift>();
+        depthHue.depthShader = depthHueShiftShader;
 
         // Wire camera to ball
         GameObject ball = GameObject.Find("Ball");

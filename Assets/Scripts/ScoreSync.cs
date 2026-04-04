@@ -52,9 +52,6 @@ public class ScoreSync : MonoBehaviour
     private Button goSettingsBtn;
     private TMP_Text goSettingsLabel;
 
-    // Debug
-    private Button debugClearBtn;
-
     // Font
     private TMP_FontAsset defaultFont;
 
@@ -224,24 +221,6 @@ public class ScoreSync : MonoBehaviour
         goSettingsLabel = CreateText(settingsRT, "Lbl", "\u2699",
             40, FontStyles.Normal, new Color(0.5f, 0.5f, 0.55f, 0f));
         StretchFull(goSettingsLabel.rectTransform);
-
-        // ── DEBUG CLR ──
-        GameObject btnObj = new GameObject("DebugClear");
-        RectTransform btnRT = btnObj.AddComponent<RectTransform>();
-        btnRT.SetParent(canvasObj.transform, false);
-        btnRT.anchorMin = new Vector2(0, 0);
-        btnRT.anchorMax = new Vector2(0, 0);
-        btnRT.pivot = new Vector2(0, 0);
-        btnRT.anchoredPosition = new Vector2(10, 10);
-        btnRT.sizeDelta = new Vector2(80, 40);
-        Image btnImg = btnObj.AddComponent<Image>();
-        btnImg.color = new Color(0, 0, 0, 0.01f);
-        debugClearBtn = btnObj.AddComponent<Button>();
-        debugClearBtn.onClick.AddListener(ClearAllScores);
-
-        TMP_Text btnLabel = CreateText(btnRT, "Lbl", "CLR",
-            14, FontStyles.Normal, new Color(0.4f, 0.4f, 0.4f, 0.3f));
-        StretchFull(btnLabel.rectTransform);
 
         // Start in title
         ShowGroup(State.Title);

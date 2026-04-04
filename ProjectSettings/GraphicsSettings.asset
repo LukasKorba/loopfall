@@ -40,6 +40,8 @@ GraphicsSettings:
   - {fileID: 4800000, guid: 2e3541e96060a46e2bfd40e3efe8743c, type: 3}
   - {fileID: 4800000, guid: 68dd14f0d7f2b48949114a0d81606bd7, type: 3}
   - {fileID: 4800000, guid: fae0febebf4044dccacbe667667c6311, type: 3}
+  - {fileID: 210, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 4800000, guid: 26ee0fcdd804f4978ab6d317fe988e75, type: 3}
   m_PreloadedShaders: []
   m_PreloadShadersBatchTimeLimit: -1
   m_SpritesDefaultMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
@@ -48,7 +50,55 @@ GraphicsSettings:
   m_TransparencySortAxis: {x: 0, y: 0, z: 1}
   m_DefaultRenderingPath: 1
   m_DefaultMobileRenderingPath: 1
-  m_TierSettings: []
+  m_TierSettings:
+  - serializedVersion: 5
+    m_BuildTarget: 4
+    m_Tier: 0
+    m_Settings:
+      standardShaderQuality: 2
+      renderingPath: 1
+      hdrMode: 0
+      realtimeGICPUUsage: 25
+      useReflectionProbeBoxProjection: 1
+      useReflectionProbeBlending: 1
+      useCascadedShadowMaps: 1
+      prefer32BitShadowMaps: 0
+      enableLPPV: 1
+      useDitherMaskForAlphaBlendedShadows: 1
+      useHDR: 1
+      renderPipeline: {fileID: 0}
+  - serializedVersion: 5
+    m_BuildTarget: 4
+    m_Tier: 1
+    m_Settings:
+      standardShaderQuality: 2
+      renderingPath: 1
+      hdrMode: 0
+      realtimeGICPUUsage: 25
+      useReflectionProbeBoxProjection: 1
+      useReflectionProbeBlending: 1
+      useCascadedShadowMaps: 1
+      prefer32BitShadowMaps: 0
+      enableLPPV: 1
+      useDitherMaskForAlphaBlendedShadows: 1
+      useHDR: 1
+      renderPipeline: {fileID: 0}
+  - serializedVersion: 5
+    m_BuildTarget: 4
+    m_Tier: 2
+    m_Settings:
+      standardShaderQuality: 2
+      renderingPath: 1
+      hdrMode: 0
+      realtimeGICPUUsage: 25
+      useReflectionProbeBoxProjection: 1
+      useReflectionProbeBlending: 1
+      useCascadedShadowMaps: 1
+      prefer32BitShadowMaps: 0
+      enableLPPV: 1
+      useDitherMaskForAlphaBlendedShadows: 1
+      useHDR: 1
+      renderPipeline: {fileID: 0}
   m_LightmapStripping: 0
   m_FogStripping: 0
   m_InstancingStripping: 0

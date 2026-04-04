@@ -37,12 +37,12 @@ Shader "Loopfall/DepthHueShift"
             };
 
             sampler2D _MainTex;
-            sampler2D _CameraDepthTexture;
+            UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
             float _HueShiftAmount;
             float _DepthStartWorld;
             float _DepthEndWorld;
             float _Saturation;
-            float4 _FogColor;
+            half4 _FogColor;
             float _FogAmount;
             float _FogStart;
             float _FogEnd;
@@ -55,7 +55,6 @@ Shader "Loopfall/DepthHueShift"
                 return o;
             }
 
-            // RGB → HSV
             float3 rgb2hsv(float3 c)
             {
                 float4 K = float4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
@@ -66,7 +65,6 @@ Shader "Loopfall/DepthHueShift"
                 return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
             }
 
-            // HSV → RGB
             float3 hsv2rgb(float3 c)
             {
                 float4 K = float4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
@@ -74,42 +72,29 @@ Shader "Loopfall/DepthHueShift"
                 return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            half4 frag(v2f i) : SV_Target
             {
-                fixed4 col = tex2D(_MainTex, i.uv);
+                half4 col = tex2D(_MainTex, i.uv);
 
-                // Sample depth buffer — world-space distance from camera
                 float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
                 float eyeDepth = LinearEyeDepth(rawDepth);
 
-                // Skip skybox / background (very far)
                 if (eyeDepth > 500.0)
                     return col;
 
-                // Hue shift ramp
                 float t = saturate((eyeDepth - _DepthStartWorld) / (_DepthEndWorld - _DepthStartWorld));
 
-                // Convert to HSV
                 float3 hsv = rgb2hsv(col.rgb);
-
-                // Hue shift — rainbow sweep over depth
                 hsv.x = frac(hsv.x + t * _HueShiftAmount);
-
-                // Slight saturation boost at distance so shifted colors pop
                 hsv.y = saturate(hsv.y + t * _Saturation);
-
-                // Convert back to RGB
                 float3 shifted = hsv2rgb(hsv);
-
-                // Apply hue shift
                 float3 result = lerp(col.rgb, shifted, t);
 
-                // Fog — separate depth ramp, blends toward fog color
                 float fogT = saturate((eyeDepth - _FogStart) / (_FogEnd - _FogStart));
-                fogT = fogT * fogT; // Quadratic falloff — subtle near, strong far
+                fogT = fogT * fogT;
                 result = lerp(result, _FogColor.rgb, fogT * _FogAmount);
 
-                return fixed4(result, col.a);
+                return half4(result, col.a);
             }
             ENDCG
         }
