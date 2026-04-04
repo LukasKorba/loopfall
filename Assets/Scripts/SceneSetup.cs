@@ -18,6 +18,9 @@ public class SceneSetup : MonoBehaviour
 
     void Awake()
     {
+        // Force Ultra quality on all platforms (iOS defaults to Medium otherwise)
+        QualitySettings.SetQualityLevel(5, true);
+
         CreateMaterials();
         CreateTorus();
         CreateBall();
@@ -30,12 +33,13 @@ public class SceneSetup : MonoBehaviour
         // Physics settings
         Physics.gravity = new Vector3(0, -9.81f, 0);
 
-        // Force high quality shadows on all platforms (iPhone defaults to Medium = hard shadows)
+        // Force high quality rendering on all platforms
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
         QualitySettings.shadowDistance = 50.0f; // Well beyond visible range to prevent edge blinking
         QualitySettings.shadowCascades = 1;
         QualitySettings.shadowProjection = ShadowProjection.StableFit; // Prevents cascade shifting
+        QualitySettings.pixelLightCount = 4;
     }
 
     Material trackMaterial;
@@ -67,25 +71,26 @@ public class SceneSetup : MonoBehaviour
         trackMaterial.SetFloat("_PulseAmount", 0.12f);
         trackMaterial.SetFloat("_Glossiness", 0.25f);
         trackMaterial.SetFloat("_Metallic", 0.05f);
-        trackMaterial.SetFloat("_DepthFadeStart", 2.0f);
-        trackMaterial.SetFloat("_DepthFadeEnd", 18.0f);
+        trackMaterial.SetFloat("_DepthFadeStart", 1.5f);
+        trackMaterial.SetFloat("_DepthFadeEnd", 14.0f);
         trackMaterial.SetColor("_FarColor", new Color(0.2f, 0.05f, 0.3f, 0.25f)); // Muted purple at distance
 
         // Obstacle front: warm amber-orange — contrasts against blue grid
+        // Linear color space: boost emission to compensate for gamma→linear conversion
         obstacleFrontMaterial = new Material(Shader.Find("Standard"));
-        obstacleFrontMaterial.color = new Color(1.0f, 0.55f, 0.1f);
+        obstacleFrontMaterial.color = new Color(1.0f, 0.6f, 0.15f);
         obstacleFrontMaterial.SetFloat("_Glossiness", 0.85f);
         obstacleFrontMaterial.SetFloat("_Metallic", 0.5f);
         obstacleFrontMaterial.EnableKeyword("_EMISSION");
-        obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.5f, 0.2f, 0.03f));
+        obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.9f, 0.4f, 0.08f));
 
         // Obstacle top: bright gold — catches light, brightest element on track
         obstacleTopMaterial = new Material(Shader.Find("Standard"));
-        obstacleTopMaterial.color = new Color(1.0f, 0.7f, 0.2f);
+        obstacleTopMaterial.color = new Color(1.0f, 0.75f, 0.25f);
         obstacleTopMaterial.SetFloat("_Glossiness", 0.9f);
         obstacleTopMaterial.SetFloat("_Metallic", 0.4f);
         obstacleTopMaterial.EnableKeyword("_EMISSION");
-        obstacleTopMaterial.SetColor("_EmissionColor", new Color(0.55f, 0.3f, 0.05f));
+        obstacleTopMaterial.SetColor("_EmissionColor", new Color(1.0f, 0.55f, 0.1f));
 
         // Obstacle shadow: double-sided, dark strip on track surface
         obstacleShadowMaterial = new Material(Shader.Find("Standard"));
@@ -504,22 +509,23 @@ public class SceneSetup : MonoBehaviour
                 Vector3 faceNormal1 = Vector3.Cross(p10 - p00, p11 - p00).normalized;
                 Vector3 faceNormal2 = Vector3.Cross(p11 - p00, p01 - p00).normalized;
 
-                // Front side
+                // Front side (outward facing) — alpha=0 to suppress grid emission
+                Color outerColor = new Color(tileColor.r, tileColor.g, tileColor.b, 0f);
                 int idx = verts.Count;
                 verts.Add(p00); verts.Add(p10); verts.Add(p11);
                 normals.Add(faceNormal1); normals.Add(faceNormal1); normals.Add(faceNormal1);
-                colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                colors.Add(outerColor); colors.Add(outerColor); colors.Add(outerColor);
                 uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u1, v0)); uvs.Add(new Vector2(u1, v1));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
 
                 idx = verts.Count;
                 verts.Add(p00); verts.Add(p11); verts.Add(p01);
                 normals.Add(faceNormal2); normals.Add(faceNormal2); normals.Add(faceNormal2);
-                colors.Add(tileColor); colors.Add(tileColor); colors.Add(tileColor);
+                colors.Add(outerColor); colors.Add(outerColor); colors.Add(outerColor);
                 uvs.Add(new Vector2(u0, v0)); uvs.Add(new Vector2(u1, v1)); uvs.Add(new Vector2(u0, v1));
                 tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
 
-                // Back side (inward facing) — reversed winding for double-sided collision
+                // Back side (inward facing) — alpha=1 for full grid, reversed winding for double-sided collision
                 idx = verts.Count;
                 verts.Add(p00); verts.Add(p11); verts.Add(p10);
                 normals.Add(-faceNormal1); normals.Add(-faceNormal1); normals.Add(-faceNormal1);

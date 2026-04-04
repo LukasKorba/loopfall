@@ -15,8 +15,6 @@ Shader "Loopfall/Rail"
     {
         Tags { "RenderType"="Opaque" "Queue"="Geometry" }
         LOD 200
-        Cull Off
-
         CGPROGRAM
         #pragma surface surf Standard fullforwardshadows vertex:vert
         #pragma target 3.0

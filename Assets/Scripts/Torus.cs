@@ -8,7 +8,7 @@ public class Torus : MonoBehaviour
     // MANUAL PARAM: Rotation speed — original constant speed from the version you loved
     private float mAngleStep = 0.17f;
     private int mRounds = 0;
-    private float mObstacleStep = 10.0f;
+    private float mObstacleStep = 4.0f;
     private float mObstacleStepInv;
 
     // MANUAL PARAM: First obstacle distance — higher = more reaction time at start

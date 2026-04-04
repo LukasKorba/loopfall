@@ -5,7 +5,7 @@ Shader "Loopfall/TrackGrid"
         _BaseColor ("Base Color", Color) = (0.12, 0.12, 0.14, 1)
         _GridColor1 ("Grid Color 1 (Major)", Color) = (0.0, 0.6, 0.8, 0.6)
         _GridColor2 ("Grid Color 2 (Minor)", Color) = (0.5, 0.1, 0.6, 0.3)
-        _GridColor3 ("Grid Color 3 (Accent)", Color) = (0.8, 0.4, 0.1, 0.2)
+        _GridColor3 ("Grid Color 3 (Accent - U only)", Color) = (0.8, 0.4, 0.1, 0.2)
         _MajorLineWidth ("Major Line Width", Range(0.001, 0.05)) = 0.015
         _MinorLineWidth ("Minor Line Width", Range(0.001, 0.03)) = 0.006
         _MajorGridU ("Major Grid Lines (around tube)", Range(1, 64)) = 16
@@ -26,8 +26,6 @@ Shader "Loopfall/TrackGrid"
     {
         Tags { "RenderType"="Opaque" "Queue"="Geometry" }
         LOD 200
-        Cull Off
-
         CGPROGRAM
         #pragma surface surf Standard fullforwardshadows vertex:vert
         #pragma target 3.0
@@ -104,8 +102,8 @@ Shader "Loopfall/TrackGrid"
             float3 nearCol = _GridColor1.rgb * major * _GridColor1.a;
             nearCol += _GridColor2.rgb * minor * _GridColor2.a * (1.0 - major * 0.5);
 
-            // Accent: diagonal shimmer
-            float accent = gridLine((uv.x + uv.y) * _MajorGridU * 0.5, _MinorLineWidth * 0.7, _GlowFalloff * 2.0);
+            // Accent: extra U-direction shimmer (no diagonals — those align with triangle edges)
+            float accent = gridLine(uv.x * _MajorGridU * 1.5, _MinorLineWidth * 0.7, _GlowFalloff * 2.0);
             nearCol += _GridColor3.rgb * accent * _GridColor3.a * 0.3;
 
             // Far grid: single muted color, reduced intensity
@@ -114,13 +112,13 @@ Shader "Loopfall/TrackGrid"
 
             // Blend near → far based on distance
             float3 gridCol = lerp(nearCol, farCol, depthT);
-            float intensity = lerp(_GlowIntensity, _GlowIntensity * 0.3, depthT);
+            float intensity = lerp(_GlowIntensity, 0.0, depthT);
 
             // Base color with per-tile vertex color variation
             float3 base = _BaseColor.rgb * IN.vertColor.rgb;
 
             o.Albedo = base;
-            o.Emission = gridCol * intensity * pulse;
+            o.Emission = gridCol * intensity * pulse * IN.vertColor.a;
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness + totalGrid * 0.2;
             o.Alpha = 1.0;
