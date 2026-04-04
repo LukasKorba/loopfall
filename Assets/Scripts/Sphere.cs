@@ -24,7 +24,7 @@ public class Sphere : MonoBehaviour
     public float impulseMultiplier = 1.0f;
 
     // DEBUG: disable obstacle collision, press W to simulate death
-    private bool mDebugGodMode = true;
+    private bool mDebugGodMode = false;
 
     // Rewind
     public RewindSystem mRewindSystem;

@@ -21,6 +21,11 @@ Shader "Loopfall/TrackGrid"
         _DepthFadeStart ("Depth Fade Start", Range(0, 10)) = 2.0
         _DepthFadeEnd ("Depth Fade End", Range(5, 50)) = 20.0
         _FarColor ("Far Grid Color", Color) = (0.2, 0.05, 0.3, 0.3)
+        _SparkIntensity ("Spark Intensity", Range(0, 3)) = 1.5
+        _SparkSize ("Spark Size", Range(0.005, 0.1)) = 0.025
+        _SparkColor1 ("Spark Color 1", Color) = (0.2, 0.8, 1.0, 1)
+        _SparkColor2 ("Spark Color 2", Color) = (1.0, 0.4, 0.8, 1)
+        _SparkColor3 ("Spark Color 3", Color) = (0.3, 1.0, 0.5, 1)
     }
     SubShader
     {
@@ -57,6 +62,11 @@ Shader "Loopfall/TrackGrid"
         float _DepthFadeStart;
         float _DepthFadeEnd;
         fixed4 _FarColor;
+        float _SparkIntensity;
+        float _SparkSize;
+        fixed4 _SparkColor1;
+        fixed4 _SparkColor2;
+        fixed4 _SparkColor3;
 
         void vert(inout appdata_full v, out Input o)
         {
@@ -73,6 +83,33 @@ Shader "Loopfall/TrackGrid"
             float core = saturate(1.0 - d / width);
             float glow = exp(-d * falloff);
             return max(core, glow * 0.4);
+        }
+
+        // Single spark traveling along a grid line
+        // lineCoord: position along the line (U or V)
+        // crossCoord: distance from the grid line (snapped to nearest)
+        // speed: travel speed
+        // offset: phase offset so sparks don't overlap
+        float spark(float lineCoord, float crossCoord, float gridCount,
+                     float speed, float offset, float size)
+        {
+            // Snap to nearest grid line — spark only appears ON a line
+            float nearest = floor(crossCoord * gridCount + 0.5) / gridCount;
+            float lineDist = abs(crossCoord - nearest);
+            float onLine = exp(-lineDist * gridCount * 12.0); // Sharp falloff from line
+
+            // Traveling position along the line
+            float pos = frac(lineCoord + _Time.y * speed + offset);
+            float dist = abs(pos - 0.5) * 2.0; // Distance from spark center (0..1)
+
+            // Sharp gaussian peak for the spark
+            float sparkGlow = exp(-dist * dist / (size * size));
+
+            // Small bright tail trailing behind
+            float tailDir = (speed > 0) ? 1.0 : -1.0;
+            float tail = exp(-(pos - 0.5 + tailDir * 0.03) * (pos - 0.5 + tailDir * 0.03) / (size * size * 6.0));
+
+            return (sparkGlow + tail * 0.3) * onLine;
         }
 
         void surf(Input IN, inout SurfaceOutputStandard o)
@@ -105,6 +142,23 @@ Shader "Loopfall/TrackGrid"
             // Accent: extra U-direction shimmer (no diagonals — those align with triangle edges)
             float accent = gridLine(uv.x * _MajorGridU * 1.5, _MinorLineWidth * 0.7, _GlowFalloff * 2.0);
             nearCol += _GridColor3.rgb * accent * _GridColor3.a * 0.3;
+
+            // ── TRAVELING SPARKS ──────────────────────────────────
+            float3 sparkTotal = float3(0, 0, 0);
+
+            // U-direction sparks (traveling around the tube, along V grid lines)
+            sparkTotal += _SparkColor1.rgb * spark(uv.x, uv.y, _MajorGridV, 0.12, 0.0, _SparkSize);
+            sparkTotal += _SparkColor2.rgb * spark(uv.x, uv.y, _MajorGridV, -0.08, 0.37, _SparkSize);
+            sparkTotal += _SparkColor1.rgb * spark(uv.x, uv.y, _MajorGridV, 0.15, 0.72, _SparkSize * 0.7) * 0.6;
+
+            // V-direction sparks (traveling along the tube, along U grid lines)
+            sparkTotal += _SparkColor3.rgb * spark(uv.y, uv.x, _MajorGridU, 0.10, 0.15, _SparkSize);
+            sparkTotal += _SparkColor2.rgb * spark(uv.y, uv.x, _MajorGridU, -0.06, 0.55, _SparkSize);
+            sparkTotal += _SparkColor3.rgb * spark(uv.y, uv.x, _MajorGridU, 0.18, 0.88, _SparkSize * 0.7) * 0.6;
+
+            // Fade sparks with distance (less visible far away)
+            float sparkFade = 1.0 - depthT * 0.8;
+            nearCol += sparkTotal * _SparkIntensity * sparkFade;
 
             // Far grid: single muted color, reduced intensity
             float totalGrid = saturate(major + minor * 0.5);
