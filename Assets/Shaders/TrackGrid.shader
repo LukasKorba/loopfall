@@ -182,11 +182,12 @@ Shader "Loopfall/TrackGrid"
                 float ringRadius = timeSincePulse * 8.0; // Expand at 8 units/sec
                 float ringDist = abs(dist - ringRadius);
                 float ringGlow = exp(-ringDist * ringDist * 40.0); // Sharp ring
-                float fade = 1.0 - timeSincePulse; // Fade out over 1 second
+                float attack = smoothstep(0.0, 0.08, timeSincePulse); // Quick ramp-in
+                float fade = attack * (1.0 - timeSincePulse); // Ramp in then fade out
                 // Only glow on grid lines — multiply by existing grid presence
                 float onGrid = saturate(totalGrid * 3.0);
-                float3 pulseColor = lerp(_GridColor1.rgb, float3(1, 1, 1), 0.5);
-                gridCol += pulseColor * ringGlow * fade * fade * onGrid * 2.0;
+                float3 pulseColor = lerp(_GridColor1.rgb, float3(1, 1, 1), 0.3);
+                gridCol += pulseColor * ringGlow * fade * fade * onGrid * 1.6;
             }
 
             // Base color with per-tile vertex color variation
