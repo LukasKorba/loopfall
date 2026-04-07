@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 public class Sphere : MonoBehaviour
 {
@@ -29,8 +30,14 @@ public class Sphere : MonoBehaviour
     // Rewind
     public RewindSystem mRewindSystem;
 
+    // Persistent stats
+    private const string STAT_TAPS = "TotalTaps";
+    private const string STAT_RUNS = "TotalRuns";
+    private int mSessionTaps = 0;
+
     void Awake()
     {
+        QualitySettings.vSyncCount = 0; // Disable VSync so targetFrameRate is respected
         Application.targetFrameRate = 60;
         Input.multiTouchEnabled = false;
     }
@@ -50,6 +57,11 @@ public class Sphere : MonoBehaviour
         mTorusScript.SetPaused(true);
     }
 
+    bool IsPointerOverUI()
+    {
+        return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+    }
+
     void Update()
     {
         // Block all input during splash screen
@@ -60,8 +72,8 @@ public class Sphere : MonoBehaviour
         if (mWaitingToStart)
         {
             bool tapped = Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
-                          (Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
-                          (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began);
+                          (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
+                          (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began);
 
             if (tapped)
             {
@@ -69,6 +81,7 @@ public class Sphere : MonoBehaviour
                 mTorusScript.SetPaused(false);
                 if (mRewindSystem != null)
                     mRewindSystem.StartRecording();
+                IncrementRuns();
 
                 // Apply first impulse based on tap side
                 bool leftSide = false;
@@ -109,8 +122,8 @@ public class Sphere : MonoBehaviour
             if (sync != null && !sync.CanRestart()) return;
 
             if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
-                (Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
-                (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
+                (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
+                (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
             {
                 DoReset();
                 return;
@@ -126,7 +139,7 @@ public class Sphere : MonoBehaviour
                 ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
 
             // Mouse: left half = left, right half = right (desktop only)
-            if (Input.touchCount == 0 && Input.GetMouseButtonDown(0))
+            if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
             {
                 if (Input.mousePosition.x < Screen.width * 0.5f)
                     ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
@@ -135,7 +148,7 @@ public class Sphere : MonoBehaviour
             }
 
             // Touch: left half = left, right half = right
-            if (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
+            if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
             {
                 if (Input.touches[0].position.x < Screen.width * 0.5f)
                     ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
@@ -194,10 +207,19 @@ public class Sphere : MonoBehaviour
         }
 
         mTorusScript.UserInteraction();
+
+        GameAudio audio = FindAnyObjectByType<GameAudio>();
+        if (audio != null) audio.PlayTap();
+
+        // Track taps — save every 10 to avoid I/O spam
+        mSessionTaps++;
+        if (mSessionTaps % 10 == 0)
+            SaveTaps();
     }
 
     public void DoReset()
     {
+        IncrementRuns();
         bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
 
         if (mRewindSystem != null)
@@ -284,4 +306,34 @@ public class Sphere : MonoBehaviour
             mNormal = collision.contacts[0].normal;
         }
     }
+
+    // ── PERSISTENT STATS ─────────────────────────────────────
+
+    void IncrementRuns()
+    {
+        int runs = PlayerPrefs.GetInt(STAT_RUNS, 0) + 1;
+        PlayerPrefs.SetInt(STAT_RUNS, runs);
+        PlayerPrefs.Save();
+    }
+
+    void SaveTaps()
+    {
+        int total = PlayerPrefs.GetInt(STAT_TAPS, 0) + mSessionTaps;
+        PlayerPrefs.SetInt(STAT_TAPS, total);
+        PlayerPrefs.Save();
+        mSessionTaps = 0;
+    }
+
+    void OnApplicationPause(bool paused)
+    {
+        if (paused && mSessionTaps > 0) SaveTaps();
+    }
+
+    void OnApplicationQuit()
+    {
+        if (mSessionTaps > 0) SaveTaps();
+    }
+
+    public static int GetTotalTaps() { return PlayerPrefs.GetInt(STAT_TAPS, 0); }
+    public static int GetTotalRuns() { return PlayerPrefs.GetInt(STAT_RUNS, 0); }
 }

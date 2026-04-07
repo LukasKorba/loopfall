@@ -59,8 +59,9 @@ public class Torus : MonoBehaviour
     private int mNextMilestone = 5;
     private const int MILESTONE_INTERVAL = 5;
 
-    // Pending event for audio system to consume
+    // Pending events for audio system to consume
     private int mPendingSwingTier = 0; // 0=none, 1=swing, 2=milestone
+    private bool mPendingGatePass = false;
 
     private List<Obstacle> mObstacles;
 
@@ -149,6 +150,10 @@ public class Torus : MonoBehaviour
             {
                 mPendingSwingTier = 2;
                 mNextMilestone += MILESTONE_INTERVAL;
+            }
+            else
+            {
+                mPendingGatePass = true;
             }
 
             // Grid pulse wave — expanding ring from ball position
@@ -338,5 +343,12 @@ public class Torus : MonoBehaviour
         int tier = mPendingSwingTier;
         mPendingSwingTier = 0;
         return tier;
+    }
+
+    public bool ConsumeGatePass()
+    {
+        bool passed = mPendingGatePass;
+        mPendingGatePass = false;
+        return passed;
     }
 }

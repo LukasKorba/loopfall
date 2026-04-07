@@ -762,6 +762,9 @@ public class RewindSystem : MonoBehaviour
         // Hide everything else immediately.
         if (gatePropBlock == null) gatePropBlock = new MaterialPropertyBlock();
 
+        GameAudio audio = FindAnyObjectByType<GameAudio>();
+        if (audio != null) audio.PlayGateDissolve();
+
         oldAnims = new List<ObstacleAnim>();
         List<Obstacle> obstacles = torusScript.GetObstacleList();
         int staggerIdx = 0;
@@ -842,6 +845,9 @@ public class RewindSystem : MonoBehaviour
                     newAnims.Add(a);
                 }
                 newPhaseStarted = true;
+
+                GameAudio audio = FindAnyObjectByType<GameAudio>();
+                if (audio != null) audio.PlayGateSpawn();
             }
         }
 

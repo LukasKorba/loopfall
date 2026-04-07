@@ -1,11 +1,11 @@
 using UnityEngine;
-#if UNITY_IOS
+#if UNITY_IOS || UNITY_STANDALONE_OSX
 using UnityEngine.SocialPlatforms.GameCenter;
 #endif
 
 /// <summary>
 /// GameCenter integration — authentication, score submission, leaderboard display.
-/// Attach to a persistent GameObject via SceneSetup.
+/// Works on iOS and macOS. Created by SceneSetup.
 ///
 /// Usage:
 ///   GameCenterManager.Instance.ReportScore(score);
@@ -15,8 +15,10 @@ public class GameCenterManager : MonoBehaviour
 {
     public static GameCenterManager Instance { get; private set; }
 
-    // Apple leaderboard ID — set this in App Store Connect
-    private const string LEADERBOARD_ID = "com.lukaskorba.loopfall.highscore";
+    // Apple leaderboard IDs — set in App Store Connect
+    private const string LB_PURE_HELL = "com.lukaskorba.loopfall.purehell";
+    private const string LB_TAP_MASTER = "com.lukaskorba.loopfall.tapmaster";
+    private const string LB_RUNS = "com.lukaskorba.loopfall.runs";
 
     private bool mAuthenticated = false;
 
@@ -37,7 +39,7 @@ public class GameCenterManager : MonoBehaviour
 
     void Authenticate()
     {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         Social.localUser.Authenticate((bool success) =>
         {
             mAuthenticated = success;
@@ -47,34 +49,42 @@ public class GameCenterManager : MonoBehaviour
                 Debug.Log("[GameCenter] Authentication failed");
         });
 #else
-        Debug.Log("[GameCenter] Skipped — not on iOS device");
+        Debug.Log("[GameCenter] Skipped — not on Apple device");
 #endif
     }
 
-    /// <summary>
-    /// Submit a score to the GameCenter leaderboard.
-    /// Call this after each game over.
-    /// </summary>
     public void ReportScore(int score)
     {
         if (score <= 0) return;
+        Report(score, LB_PURE_HELL);
+    }
 
-#if UNITY_IOS && !UNITY_EDITOR
-        if (!mAuthenticated)
-        {
-            Debug.Log("[GameCenter] Not authenticated — score not reported");
-            return;
-        }
+    public void ReportTaps(int totalTaps)
+    {
+        if (totalTaps <= 0) return;
+        Report(totalTaps, LB_TAP_MASTER);
+    }
 
-        Social.ReportScore(score, LEADERBOARD_ID, (bool success) =>
+    public void ReportRuns(int totalRuns)
+    {
+        if (totalRuns <= 0) return;
+        Report(totalRuns, LB_RUNS);
+    }
+
+    void Report(int value, string leaderboardID)
+    {
+#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+        if (!mAuthenticated) return;
+
+        Social.ReportScore(value, leaderboardID, (bool success) =>
         {
             if (success)
-                Debug.Log($"[GameCenter] Score {score} reported");
+                Debug.Log($"[GameCenter] {leaderboardID}: {value} reported");
             else
-                Debug.Log($"[GameCenter] Failed to report score {score}");
+                Debug.Log($"[GameCenter] {leaderboardID}: failed to report {value}");
         });
 #else
-        Debug.Log($"[GameCenter] (Editor) Would report score: {score}");
+        Debug.Log($"[GameCenter] (Editor) {leaderboardID}: {value}");
 #endif
     }
 
@@ -83,14 +93,15 @@ public class GameCenterManager : MonoBehaviour
     /// </summary>
     public void ShowLeaderboard()
     {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         if (!mAuthenticated)
         {
             Debug.Log("[GameCenter] Not authenticated — cannot show leaderboard");
             return;
         }
 
-        GameCenterPlatform.ShowLeaderboardUI(LEADERBOARD_ID, UnityEngine.SocialPlatforms.TimeScope.AllTime);
+        // Show default leaderboard set — user can browse all boards
+        GameCenterPlatform.ShowLeaderboardUI(LB_PURE_HELL, UnityEngine.SocialPlatforms.TimeScope.AllTime);
 #else
         Debug.Log("[GameCenter] (Editor) Would show leaderboard");
 #endif

@@ -30,6 +30,12 @@ public class GameAudio : MonoBehaviour
     private AudioSource sfxSource;
     private AudioClip gameOverClip;
     private AudioClip glitchClip;
+    private AudioClip tapClip;
+    private AudioClip countClip;
+    private AudioClip gateClip;
+    private AudioClip newBestClip;
+    private AudioClip gateDissolveClip;
+    private AudioClip gateSpawnClip;
 
     // ── REWIND SOUND ─────────────────────────────────────────
     private AudioSource rewindSource;
@@ -133,6 +139,12 @@ public class GameAudio : MonoBehaviour
         rollClip = Resources.Load<AudioClip>("Audio/sfx_roll");
         rewindClip = Resources.Load<AudioClip>("Audio/sfx_rewind");
         glitchClip = Resources.Load<AudioClip>("Audio/sfx_glitch");
+        tapClip = Resources.Load<AudioClip>("Audio/sfx_tap");
+        countClip = Resources.Load<AudioClip>("Audio/sfx_count");
+        gateClip = Resources.Load<AudioClip>("Audio/sfx_gate");
+        newBestClip = Resources.Load<AudioClip>("Audio/sfx_newbest");
+        gateDissolveClip = Resources.Load<AudioClip>("Audio/sfx_gate_dissolve");
+        gateSpawnClip = Resources.Load<AudioClip>("Audio/sfx_gate_spawn");
         Debug.Log($"[GameAudio] Loaded: gameOver={gameOverClip != null} roll={rollClip != null} tier1={swingTier1Clips.Length} tier2={swingTier2Clips.Length}");
     }
 
@@ -159,6 +171,10 @@ public class GameAudio : MonoBehaviour
     void Update()
     {
         if (mTorus == null) return;
+
+        // Poll for gate pass (non-milestone only)
+        if (mTorus.ConsumeGatePass())
+            PlayGate();
 
         // Poll for swing events
         int tier = mTorus.ConsumeSwingEvent();
@@ -265,6 +281,42 @@ public class GameAudio : MonoBehaviour
     {
         if (glitchClip != null)
             sfxSource.PlayOneShot(glitchClip);
+    }
+
+    public void PlayTap()
+    {
+        if (tapClip != null)
+            sfxSource.PlayOneShot(tapClip);
+    }
+
+    public void PlayCount()
+    {
+        if (countClip != null)
+            sfxSource.PlayOneShot(countClip, 0.5f);
+    }
+
+    public void PlayGate()
+    {
+        if (gateClip != null)
+            sfxSource.PlayOneShot(gateClip);
+    }
+
+    public void PlayNewBest(bool allTimeBest)
+    {
+        if (newBestClip != null)
+            sfxSource.PlayOneShot(newBestClip, allTimeBest ? 1.0f : 0.6f);
+    }
+
+    public void PlayGateDissolve()
+    {
+        if (gateDissolveClip != null)
+            sfxSource.PlayOneShot(gateDissolveClip);
+    }
+
+    public void PlayGateSpawn()
+    {
+        if (gateSpawnClip != null)
+            sfxSource.PlayOneShot(gateSpawnClip);
     }
 
     void PlaySwingVoice(int tier)

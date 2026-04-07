@@ -21,6 +21,8 @@ public class DebugPanel : MonoBehaviour
     [SerializeField] private float ballSpeed;
     [SerializeField] private string rewindState;
     [SerializeField] private bool gameCenterAuth;
+    [SerializeField] private int totalTaps;
+    [SerializeField] private int totalRuns;
 
     // Cached refs
     private GameAudio mAudio;
@@ -58,5 +60,8 @@ public class DebugPanel : MonoBehaviour
 
         if (GameCenterManager.Instance != null)
             gameCenterAuth = GameCenterManager.Instance.IsAuthenticated();
+
+        totalTaps = Sphere.GetTotalTaps();
+        totalRuns = Sphere.GetTotalRuns();
     }
 }

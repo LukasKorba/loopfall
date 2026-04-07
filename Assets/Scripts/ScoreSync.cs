@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 using System.Collections.Generic;
 
@@ -30,6 +31,7 @@ public class ScoreSync : MonoBehaviour
     private State prevState = State.Title;
     private string lastScoreText = "0";
     private bool isNewBest = false;
+    private bool isTopFive = false;
     private int goFinalScore = 0;
     private int goRank = 0;
 
@@ -62,6 +64,8 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text bestScoreText;
     private Image bestScoreLine;
     private TMP_Text tapToStartText;
+    private Button titleLBBtn;
+    private TMP_Text titleLBLabel;
 
     // ── PLAYING ──────────────────────────────────────────────
     private RectTransform playingGroup;
@@ -91,6 +95,8 @@ public class ScoreSync : MonoBehaviour
     private const int LEADERBOARD_SHOW = 5;
     private Button goSettingsBtn;
     private TMP_Text goSettingsLabel;
+    private Button goLBBtn;
+    private TMP_Text goLBLabel;
 
     // ── TITLE FADE ───────────────────────────────────────────
     private CanvasGroup titleCanvasGroup;
@@ -101,6 +107,8 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text goScoreCyanText;
     private TMP_Text goScoreMagentaText;
     private TMP_Text goScoreYellowText;
+    private int goLastDisplayScore = -1; // Track count-up ticks for SFX
+    private bool goNewBestSfxPlayed = false;
 
     // ── VHS GLITCH ────────────────────────────────────────────
     private float glitchTimer = 0f;          // Countdown to next burst
@@ -214,6 +222,9 @@ public class ScoreSync : MonoBehaviour
         int.TryParse(scoreText, out goFinalScore);
         goRank = InsertScore(goFinalScore);
         isNewBest = (goRank == 1);
+        isTopFive = (goRank >= 2 && goRank <= 5);
+        goLastDisplayScore = -1;
+        goNewBestSfxPlayed = false;
     }
 
     public bool IsSplash() { return state == State.Splash; }
@@ -240,6 +251,14 @@ public class ScoreSync : MonoBehaviour
         canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
+
+        // EventSystem — required for button clicks and UI raycasting
+        if (FindAnyObjectByType<EventSystem>() == null)
+        {
+            GameObject esObj = new GameObject("EventSystem");
+            esObj.AddComponent<EventSystem>();
+            esObj.AddComponent<StandaloneInputModule>();
+        }
 
         CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -416,6 +435,10 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(tapToStartText.rectTransform, new Vector2(0.5f, 0.32f), new Vector2(700, 55));
         tapToStartText.characterSpacing = 8f;
 
+        // Leaderboard button — bottom left
+        titleLBBtn = CreateLBButton(titleGroup, out titleLBLabel);
+        titleLBBtn.onClick.AddListener(OnLeaderboardTap);
+
         // Drop shadows on main labels
         ApplyDropShadow(titleText);
         ApplyDropShadow(subtitleText);
@@ -525,6 +548,10 @@ public class ScoreSync : MonoBehaviour
         goSettingsLabel = CreateText(settingsRT, "Lbl", "\u2699",
             40, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
         StretchFull(goSettingsLabel.rectTransform);
+
+        // Leaderboard button — top left (mirrors settings gear top right)
+        goLBBtn = CreateLBButton(gameOverGroup, out goLBLabel);
+        goLBBtn.onClick.AddListener(OnLeaderboardTap);
 
         // Drop shadows on main labels
         ApplyDropShadow(goScoreText);
@@ -840,6 +867,10 @@ public class ScoreSync : MonoBehaviour
         {
             SetAlpha(tapToStartText, 0f);
         }
+
+        // Leaderboard button — fade in with best score
+        float lbFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
+        SetAlpha(titleLBLabel, lbFade * 0.5f);
     }
 
     void AnimateTitleCharacters()
@@ -1079,6 +1110,12 @@ public class ScoreSync : MonoBehaviour
             float countP = Mathf.Clamp01((t - 0.3f) / countDuration);
             float countEased = EaseOutCubic(countP);
             int displayScore = Mathf.RoundToInt(goFinalScore * countEased);
+            if (displayScore != goLastDisplayScore)
+            {
+                goLastDisplayScore = displayScore;
+                GameAudio audio = FindAnyObjectByType<GameAudio>();
+                if (audio != null) audio.PlayCount();
+            }
             goScoreText.text = displayScore.ToString();
             goScoreGlowText.text = displayScore.ToString();
 
@@ -1150,31 +1187,65 @@ public class ScoreSync : MonoBehaviour
             }
         }
 
-        // "NEW BEST" — gold with double-frequency shimmer
-        if (isNewBest && t > 1.0f)
+        // Celebration label — "NEW BEST" (gold) or "TOP 5" (cyan)
+        if ((isNewBest || isTopFive) && t > 1.0f)
         {
             float p = Mathf.Clamp01((t - 1.0f) / 0.4f);
-            float shimmer = 0.8f + Mathf.Sin(Time.time * 3f) * 0.15f
-                          + Mathf.Sin(Time.time * 7f) * 0.05f;
-            SetAlpha(goNewBestText, EaseOutCubic(p) * shimmer);
+            float eased = EaseOutCubic(p);
+
+            if (isNewBest)
+            {
+                goNewBestText.text = "NEW BEST";
+                float shimmer = 0.8f + Mathf.Sin(Time.time * 3f) * 0.15f
+                              + Mathf.Sin(Time.time * 7f) * 0.05f;
+                SetAlpha(goNewBestText, eased * shimmer);
+                goNewBestText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b,
+                    goNewBestText.color.a);
+
+                // Scale pop on new best
+                float popScale = Mathf.Lerp(1.5f, 1.0f, EaseOutBack(p));
+                goNewBestText.rectTransform.localScale = new Vector3(popScale, popScale, 1f);
+            }
+            else
+            {
+                goNewBestText.text = "TOP 5";
+                float pulse = 0.6f + Mathf.Sin(Time.time * 2f) * 0.1f;
+                SetAlpha(goNewBestText, eased * pulse);
+                goNewBestText.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b,
+                    goNewBestText.color.a);
+
+                float popScale = Mathf.Lerp(1.2f, 1.0f, EaseOutBack(p));
+                goNewBestText.rectTransform.localScale = new Vector3(popScale, popScale, 1f);
+            }
+
+            // SFX — fire once when label appears
+            if (!goNewBestSfxPlayed && p > 0f)
+            {
+                goNewBestSfxPlayed = true;
+                GameAudio audio = FindAnyObjectByType<GameAudio>();
+                if (audio != null) audio.PlayNewBest(isNewBest);
+            }
         }
         else
         {
             SetAlpha(goNewBestText, 0f);
+            goNewBestText.rectTransform.localScale = Vector3.one;
         }
 
         // Mini leaderboard — staggered slide-in
         AnimateLeaderboard(t);
 
-        // Settings gear
+        // Settings gear + leaderboard button
         if (t > 0.6f)
         {
             float p = Mathf.Clamp01((t - 0.6f) / 0.4f);
             SetAlpha(goSettingsLabel, p * 0.35f);
+            SetAlpha(goLBLabel, p * 0.5f);
         }
         else
         {
             SetAlpha(goSettingsLabel, 0f);
+            SetAlpha(goLBLabel, 0f);
         }
 
         // Tap to play — pulsing cyan
@@ -1303,6 +1374,34 @@ public class ScoreSync : MonoBehaviour
         rt.offsetMax = Vector2.zero;
     }
 
+    Button CreateLBButton(RectTransform parent, out TMP_Text label)
+    {
+        GameObject btnObj = new GameObject("LeaderboardBtn");
+        RectTransform rt = btnObj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0, 1);
+        rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1);
+        rt.anchoredPosition = new Vector2(40, -40);
+        rt.sizeDelta = new Vector2(80, 80);
+
+        Image img = btnObj.AddComponent<Image>();
+        img.color = new Color(0, 0, 0, 0.01f); // Near-invisible hit area
+        Button btn = btnObj.AddComponent<Button>();
+
+        label = CreateText(rt, "LBIcon", "LB",
+            28, FontStyles.Bold, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
+        StretchFull(label.rectTransform);
+
+        return btn;
+    }
+
+    void OnLeaderboardTap()
+    {
+        if (GameCenterManager.Instance != null)
+            GameCenterManager.Instance.ShowLeaderboard();
+    }
+
     void SetGroupActive(RectTransform group, bool active)
     {
         if (group != null)
@@ -1359,7 +1458,11 @@ public class ScoreSync : MonoBehaviour
 
         // Report to GameCenter
         if (GameCenterManager.Instance != null)
+        {
             GameCenterManager.Instance.ReportScore(score);
+            GameCenterManager.Instance.ReportTaps(Sphere.GetTotalTaps());
+            GameCenterManager.Instance.ReportRuns(Sphere.GetTotalRuns());
+        }
 
         return rank <= MAX_SCORES ? rank : 0;
     }
