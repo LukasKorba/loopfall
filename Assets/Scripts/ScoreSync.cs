@@ -201,6 +201,7 @@ public class ScoreSync : MonoBehaviour
             if (state == State.Playing)
             {
                 lastPlayingScore = "0";
+                if (playingScoreText != null) playingScoreText.text = "0";
                 scoreAnimTimer = -1f;
                 scorePopTimer = -1f;
                 scoreGlowTimer = -1f;
