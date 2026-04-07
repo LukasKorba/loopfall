@@ -73,9 +73,14 @@ Shader "Loopfall/TrackGrid"
         float _ScorePulseTime;
         float4 _ScorePulsePos;
 
+        // Milestone pulse — every 5 gates, gold/amber ring
+        float _MilestonePulseTime;
+        float4 _MilestonePulsePos;
+
         // Death pulse — dual shockwave rings
         float _DeathPulseTime;
         float4 _DeathPulsePos;
+
 
         void vert(inout appdata_full v, out Input o)
         {
@@ -192,6 +197,22 @@ Shader "Loopfall/TrackGrid"
                 float onGrid = saturate(totalGrid * 3.0);
                 float3 pulseColor = lerp(_GridColor1.rgb, float3(1, 1, 1), 0.3);
                 gridCol += pulseColor * ringGlow * fade * fade * onGrid * 1.6;
+            }
+
+            // ── MILESTONE PULSE WAVE ──────────────────────────────
+            float timeSinceMilestone = _Time.y - _MilestonePulseTime;
+            if (timeSinceMilestone > 0.0 && timeSinceMilestone < 1.4)
+            {
+                float mDist = distance(IN.worldPos, _MilestonePulsePos.xyz);
+                float mRingRadius = timeSinceMilestone * 10.0; // Faster expansion
+                float mRingDist = abs(mDist - mRingRadius);
+                float mRingGlow = exp(-mRingDist * mRingDist * 25.0); // Wider ring
+                float mAttack = smoothstep(0.0, 0.06, timeSinceMilestone);
+                float mFade = mAttack * (1.0 - timeSinceMilestone / 1.4);
+                float mOnGrid = saturate(totalGrid * 3.0);
+                // Gold/amber color
+                float3 milestoneColor = float3(1.0, 0.75, 0.15);
+                gridCol += milestoneColor * mRingGlow * mFade * mFade * mOnGrid * 2.5;
             }
 
             // ── DEATH PULSE WAVES ─────────────────────────────────

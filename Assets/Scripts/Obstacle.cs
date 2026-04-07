@@ -7,7 +7,8 @@ public class Obstacle
     public float mAngle = float.MaxValue;
     public Obstacle mNextOne = null;
 
-    public Obstacle(int gapSizeFrom, int gapSizeTo, float obstacleStepInv, Material obstacleTop, Material obstacleFront, Material obstacleShadow)
+    public Obstacle(int gapSizeFrom, int gapSizeTo, float obstacleStepInv, Material obstacleTop, Material obstacleFront, Material obstacleShadow,
+                    bool avoidCenter = false)
     {
         mGameObject = new GameObject("torusObstacle");
 
@@ -21,7 +22,20 @@ public class Obstacle
         int originMax = 180 - gapSize - 2;
         if (originMax <= originMin) originMax = originMin + 1;
 
-        float gapOrigin = (float)Random.Range(originMin, originMax);
+        float gapOrigin;
+        if (avoidCenter)
+        {
+            // Force gap to left or right side — never at center (90°)
+            // Pick from [originMin..65] or [115..originMax]
+            if (Random.value < 0.5f)
+                gapOrigin = (float)Random.Range(originMin, Mathf.Min(65, originMax));
+            else
+                gapOrigin = (float)Random.Range(Mathf.Max(115, originMin), originMax);
+        }
+        else
+        {
+            gapOrigin = (float)Random.Range(originMin, originMax);
+        }
 
         Mesh shadowMesh = null;
         Mesh mesh = generateObstacleMeshGap(

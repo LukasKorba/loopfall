@@ -53,6 +53,9 @@ public class RewindSystem : MonoBehaviour
     private float stateTimer = 0f;
 
     private const float PAUSE_DURATION = 0.6f;
+    private bool mFastForward = false;  // Tap during rewind = 2x speed
+    private float mDeathGrace = 0f;     // Ignore taps for this long after death
+    private const float DEATH_GRACE_PERIOD = 0.4f;
 
     // Rewind speed: angle-based, scales with distance traveled
     // Short runs (< 50°): gentle 30°/s so player sees their path
@@ -77,8 +80,8 @@ public class RewindSystem : MonoBehaviour
     private const float TRAIL_DISMISS_PER_POINT = 0.04f; // Extra dismiss time per score point
     private const float TRAIL_DISMISS_MAX = 4.0f;    // Cap
     private float trailDismissDuration = TRAIL_DISMISS_BASE;
-    private const float OBSTACLE_STAGGER = 0.05f;
-    private const float OBSTACLE_ANIM_DURATION = 0.15f;
+    private const float OBSTACLE_STAGGER = 0.06f;
+    private const float OBSTACLE_ANIM_DURATION = 0.3f;
 
     // Obstacle swap
     private struct ObstacleAnim
@@ -86,11 +89,14 @@ public class RewindSystem : MonoBehaviour
         public GameObject obj;
         public float triggerTime;
         public Vector3 originalScale;
+        public MeshRenderer renderer;
     }
     private List<ObstacleAnim> oldAnims;
     private List<ObstacleAnim> newAnims;
     private bool oldPhaseDone;
     private bool newPhaseStarted;
+    private MaterialPropertyBlock gatePropBlock;
+    private static readonly int SpawnProgressID = Shader.PropertyToID("_SpawnProgress");
 
     public void Initialize(Transform ball, Rigidbody ballRb,
                            Torus torus, Transform torusTrans,
@@ -118,6 +124,8 @@ public class RewindSystem : MonoBehaviour
     {
         currentState = State.Pausing;
         stateTimer = 0f;
+        mFastForward = false;
+        mDeathGrace = DEATH_GRACE_PERIOD;
 
         // Compute rewind speed based on distance traveled
         float deathAngle = frames.Count > 0 ? frames[frames.Count - 1].torusAngle : 0f;
@@ -142,14 +150,14 @@ public class RewindSystem : MonoBehaviour
     public bool IsPausingOrRewinding()
     {
         return currentState == State.Pausing ||
-               currentState == State.Rewinding ||
-               currentState == State.TrailDismiss;
+               currentState == State.Rewinding;
     }
 
-    // ScoreSync: true when UI should appear (obstacle swap + done)
+    // ScoreSync: true when UI should appear (trail dismiss onward)
     public bool IsComplete()
     {
-        return currentState == State.ObstacleSwap ||
+        return currentState == State.TrailDismiss ||
+               currentState == State.ObstacleSwap ||
                currentState == State.Complete;
     }
 
@@ -159,8 +167,42 @@ public class RewindSystem : MonoBehaviour
         return currentState == State.Complete;
     }
 
+    public bool IsRewinding() { return currentState == State.Rewinding; }
+    public string GetStateName() { return currentState.ToString(); }
+    public float GetRewindDuration() { return rewindDuration; }
+    /// <summary>Returns 0..1 progress through the rewind (1 = about to land).</summary>
+    public float GetRewindProgress() { return currentState == State.Rewinding ? Mathf.Clamp01(stateTimer / rewindDuration) : 0f; }
+
     void Update()
     {
+        // Grace period — ignore leftover taps from gameplay
+        if (mDeathGrace > 0f)
+        {
+            mDeathGrace -= Time.deltaTime;
+            bool anyTap = Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
+                          Input.GetKeyDown(KeyCode.R) ||
+                          (Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
+                          (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began);
+            if (anyTap)
+                Debug.Log($"[Rewind] Tap ignored (grace {mDeathGrace:F2}s remaining)");
+        }
+
+        // Tap during rewind/trail dismiss → fast-forward 2x
+        if (!mFastForward && mDeathGrace <= 0f && (currentState == State.Pausing || currentState == State.Rewinding || currentState == State.TrailDismiss || currentState == State.ObstacleSwap))
+        {
+            bool tapped = Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
+                          Input.GetKeyDown(KeyCode.R) ||
+                          (Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
+                          (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began);
+            if (tapped)
+            {
+                Debug.Log($"[Rewind] Fast-forward activated (state={currentState})");
+                mFastForward = true;
+            }
+        }
+
+        float dt = mFastForward ? Time.deltaTime * 2f : Time.deltaTime;
+
         switch (currentState)
         {
             case State.Recording:
@@ -186,17 +228,17 @@ public class RewindSystem : MonoBehaviour
                 break;
 
             case State.Rewinding:
-                stateTimer += Time.deltaTime;
+                stateTimer += dt;
                 AnimateRewind();
                 break;
 
             case State.TrailDismiss:
-                stateTimer += Time.deltaTime;
+                stateTimer += dt;
                 AnimateTrailDismiss();
                 break;
 
             case State.ObstacleSwap:
-                stateTimer += Time.deltaTime;
+                stateTimer += dt;
                 AnimateObstacleSwap();
                 break;
         }
@@ -718,6 +760,8 @@ public class RewindSystem : MonoBehaviour
         // Only animate obstacles from the first lap (mAngle < 360) —
         // these are the ones physically visible at angle 0.
         // Hide everything else immediately.
+        if (gatePropBlock == null) gatePropBlock = new MaterialPropertyBlock();
+
         oldAnims = new List<ObstacleAnim>();
         List<Obstacle> obstacles = torusScript.GetObstacleList();
         int staggerIdx = 0;
@@ -732,6 +776,7 @@ public class RewindSystem : MonoBehaviour
                 a.obj = obstacles[i].mGameObject;
                 a.triggerTime = staggerIdx * OBSTACLE_STAGGER;
                 a.originalScale = a.obj.transform.localScale;
+                a.renderer = a.obj.GetComponent<MeshRenderer>();
                 oldAnims.Add(a);
                 staggerIdx++;
             }
@@ -744,7 +789,7 @@ public class RewindSystem : MonoBehaviour
 
     void AnimateObstacleSwap()
     {
-        // Phase A: shrink old obstacles to zero
+        // Phase A: old gates flash bright and dissolve (_SpawnProgress 1→0)
         if (!oldPhaseDone)
         {
             bool allDone = true;
@@ -757,7 +802,13 @@ public class RewindSystem : MonoBehaviour
                 if (elapsed < 0f) { allDone = false; continue; }
 
                 float p = Mathf.Clamp01(elapsed / OBSTACLE_ANIM_DURATION);
-                a.obj.transform.localScale = a.originalScale * (1f - EaseInCubic(p));
+                float sp = 1f - EaseInCubic(p); // 1→0
+
+                if (a.renderer != null)
+                {
+                    gatePropBlock.SetFloat(SpawnProgressID, sp);
+                    a.renderer.SetPropertyBlock(gatePropBlock);
+                }
 
                 if (p < 1f) allDone = false;
             }
@@ -770,10 +821,10 @@ public class RewindSystem : MonoBehaviour
                 torusScript.SoftReset();
                 torusScript.ReplaceObstacles();
 
-                // Prepare new obstacles — start at scale zero
+                // Prepare new obstacles — start invisible
                 newAnims = new List<ObstacleAnim>();
                 List<Obstacle> newObs = torusScript.GetObstacleList();
-                float baseTime = stateTimer + 0.08f;
+                float baseTime = stateTimer + 0.1f;
                 for (int i = 0; i < newObs.Count; i++)
                 {
                     if (newObs[i].mGameObject == null) continue;
@@ -781,14 +832,20 @@ public class RewindSystem : MonoBehaviour
                     a.obj = newObs[i].mGameObject;
                     a.triggerTime = baseTime + i * OBSTACLE_STAGGER;
                     a.originalScale = a.obj.transform.localScale;
-                    a.obj.transform.localScale = Vector3.zero;
+                    a.renderer = a.obj.GetComponent<MeshRenderer>();
+                    // Start invisible via shader
+                    if (a.renderer != null)
+                    {
+                        gatePropBlock.SetFloat(SpawnProgressID, 0f);
+                        a.renderer.SetPropertyBlock(gatePropBlock);
+                    }
                     newAnims.Add(a);
                 }
                 newPhaseStarted = true;
             }
         }
 
-        // Phase B: scale new obstacles in with bounce
+        // Phase B: new gates materialize from glow (_SpawnProgress 0→1)
         if (newPhaseStarted)
         {
             bool allDone = true;
@@ -801,13 +858,32 @@ public class RewindSystem : MonoBehaviour
                 if (elapsed < 0f) { allDone = false; continue; }
 
                 float p = Mathf.Clamp01(elapsed / OBSTACLE_ANIM_DURATION);
-                a.obj.transform.localScale = a.originalScale * EaseOutBack(p);
+                float sp = EaseOutCubic(p); // 0→1
+
+                if (a.renderer != null)
+                {
+                    gatePropBlock.SetFloat(SpawnProgressID, sp);
+                    a.renderer.SetPropertyBlock(gatePropBlock);
+                }
+
+                newAnims[i] = a;
 
                 if (p < 1f) allDone = false;
             }
 
             if (allDone)
+            {
+                // Ensure all gates are fully normal
+                for (int i = 0; i < newAnims.Count; i++)
+                {
+                    if (newAnims[i].renderer != null)
+                    {
+                        gatePropBlock.SetFloat(SpawnProgressID, 1f);
+                        newAnims[i].renderer.SetPropertyBlock(gatePropBlock);
+                    }
+                }
                 currentState = State.Complete;
+            }
         }
     }
 

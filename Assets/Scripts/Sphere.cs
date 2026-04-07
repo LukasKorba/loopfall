@@ -52,6 +52,10 @@ public class Sphere : MonoBehaviour
 
     void Update()
     {
+        // Block all input during splash screen
+        ScoreSync splashCheck = FindAnyObjectByType<ScoreSync>();
+        if (splashCheck != null && splashCheck.IsSplash()) return;
+
         // Title state — any tap starts the game
         if (mWaitingToStart)
         {
@@ -93,6 +97,8 @@ public class Sphere : MonoBehaviour
             DeathEffect death = mCamera.GetComponent<DeathEffect>();
             if (death != null) death.TriggerDeath(transform.position);
             if (mRewindSystem != null) mRewindSystem.OnDeath();
+            GameAudio debugAudio = FindAnyObjectByType<GameAudio>();
+            if (debugAudio != null) debugAudio.PlayGameOver();
         }
 
         // Game over state — any tap resets
@@ -102,7 +108,7 @@ public class Sphere : MonoBehaviour
             ScoreSync sync = FindAnyObjectByType<ScoreSync>();
             if (sync != null && !sync.CanRestart()) return;
 
-            if (Input.GetKeyDown(KeyCode.R) ||
+            if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
                 (Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
                 (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
             {
@@ -229,6 +235,7 @@ public class Sphere : MonoBehaviour
             swing.mDiff = Vector3.zero;
             swing.ResetSpring();
         }
+
     }
 
     public bool IsWaiting() { return mWaitingToStart; }
@@ -263,6 +270,10 @@ public class Sphere : MonoBehaviour
 
             if (mRewindSystem != null)
                 mRewindSystem.OnDeath();
+
+            GameAudio audio = FindAnyObjectByType<GameAudio>();
+            if (audio != null)
+                audio.PlayGameOver();
         }
     }
 

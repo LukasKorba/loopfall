@@ -18,6 +18,12 @@ public class Torus : MonoBehaviour
         AudioServicesPlaySystemSound(1519); // Peek — light tap
 #endif
     }
+    static void HeavyHaptic()
+    {
+#if UNITY_IOS && !UNITY_EDITOR
+        AudioServicesPlaySystemSound(1520); // Pop — heavy tap
+#endif
+    }
     private float mAngle = 0.0f;
     private float mAngleScore = 0.0f;
     // MANUAL PARAM: Rotation speed — original constant speed from the version you loved
@@ -38,6 +44,23 @@ public class Torus : MonoBehaviour
     private int mScoreWithoutInteraction = 0;
 
     private bool mGameOver = false;
+
+    // ── SWING DETECTION (tier 1) ─────────────────────────────
+    // Pure flow: no taps between gates, ball swings through varied positions
+    private float mLastPassAngle = float.MinValue;
+    private float mSwingAccumulated = 0f;
+    private int mSwingGates = 0;
+    private float mSwingCooldown = 0f;
+    private const float SWING_COOLDOWN = 10f;
+    private const float SWING_TIER1_ANGLE = 25f;
+
+    // ── MILESTONE (tier 2) ───────────────────────────────────
+    // Every 5 points — "on fire" energy
+    private int mNextMilestone = 5;
+    private const int MILESTONE_INTERVAL = 5;
+
+    // Pending event for audio system to consume
+    private int mPendingSwingTier = 0; // 0=none, 1=swing, 2=milestone
 
     private List<Obstacle> mObstacles;
 
@@ -78,23 +101,77 @@ public class Torus : MonoBehaviour
         // Rotate mesh
         transform.Rotate(0.0f, 0.0f, -mAngleStep);
 
+        // Swing cooldown tick
+        if (mSwingCooldown > 0f)
+            mSwingCooldown -= Time.deltaTime;
+
         // Score
         if (mCurrentObstacle != null && mAngle - 1.25f > mCurrentObstacle.mAngle)
         {
             mScore++;
             mScoreLbl.text = mScore.ToString();
             mCurrentObstacle = mCurrentObstacle.mNextOne;
+
+            // ── Swing detection (tier 1) ─────────────────────
+            // Check BEFORE incrementing — 0 means player tapped since last gate
+            if (mBallTransform != null)
+            {
+                float ballAngle = GetBallCrossSectionAngle();
+                bool noTap = mScoreWithoutInteraction > 0;
+
+                if (mScore >= 2 && noTap && mLastPassAngle > -999f)
+                {
+                    float delta = Mathf.Abs(ballAngle - mLastPassAngle);
+                    mSwingAccumulated += delta;
+                    mSwingGates++;
+
+                    if (mSwingCooldown <= 0f && mSwingAccumulated >= SWING_TIER1_ANGLE)
+                    {
+                        mPendingSwingTier = 1;
+                        mSwingCooldown = SWING_COOLDOWN;
+                    }
+                }
+                else
+                {
+                    // Tapped since last gate — reset streak
+                    mSwingAccumulated = 0f;
+                    mSwingGates = 0;
+                }
+
+                mLastPassAngle = ballAngle;
+            }
+
             mScoreWithoutInteraction++;
+
+            // ── Milestone (tier 2) — overrides swing ─────────
+            bool isMilestone = mScore >= mNextMilestone;
+            if (isMilestone)
+            {
+                mPendingSwingTier = 2;
+                mNextMilestone += MILESTONE_INTERVAL;
+            }
 
             // Grid pulse wave — expanding ring from ball position
             if (mBallTransform != null)
             {
-                Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
-                Shader.SetGlobalVector("_ScorePulsePos", mBallTransform.position);
+                if (isMilestone)
+                {
+                    // Gold milestone pulse — wider, brighter, separate slot
+                    Shader.SetGlobalFloat("_MilestonePulseTime", Time.time);
+                    Shader.SetGlobalVector("_MilestonePulsePos", mBallTransform.position);
+                }
+                else
+                {
+                    Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
+                    Shader.SetGlobalVector("_ScorePulsePos", mBallTransform.position);
+                }
             }
 
-            // Haptic feedback
-            LightHaptic();
+            // Haptic feedback — heavier on milestones
+            if (isMilestone)
+                HeavyHaptic();
+            else
+                LightHaptic();
         }
 
         // Update obstacles
@@ -130,8 +207,12 @@ public class Torus : MonoBehaviour
 
     Obstacle generateObstacle()
     {
+        bool isFirst = (mLastObstacle == null);
+
         // MANUAL PARAM: gap size range (15-21) controls difficulty
-        Obstacle obstacle = new Obstacle(15, 21, mObstacleStepInv, mObstacleTop, mObstacleFront, mObstacleShadow);
+        // First gate: avoid center gap so player must tap to start
+        Obstacle obstacle = new Obstacle(15, 21, mObstacleStepInv, mObstacleTop, mObstacleFront, mObstacleShadow,
+                                         avoidCenter: isFirst);
 
         if (mLastObstacle != null)
             obstacle.mAngle = mLastObstacle.mAngle + 10.0f;
@@ -175,6 +256,7 @@ public class Torus : MonoBehaviour
         UpdateObstacles();
 
         mScoreWithoutInteraction = 0;
+        ResetSwing();
     }
 
     public void UserInteraction()
@@ -188,6 +270,7 @@ public class Torus : MonoBehaviour
     public void SetPaused(bool paused) { mPaused = paused; }
     public bool IsPaused() { return mPaused; }
 
+    public int GetScore() { return mScore; }
     public float GetAngle() { return mAngle; }
 
     public void SetAngle(float angle)
@@ -210,6 +293,7 @@ public class Torus : MonoBehaviour
         mGameOver = false;
         mPaused = true; // Stay paused until user taps
         mScoreWithoutInteraction = 0;
+        ResetSwing();
     }
 
     // Destroy current obstacles and generate fresh ones
@@ -221,5 +305,38 @@ public class Torus : MonoBehaviour
         mLastObstacle = null;
         mCurrentObstacle = null;
         UpdateObstacles();
+    }
+
+    // ── SWING HELPERS ────────────────────────────────────────
+
+    // Ball's angular position on the torus cross-section (0-180°)
+    // Matches Obstacle's gapOrigin coordinate space
+    float GetBallCrossSectionAngle()
+    {
+        Vector3 local = transform.InverseTransformPoint(mBallTransform.position);
+        // Torus center at (0, -10, 0) in local space, radius 1
+        float dy = -(local.y + 10f);
+        float dz = -local.z;
+        return Mathf.Atan2(dy, dz) * Mathf.Rad2Deg;
+    }
+
+    void ResetSwing()
+    {
+        mLastPassAngle = float.MinValue;
+        mSwingAccumulated = 0f;
+        mSwingGates = 0;
+        mPendingSwingTier = 0;
+        mNextMilestone = MILESTONE_INTERVAL;
+    }
+
+    /// <summary>
+    /// Consume pending swing event. Returns 0 (none), 1 (tier1), or 2 (tier2).
+    /// Resets after reading so each event fires once.
+    /// </summary>
+    public int ConsumeSwingEvent()
+    {
+        int tier = mPendingSwingTier;
+        mPendingSwingTier = 0;
+        return tier;
     }
 }

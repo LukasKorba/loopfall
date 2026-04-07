@@ -7,15 +7,18 @@ Shader "Loopfall/Gate"
         _EmissionIntensity ("Emission Intensity", Range(0, 3)) = 1.0
         _DiffuseStrength ("Diffuse Strength", Range(0, 1)) = 0.35
         _AmbientBoost ("Ambient Boost", Range(0, 1)) = 0.15
+        _SpawnProgress ("Spawn Progress", Range(0, 1)) = 1.0
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         LOD 200
 
         Pass
         {
             Tags { "LightMode"="ForwardBase" }
+            Blend SrcAlpha OneMinusSrcAlpha
+            ZWrite On
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -42,6 +45,7 @@ Shader "Loopfall/Gate"
             float _EmissionIntensity;
             float _DiffuseStrength;
             float _AmbientBoost;
+            float _SpawnProgress;
 
             v2f vert(appdata v)
             {
@@ -76,9 +80,15 @@ Shader "Loopfall/Gate"
                 float3 ambient = _Color.rgb * _AmbientBoost;
                 float3 emission = _EmissionColor.rgb * _EmissionIntensity;
 
-                float3 result = litColor + ambient + emission + rim * _EmissionColor.rgb;
+                float3 normalResult = litColor + ambient + emission + rim * _EmissionColor.rgb;
 
-                return half4(result, 1.0);
+                // Spawn effect: sp=0 invisible, sp→0.3 white-hot glow fading in, sp=1 normal
+                float sp = saturate(_SpawnProgress);
+                float3 spawnGlow = _EmissionColor.rgb * 4.0;
+                float3 result = lerp(spawnGlow, normalResult, smoothstep(0.15, 0.8, sp));
+                float alpha = smoothstep(0.0, 0.15, sp);
+
+                return half4(result, alpha);
             }
             ENDCG
         }

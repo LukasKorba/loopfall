@@ -36,6 +36,11 @@ public class SceneSetup : MonoBehaviour
         CreateUI();
         CreateBackground();
         CreateRewindSystem();
+        CreateAudio();
+        CreateGameCenter();
+#if UNITY_EDITOR
+        CreateDebugPanel();
+#endif
 
         // Physics settings
         Physics.gravity = new Vector3(0, -9.81f, 0);
@@ -472,6 +477,26 @@ public class SceneSetup : MonoBehaviour
         BackgroundRings bg = bgObj.AddComponent<BackgroundRings>();
         bg.Setup();
     }
+
+    void CreateAudio()
+    {
+        GameObject audioObj = new GameObject("GameAudio");
+        audioObj.AddComponent<GameAudio>();
+    }
+
+    void CreateGameCenter()
+    {
+        GameObject gcObj = new GameObject("GameCenterManager");
+        gcObj.AddComponent<GameCenterManager>();
+    }
+
+#if UNITY_EDITOR
+    void CreateDebugPanel()
+    {
+        GameObject dbgObj = new GameObject("DebugPanel");
+        dbgObj.AddComponent<DebugPanel>();
+    }
+#endif
 
     void CreateRewindSystem()
     {

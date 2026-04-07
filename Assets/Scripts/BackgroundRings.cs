@@ -107,9 +107,37 @@ public class BackgroundRings : MonoBehaviour
             star.transform.parent = transform;
             Object.Destroy(star.GetComponent<Collider>());
 
-            // Place stars at moderate depth (5–40 units) so they're actually visible
-            float depth = Random.Range(5f, 40f);
             float halfAngle = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
+
+            float size;
+            float brightness;
+            float alpha;
+            float depth;
+
+            float roll = Random.value;
+            if (roll < 0.05f)
+            {
+                // Bright stars — push deeper so they never appear as solid squares
+                depth = Random.Range(20f, 40f);
+                size = Random.Range(0.06f, 0.12f);
+                brightness = Random.Range(2.0f, 3.5f);
+                alpha = Random.Range(0.5f, 0.8f);
+            }
+            else if (roll < 0.2f)
+            {
+                depth = Random.Range(10f, 40f);
+                size = Random.Range(0.05f, 0.1f);
+                brightness = Random.Range(1.5f, 3.0f);
+                alpha = Random.Range(0.4f, 0.7f);
+            }
+            else
+            {
+                depth = Random.Range(5f, 40f);
+                size = Random.Range(0.02f, 0.05f);
+                brightness = Random.Range(0.8f, 1.5f);
+                alpha = Random.Range(0.15f, 0.4f);
+            }
+
             float halfH = depth * Mathf.Tan(halfAngle) * 1.3f;
             float halfW = halfH * (Screen.width > 0 ? (float)Screen.width / Screen.height : 1.78f) * 1.3f;
 
@@ -120,30 +148,6 @@ public class BackgroundRings : MonoBehaviour
             );
             star.transform.position = cam.transform.TransformPoint(localPos);
             star.transform.rotation = cam.transform.rotation;
-
-            float size;
-            float brightness;
-            float alpha;
-
-            float roll = Random.value;
-            if (roll < 0.05f)
-            {
-                size = Random.Range(0.1f, 0.2f);
-                brightness = Random.Range(3.0f, 5.0f);
-                alpha = Random.Range(0.7f, 1.0f);
-            }
-            else if (roll < 0.2f)
-            {
-                size = Random.Range(0.05f, 0.1f);
-                brightness = Random.Range(1.5f, 3.0f);
-                alpha = Random.Range(0.4f, 0.7f);
-            }
-            else
-            {
-                size = Random.Range(0.02f, 0.05f);
-                brightness = Random.Range(0.8f, 1.5f);
-                alpha = Random.Range(0.15f, 0.4f);
-            }
             star.transform.localScale = Vector3.one * size;
 
             Color starColor;

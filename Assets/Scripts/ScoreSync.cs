@@ -20,8 +20,12 @@ public class ScoreSync : MonoBehaviour
     private const string SCORES_KEY = "TopScores";
 
     // ── STATE ────────────────────────────────────────────────
-    private enum State { Title, Playing, Rewinding, GameOver }
+    private enum State { Splash, Title, Playing, Rewinding, GameOver }
+#if UNITY_EDITOR
     private State state = State.Title;
+#else
+    private State state = State.Splash;
+#endif
     private float stateTimer = 0f;
     private State prevState = State.Title;
     private string lastScoreText = "0";
@@ -34,6 +38,19 @@ public class ScoreSync : MonoBehaviour
     private Image overlayImage;
     private RawImage vignetteImage;
     private RawImage scanlinesImage;
+    private Image blackoutImage;  // Full black to hide torus during splash
+
+    // ── SPLASH ───────────────────────────────────────────────
+    private RectTransform splashGroup;
+    private TMP_Text splashNameText;
+    private TMP_Text splashNameCyanText;
+    private TMP_Text splashNameMagentaText;
+    private TMP_Text splashNameYellowText;
+    private TMP_Text splashPresentsText;
+    private RawImage splashStarsImage;
+    private const float SPLASH_HOLD = 4.5f;
+    private const float SPLASH_FADE_IN = 0.8f;
+    private const float SPLASH_FADE_OUT = 1.0f;
 
     // ── TITLE ────────────────────────────────────────────────
     private RectTransform titleGroup;
@@ -96,6 +113,10 @@ public class ScoreSync : MonoBehaviour
     private const float GLITCH_MIN_DURATION = 0.06f;
     private const float GLITCH_MAX_DURATION = 0.25f;
 
+    // Splash-specific scheduled glitches (1-3 guaranteed bursts)
+    private float[] splashGlitchTimes;
+    private int splashGlitchNext;
+
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
     private Sprite circleSprite;
@@ -111,6 +132,14 @@ public class ScoreSync : MonoBehaviour
     void Update()
     {
         if (canvas == null) return;
+
+        // Splash is self-timed — don't poll sphere state
+        if (state == State.Splash)
+        {
+            stateTimer += Time.deltaTime;
+            AnimateState();
+            return;
+        }
 
         Sphere sphere = FindAnyObjectByType<Sphere>();
         if (sphere == null) return;
@@ -187,6 +216,8 @@ public class ScoreSync : MonoBehaviour
         isNewBest = (goRank == 1);
     }
 
+    public bool IsSplash() { return state == State.Splash; }
+
     public bool CanRestart()
     {
         if (state != State.GameOver || stateTimer < 1.0f) return false;
@@ -217,6 +248,12 @@ public class ScoreSync : MonoBehaviour
 
         canvasObj.AddComponent<GraphicRaycaster>();
 
+        // Full black overlay — hides torus during splash
+        blackoutImage = CreateImage(canvasObj.transform, "Blackout",
+            new Color(0f, 0f, 0f, 1f));
+        StretchFull(blackoutImage.rectTransform);
+        blackoutImage.raycastTarget = false;
+
         // Purple-tinted overlay — retro color grading
         overlayImage = CreateImage(canvasObj.transform, "Overlay",
             new Color(0.06f, 0.02f, 0.10f, 0f));
@@ -229,11 +266,102 @@ public class ScoreSync : MonoBehaviour
         // CRT scanlines — retro horizontal bands
         scanlinesImage = CreateScanlines(canvasObj.transform);
 
+        BuildSplashGroup(canvasObj.transform);
         BuildTitleGroup(canvasObj.transform);
         BuildPlayingGroup(canvasObj.transform);
         BuildGameOverGroup(canvasObj.transform);
 
-        ShowGroup(State.Title);
+        ShowGroup(state);
+    }
+
+    void BuildSplashGroup(Transform parent)
+    {
+        splashGroup = CreateGroup(parent, "SplashGroup");
+
+        // Stars background — procedural
+        splashStarsImage = CreateStarsTexture(splashGroup.transform);
+
+        // Chromatic aberration layers for name
+        splashNameYellowText = CreateText(splashGroup, "SplashYellow", "LUKAS KORBA",
+            90, FontStyles.Bold, new Color(1f, 0.95f, 0.1f, 0f));
+        SetAnchored(splashNameYellowText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(1000, 120));
+
+        splashNameMagentaText = CreateText(splashGroup, "SplashMagenta", "LUKAS KORBA",
+            90, FontStyles.Bold, new Color(1f, 0.15f, 0.55f, 0f));
+        SetAnchored(splashNameMagentaText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(1000, 120));
+
+        splashNameCyanText = CreateText(splashGroup, "SplashCyan", "LUKAS KORBA",
+            90, FontStyles.Bold, new Color(0f, 0.85f, 1f, 0f));
+        SetAnchored(splashNameCyanText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(1000, 120));
+
+        // Main name (white)
+        splashNameText = CreateText(splashGroup, "SplashName", "LUKAS KORBA",
+            90, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
+        SetAnchored(splashNameText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(1000, 120));
+
+        // "PRESENTS"
+        splashPresentsText = CreateText(splashGroup, "SplashPresents", "PRESENTS",
+            30, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
+        SetAnchored(splashPresentsText.rectTransform, new Vector2(0.5f, 0.46f), new Vector2(500, 45));
+        splashPresentsText.characterSpacing = 16f;
+
+        ApplyDropShadow(splashNameText);
+        ApplyDropShadow(splashPresentsText);
+    }
+
+    RawImage CreateStarsTexture(Transform parent)
+    {
+        int w = 256;
+        int h = 512;
+        Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        // Fill black
+        Color[] pixels = new Color[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = new Color(0.01f, 0.005f, 0.02f, 1f);
+        // Scatter stars
+        Random.InitState(42);
+        for (int i = 0; i < 200; i++)
+        {
+            int x = Random.Range(0, w);
+            int y = Random.Range(0, h);
+            float brightness = Random.Range(0.2f, 0.7f);
+            float size = Random.Range(0.5f, 1.5f);
+            // Tint some stars slightly colored
+            float r = brightness * Random.Range(0.85f, 1.0f);
+            float g = brightness * Random.Range(0.85f, 1.0f);
+            float b = brightness * Random.Range(0.9f, 1.0f);
+            pixels[y * w + x] = new Color(r, g, b, 1f);
+            // Larger stars get a dim halo
+            if (size > 1.0f)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        int nx = Mathf.Clamp(x + dx, 0, w - 1);
+                        int ny = Mathf.Clamp(y + dy, 0, h - 1);
+                        if (nx == x && ny == y) continue;
+                        Color existing = pixels[ny * w + nx];
+                        float halo = brightness * 0.2f;
+                        pixels[ny * w + nx] = new Color(
+                            Mathf.Max(existing.r, halo * r),
+                            Mathf.Max(existing.g, halo * g),
+                            Mathf.Max(existing.b, halo * b), 1f);
+                    }
+            }
+        }
+        Random.InitState((int)System.DateTime.Now.Ticks);
+        tex.SetPixels(pixels);
+        tex.Apply();
+        tex.filterMode = FilterMode.Bilinear;
+
+        GameObject obj = new GameObject("Stars");
+        obj.transform.SetParent(parent, false);
+        RawImage img = obj.AddComponent<RawImage>();
+        img.texture = tex;
+        img.color = new Color(1f, 1f, 1f, 0f);
+        img.raycastTarget = false;
+        StretchFull(img.rectTransform);
+        return img;
     }
 
     void BuildTitleGroup(Transform parent)
@@ -480,6 +608,7 @@ public class ScoreSync : MonoBehaviour
 
     void ShowGroup(State s)
     {
+        SetGroupActive(splashGroup, s == State.Splash);
         SetGroupActive(titleGroup, s == State.Title);
         SetGroupActive(playingGroup, s == State.Playing);
         SetGroupActive(gameOverGroup, s == State.GameOver);
@@ -488,9 +617,16 @@ public class ScoreSync : MonoBehaviour
         // Title + GameOver: overlays animate in via their animate methods
         if (s == State.Title)
         {
+            blackoutImage.color = new Color(0f, 0f, 0f, 0f);
             overlayImage.color = new Color(0.06f, 0.02f, 0.10f, 0f);
             vignetteImage.color = new Color(1f, 1f, 1f, 0f);
             scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
+        }
+        if (s == State.Splash)
+        {
+            blackoutImage.color = new Color(0f, 0f, 0f, 1f);
+            scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
+            ScheduleSplashGlitches();
         }
     }
 
@@ -500,6 +636,7 @@ public class ScoreSync : MonoBehaviour
 
         switch (state)
         {
+            case State.Splash: AnimateSplash(); break;
             case State.Title: AnimateTitle(); break;
             case State.Playing: AnimatePlaying(); break;
             case State.Rewinding: AnimateRewinding(); break;
@@ -509,7 +646,13 @@ public class ScoreSync : MonoBehaviour
         // VHS glitch pass — applied after normal animation
         if (IsGlitching())
         {
-            if (state == State.Title)
+            if (state == State.Splash)
+            {
+                ApplyGlitchToText(splashNameText);
+                ApplyGlitchToText(splashPresentsText);
+                ApplyGlitchToBackdrop();
+            }
+            else if (state == State.Title)
             {
                 ApplyGlitchToText(titleText);
                 ApplyGlitchToText(subtitleText);
@@ -525,6 +668,81 @@ public class ScoreSync : MonoBehaviour
                     ApplyGlitchToText(goLeaderboardTexts[i]);
             }
             ApplyGlitchToBackdrop();
+        }
+    }
+
+    // ── SPLASH ───────────────────────────────────────────────
+
+    void AnimateSplash()
+    {
+        float t = stateTimer;
+
+        // Stars background fade in
+        float starsFade = Mathf.Clamp01(t / SPLASH_FADE_IN);
+        splashStarsImage.color = new Color(1f, 1f, 1f, starsFade);
+
+        // Keep blackout solid during splash
+        blackoutImage.color = new Color(0f, 0f, 0f, 1f);
+
+        // Scanlines
+        scanlinesImage.color = new Color(1f, 1f, 1f, starsFade * 0.7f);
+
+        // Name text fade in
+        float nameFade = Mathf.Clamp01((t - 0.3f) / 0.6f);
+        SetAlpha(splashNameText, nameFade);
+
+        // Chromatic aberration on name
+        float chromaAlpha = nameFade * 0.55f;
+        float spread = 5f + Mathf.Sin(t * 0.8f) * 3f;
+
+        Vector2 cyanOff = new Vector2(
+            Mathf.Cos(t * 0.4f) * spread,
+            Mathf.Sin(t * 0.55f) * spread * 0.6f);
+        Vector2 magentaOff = new Vector2(
+            Mathf.Cos(t * 0.4f + 2.09f) * spread,
+            Mathf.Sin(t * 0.55f + 2.09f) * spread * 0.6f);
+        Vector2 yellowOff = new Vector2(
+            Mathf.Cos(t * 0.4f + 4.19f) * spread,
+            Mathf.Sin(t * 0.55f + 4.19f) * spread * 0.6f);
+
+        splashNameCyanText.rectTransform.anchoredPosition = cyanOff;
+        splashNameMagentaText.rectTransform.anchoredPosition = magentaOff;
+        splashNameYellowText.rectTransform.anchoredPosition = yellowOff;
+        SetAlpha(splashNameCyanText, chromaAlpha);
+        SetAlpha(splashNameMagentaText, chromaAlpha);
+        SetAlpha(splashNameYellowText, chromaAlpha);
+
+        // "PRESENTS" fade in (delayed)
+        float presentsFade = Mathf.Clamp01((t - 1.0f) / 0.6f);
+        SetAlpha(splashPresentsText, presentsFade * 0.8f);
+
+        // Fade out phase
+        float fadeOutStart = SPLASH_HOLD;
+        if (t > fadeOutStart)
+        {
+            float fadeP = Mathf.Clamp01((t - fadeOutStart) / SPLASH_FADE_OUT);
+            float fadeAlpha = 1f - EaseOutCubic(fadeP);
+
+            // Fade splash elements
+            SetAlpha(splashNameText, nameFade * fadeAlpha);
+            SetAlpha(splashNameCyanText, chromaAlpha * fadeAlpha);
+            SetAlpha(splashNameMagentaText, chromaAlpha * fadeAlpha);
+            SetAlpha(splashNameYellowText, chromaAlpha * fadeAlpha);
+            SetAlpha(splashPresentsText, presentsFade * 0.8f * fadeAlpha);
+            splashStarsImage.color = new Color(1f, 1f, 1f, starsFade * fadeAlpha);
+            scanlinesImage.color = new Color(1f, 1f, 1f, starsFade * 0.7f * fadeAlpha);
+
+            // Fade blackout to reveal torus
+            blackoutImage.color = new Color(0f, 0f, 0f, fadeAlpha);
+
+            // Transition to Title when fully faded
+            if (fadeP >= 1f)
+            {
+                state = State.Title;
+                stateTimer = 0f;
+                ShowGroup(State.Title);
+                blackoutImage.color = new Color(0f, 0f, 0f, 0f);
+            }
         }
     }
 
@@ -1138,6 +1356,11 @@ public class ScoreSync : MonoBehaviour
             topScores.RemoveAt(topScores.Count - 1);
 
         SaveScores();
+
+        // Report to GameCenter
+        if (GameCenterManager.Instance != null)
+            GameCenterManager.Instance.ReportScore(score);
+
         return rank <= MAX_SCORES ? rank : 0;
     }
 
@@ -1150,10 +1373,22 @@ public class ScoreSync : MonoBehaviour
 
     // ── VHS GLITCH ENGINE ─────────────────────────────────────
 
+    void ScheduleSplashGlitches()
+    {
+        // 1-3 guaranteed glitch bursts during splash (after name appears, before fade out)
+        int count = Random.Range(1, 4); // 1, 2, or 3
+        splashGlitchTimes = new float[count];
+        splashGlitchNext = 0;
+        for (int i = 0; i < count; i++)
+            splashGlitchTimes[i] = Random.Range(1.2f, SPLASH_HOLD - 0.5f);
+        // Sort so we can consume them in order
+        System.Array.Sort(splashGlitchTimes);
+    }
+
     void TickGlitch()
     {
         // Only glitch during Title and GameOver (UI-heavy states)
-        if (state != State.Title && state != State.GameOver) return;
+        if (state != State.Splash && state != State.Title && state != State.GameOver) return;
 
         if (glitchBurstTimer >= 0f)
         {
@@ -1162,9 +1397,23 @@ public class ScoreSync : MonoBehaviour
             if (glitchBurstTimer >= glitchBurstDuration)
                 glitchBurstTimer = -1f;
         }
-        else
+        else if (state == State.Splash && splashGlitchTimes != null
+                 && splashGlitchNext < splashGlitchTimes.Length
+                 && stateTimer >= splashGlitchTimes[splashGlitchNext]
+                 && stateTimer < SPLASH_HOLD)
         {
-            // Countdown to next burst
+            // Fire scheduled splash glitch
+            splashGlitchNext++;
+            glitchBurstTimer = 0f;
+            glitchBurstDuration = Random.Range(GLITCH_MIN_DURATION, GLITCH_MAX_DURATION);
+            glitchIntensity = Random.Range(0.5f, 1.0f);
+            glitchSeed = Random.Range(0f, 1000f);
+            GameAudio audio = FindAnyObjectByType<GameAudio>();
+            if (audio != null) audio.PlayGlitch();
+        }
+        else if (state != State.Splash && stateTimer > 1.5f)
+        {
+            // Normal random countdown for Title/GameOver (wait for UI to fade in first)
             glitchTimer -= Time.deltaTime;
             if (glitchTimer <= 0f)
             {
@@ -1173,6 +1422,8 @@ public class ScoreSync : MonoBehaviour
                 glitchIntensity = Random.Range(0.3f, 1.0f);
                 glitchSeed = Random.Range(0f, 1000f);
                 glitchTimer = Random.Range(GLITCH_MIN_INTERVAL, GLITCH_MAX_INTERVAL);
+                GameAudio audio = FindAnyObjectByType<GameAudio>();
+                if (audio != null) audio.PlayGlitch();
             }
         }
     }
