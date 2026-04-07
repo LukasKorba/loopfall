@@ -19,6 +19,8 @@ public class SceneSetup : MonoBehaviour
     // Direct references — ensures shaders are included in iOS builds
     public Shader depthHueShiftRef;
     public Shader gateShaderRef;
+    public Shader blackHoleWarpRef;
+    public Shader trackItemShaderRef;
 
     void Awake()
     {
@@ -37,6 +39,7 @@ public class SceneSetup : MonoBehaviour
         CreateBackground();
         CreateRewindSystem();
         CreateAudio();
+        CreateFrenzyTimer();
         CreateGameCenter();
 #if UNITY_EDITOR
         CreateDebugPanel();
@@ -62,6 +65,8 @@ public class SceneSetup : MonoBehaviour
     Material railMaterialLeft;
     Material railMaterialRight;
     Material trailMaterial;
+    Material itemTimePlusMaterial;
+    Material itemTimeMinusMaterial;
     Shader depthHueShiftShader;
 
     void CreateMaterials()
@@ -148,6 +153,16 @@ public class SceneSetup : MonoBehaviour
         trailMaterial.SetColor("_Color", Color.white);
         trailMaterial.SetFloat("_Intensity", 2.0f);
         trailMaterial.renderQueue = 3000;
+
+        // Track item materials (Time Warp) — simple unlit glow, Cull Off
+        Shader trackItemShader = trackItemShaderRef != null ? trackItemShaderRef : Shader.Find("Loopfall/TrackItem");
+        itemTimePlusMaterial = new Material(trackItemShader);
+        itemTimePlusMaterial.SetColor("_Color", new Color(0.1f, 0.9f, 0.3f));
+        itemTimePlusMaterial.SetFloat("_Intensity", 2.0f);
+
+        itemTimeMinusMaterial = new Material(trackItemShader);
+        itemTimeMinusMaterial.SetColor("_Color", new Color(0.9f, 0.1f, 0.1f));
+        itemTimeMinusMaterial.SetFloat("_Intensity", 2.0f);
 
         // Use direct scene reference (Shader.Find gets stripped on iOS)
         depthHueShiftShader = depthHueShiftRef;
@@ -361,6 +376,8 @@ public class SceneSetup : MonoBehaviour
         torusScript.mObstacleTop = obstacleTopMaterial;
         torusScript.mObstacleShadow = obstacleShadowMaterial;
         torusScript.mBallTransform = ball.transform;
+        torusScript.mItemTimePlus = itemTimePlusMaterial;
+        torusScript.mItemTimeMinus = itemTimeMinusMaterial;
     }
 
     void CreateCamera()
@@ -380,7 +397,11 @@ public class SceneSetup : MonoBehaviour
         // Camera slightly below tube center for best view of track ahead
         mainCam.transform.position = new Vector3(-1.727f, -10.205f, 0);
         mainCam.transform.rotation = new Quaternion(0, 0.707106829f, 0, 0.707106709f);
+#if UNITY_IOS && !UNITY_EDITOR
         mainCam.fieldOfView = 55.0f;
+#else
+        mainCam.fieldOfView = 65.0f;
+#endif
         mainCam.nearClipPlane = 0.3f;
         mainCam.allowHDR = true; // Emission values >1.0 render without clamping
         mainCam.backgroundColor = new Color(0.05f, 0.05f, 0.08f); // Near black
@@ -396,6 +417,11 @@ public class SceneSetup : MonoBehaviour
         // Depth-based hue shift — rainbow color variation over distance
         DepthHueShift depthHue = mainCam.gameObject.AddComponent<DepthHueShift>();
         depthHue.depthShader = depthHueShiftShader;
+
+        // Black hole warp — gravitational lens at top of screen
+        BlackHoleWarp warp = mainCam.gameObject.AddComponent<BlackHoleWarp>();
+        if (blackHoleWarpRef != null)
+            warp.warpShader = blackHoleWarpRef;
 
         // Wire camera to ball
         GameObject ball = GameObject.Find("Ball");
@@ -482,6 +508,19 @@ public class SceneSetup : MonoBehaviour
     {
         GameObject audioObj = new GameObject("GameAudio");
         audioObj.AddComponent<GameAudio>();
+    }
+
+    void CreateFrenzyTimer()
+    {
+        GameObject timerObj = new GameObject("FrenzyTimer");
+        FrenzyTimer timer = timerObj.AddComponent<FrenzyTimer>();
+
+        Torus torusScript = GameObject.Find("TorusTrack").GetComponent<Torus>();
+        timer.Initialize(torusScript);
+        torusScript.SetFrenzyTimer(timer);
+
+        Sphere sphereScript = GameObject.Find("Ball").GetComponent<Sphere>();
+        sphereScript.mFrenzyTimer = timer;
     }
 
     void CreateGameCenter()

@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Runtime.InteropServices;
 
 /// <summary>
 /// Central audio manager — handles all game sound effects and voice lines.
@@ -15,12 +16,18 @@ using UnityEngine;
 /// </summary>
 public class GameAudio : MonoBehaviour
 {
+#if UNITY_IOS && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern bool _IsOtherAudioPlaying();
+#endif
+
     private Torus mTorus;
     private Rigidbody mBallRb;
     private Sphere mSphere;
     private RewindSystem mRewind;
 
     // ── MUSIC ────────────────────────────────────────────────
+    private bool externalMusicPlaying = false;
     private AudioSource musicSource;
     private AudioClip[] musicClips;
     private int lastMusicIndex = -1;
@@ -28,12 +35,14 @@ public class GameAudio : MonoBehaviour
 
     // ── SFX ──────────────────────────────────────────────────
     private AudioSource sfxSource;
+    private AudioSource tapSource; // Dedicated so taps never get dropped
     private AudioClip gameOverClip;
     private AudioClip glitchClip;
     private AudioClip tapClip;
     private AudioClip countClip;
     private AudioClip gateClip;
     private AudioClip newBestClip;
+    private AudioClip top5Clip;
     private AudioClip gateDissolveClip;
     private AudioClip gateSpawnClip;
 
@@ -81,6 +90,12 @@ public class GameAudio : MonoBehaviour
         sfxSource.spatialBlend = 0f;
         sfxSource.volume = 1.0f;
 
+        // Tap source — dedicated so taps never compete with game over/dissolve sounds
+        tapSource = gameObject.AddComponent<AudioSource>();
+        tapSource.playOnAwake = false;
+        tapSource.spatialBlend = 0f;
+        tapSource.volume = 1.0f;
+
         // Rewind sound source — loops, pitch mapped to rewind speed
         rewindSource = gameObject.AddComponent<AudioSource>();
         rewindSource.playOnAwake = false;
@@ -116,8 +131,15 @@ public class GameAudio : MonoBehaviour
         if (ball != null)
             mBallRb = ball.GetComponent<Rigidbody>();
 
-        // Start music — random track, no repeats between tracks
-        PlayNextTrack();
+        // Check if user is already playing music (Apple Music, Spotify, etc.)
+        externalMusicPlaying = IsExternalMusicPlaying();
+
+        // Restore user mute prefs
+        LoadMutePrefs();
+
+        // Start game music only if no external music is playing
+        if (!externalMusicPlaying)
+            PlayNextTrack();
 
         // Start rolling loop (silent until ball moves)
         if (rollClip != null)
@@ -143,6 +165,7 @@ public class GameAudio : MonoBehaviour
         countClip = Resources.Load<AudioClip>("Audio/sfx_count");
         gateClip = Resources.Load<AudioClip>("Audio/sfx_gate");
         newBestClip = Resources.Load<AudioClip>("Audio/sfx_newbest");
+        top5Clip = Resources.Load<AudioClip>("Audio/sfx_top5");
         gateDissolveClip = Resources.Load<AudioClip>("Audio/sfx_gate_dissolve");
         gateSpawnClip = Resources.Load<AudioClip>("Audio/sfx_gate_spawn");
         Debug.Log($"[GameAudio] Loaded: gameOver={gameOverClip != null} roll={rollClip != null} tier1={swingTier1Clips.Length} tier2={swingTier2Clips.Length}");
@@ -187,8 +210,8 @@ public class GameAudio : MonoBehaviour
         UpdateRollingSound();
         UpdateRewindSound();
 
-        // Auto-advance to next track when current ends
-        if (musicClips != null && musicClips.Length > 0 && !musicSource.isPlaying && musicSource.clip != null)
+        // Auto-advance to next track when current ends (skip if external music is playing)
+        if (!externalMusicPlaying && musicClips != null && musicClips.Length > 0 && !musicSource.isPlaying && musicSource.clip != null)
             PlayNextTrack();
     }
 
@@ -286,7 +309,7 @@ public class GameAudio : MonoBehaviour
     public void PlayTap()
     {
         if (tapClip != null)
-            sfxSource.PlayOneShot(tapClip);
+            tapSource.PlayOneShot(tapClip);
     }
 
     public void PlayCount()
@@ -303,8 +326,16 @@ public class GameAudio : MonoBehaviour
 
     public void PlayNewBest(bool allTimeBest)
     {
-        if (newBestClip != null)
-            sfxSource.PlayOneShot(newBestClip, allTimeBest ? 1.0f : 0.6f);
+        if (allTimeBest)
+        {
+            if (newBestClip != null)
+                sfxSource.PlayOneShot(newBestClip);
+        }
+        else
+        {
+            if (top5Clip != null)
+                sfxSource.PlayOneShot(top5Clip);
+        }
     }
 
     public void PlayGateDissolve()
@@ -364,6 +395,40 @@ public class GameAudio : MonoBehaviour
             lastTier1Index = index;
     }
 
+    // ── PERSISTENT SETTINGS ─────────────────────────────────
+
+    private const string PREF_MUSIC = "MuteMusic";
+    private const string PREF_SOUND = "MuteSound";
+
+    public void LoadMutePrefs()
+    {
+        bool muteM = PlayerPrefs.GetInt(PREF_MUSIC, 0) == 1;
+        bool muteS = PlayerPrefs.GetInt(PREF_SOUND, 0) == 1;
+        SetMusicMuted(muteM);
+        SetSoundMuted(muteS);
+    }
+
+    public bool IsMusicMuted() { return musicSource != null && musicSource.mute; }
+    public bool IsSoundMuted() { return sfxSource != null && sfxSource.mute; }
+
+    public void SetMusicMuted(bool muted)
+    {
+        if (musicSource != null) musicSource.mute = muted;
+        PlayerPrefs.SetInt(PREF_MUSIC, muted ? 1 : 0);
+        PlayerPrefs.Save();
+    }
+
+    public void SetSoundMuted(bool muted)
+    {
+        if (sfxSource != null) sfxSource.mute = muted;
+        if (tapSource != null) tapSource.mute = muted;
+        if (voiceSource != null) voiceSource.mute = muted;
+        if (rollSource != null) rollSource.mute = muted;
+        if (rewindSource != null) rewindSource.mute = muted;
+        PlayerPrefs.SetInt(PREF_SOUND, muted ? 1 : 0);
+        PlayerPrefs.Save();
+    }
+
     // ── DEBUG ────────────────────────────────────────────────
 
     private bool dbgMuteMusic, dbgMuteSfx, dbgMuteVoice, dbgMuteRoll, dbgMuteRewind;
@@ -395,5 +460,16 @@ public class GameAudio : MonoBehaviour
             dbgMuteRewind = rewind;
             if (rewindSource != null) rewindSource.mute = rewind;
         }
+    }
+
+    // ── EXTERNAL MUSIC DETECTION ────────────────────────────
+
+    bool IsExternalMusicPlaying()
+    {
+#if UNITY_IOS && !UNITY_EDITOR
+        return _IsOtherAudioPlaying();
+#else
+        return false;
+#endif
     }
 }

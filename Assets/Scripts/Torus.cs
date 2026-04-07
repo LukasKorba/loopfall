@@ -69,6 +69,13 @@ public class Torus : MonoBehaviour
     public Material mObstacleFront;
     public Material mObstacleShadow;
 
+    // Time Warp mode
+    public Material mItemTimePlus;
+    public Material mItemTimeMinus;
+    private FrenzyTimer mFrenzyTimer;
+    private List<TrackItem> mTrackItems;
+    private TrackItem mLastTrackItem = null;
+
     void Awake()
     {
         mBeginRotation = transform.rotation;
@@ -101,6 +108,14 @@ public class Torus : MonoBehaviour
 
         // Rotate mesh
         transform.Rotate(0.0f, 0.0f, -mAngleStep);
+
+        // Time Warp: handle items instead of obstacles
+        if (GameConfig.IsTimeWarp() && mTrackItems != null)
+        {
+            CheckItemPickups();
+            UpdateTrackItems();
+            return;
+        }
 
         // Swing cooldown tick
         if (mSwingCooldown > 0f)
@@ -350,5 +365,119 @@ public class Torus : MonoBehaviour
         bool passed = mPendingGatePass;
         mPendingGatePass = false;
         return passed;
+    }
+
+    // ── TIME WARP MODE ──────────────────────────────────────
+
+    public void SetAngleStep(float step) { mAngleStep = step; }
+    public float GetAngleStep() { return mAngleStep; }
+    public void SetFrenzyTimer(FrenzyTimer timer) { mFrenzyTimer = timer; }
+
+    /// <summary>Switch from Pure Hell obstacles to Time Warp items.</summary>
+    public void InitTimeWarp()
+    {
+        // Clear Pure Hell obstacles
+        foreach (Obstacle o in mObstacles)
+            Destroy(o.mGameObject);
+        mObstacles.Clear();
+        mLastObstacle = null;
+        mCurrentObstacle = null;
+
+        // Init track items
+        mTrackItems = new List<TrackItem>();
+        mLastTrackItem = null;
+        UpdateTrackItems();
+    }
+
+    /// <summary>Reset Time Warp for a new run.</summary>
+    public void ResetTimeWarp()
+    {
+        if (mTrackItems != null)
+        {
+            foreach (TrackItem item in mTrackItems)
+                Destroy(item.mGameObject);
+            mTrackItems.Clear();
+        }
+        mLastTrackItem = null;
+
+        mAngle = 0f;
+        mAngleScore = 0f;
+        mRounds = 0;
+        transform.rotation = mBeginRotation;
+        mScore = 0;
+        mScoreLbl.text = "0";
+        mGameOver = false;
+
+        UpdateTrackItems();
+    }
+
+    void CheckItemPickups()
+    {
+        if (mFrenzyTimer == null) return;
+
+        foreach (TrackItem item in mTrackItems)
+        {
+            if (item.mCollected) continue;
+            if (item.mGameObject == null || !item.mGameObject.activeSelf) continue;
+
+            if (mAngle - 0.8f > item.mAngle)
+            {
+                item.mCollected = true;
+                item.mGameObject.SetActive(false);
+
+                if (item.mType == TrackItem.ItemType.TimePlus)
+                {
+                    mFrenzyTimer.AddTime(item.GetTimeValue());
+                    LightHaptic();
+                }
+                else if (item.mType == TrackItem.ItemType.TimeMinus)
+                {
+                    mFrenzyTimer.SubtractTime(item.GetTimeValue());
+                    LightHaptic();
+                }
+            }
+        }
+    }
+
+    void UpdateTrackItems()
+    {
+        if (mTrackItems == null) return;
+
+        if (mLastTrackItem == null)
+            mLastTrackItem = GenerateTrackItem();
+
+        while (mLastTrackItem.mAngle < mAngle + 85f)
+            mLastTrackItem = GenerateTrackItem();
+
+        // Hide old items (rolling window)
+        foreach (TrackItem item in mTrackItems)
+        {
+            if (item.mAngle > mAngle - 240f)
+                break;
+            if (item.mGameObject != null && item.mGameObject.activeSelf)
+                item.mGameObject.SetActive(false);
+        }
+    }
+
+    TrackItem GenerateTrackItem()
+    {
+        // 70% time bonus, 30% time penalty
+        TrackItem.ItemType type = Random.value < 0.7f
+            ? TrackItem.ItemType.TimePlus
+            : TrackItem.ItemType.TimeMinus;
+
+        Material mat = type == TrackItem.ItemType.TimePlus ? mItemTimePlus : mItemTimeMinus;
+        TrackItem item = new TrackItem(type, mObstacleStepInv, mat);
+
+        if (mLastTrackItem != null)
+            item.mAngle = mLastTrackItem.mAngle + Random.Range(5f, 8f);
+        else
+            item.mAngle = mObstaclesAngleOrigin;
+
+        item.mGameObject.transform.parent = transform;
+        item.mGameObject.transform.Rotate(0f, 0f, item.mAngle - mAngle);
+
+        mTrackItems.Add(item);
+        return item;
     }
 }

@@ -155,6 +155,8 @@ MonoBehaviour:
   halfTubeOnly: 1
   depthHueShiftRef: {fileID: 4800000, guid: 26ee0fcdd804f4978ab6d317fe988e75, type: 3}
   gateShaderRef: {fileID: 4800000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
+  blackHoleWarpRef: {fileID: 4800000, guid: 9b20835293459464eb02f234fd3e3457, type: 3}
+  trackItemShaderRef: {fileID: 4800000, guid: 0cdf545f4ce6042668f2919c32bb9bc0, type: 3}
 --- !u!4 &875362060
 Transform:
   m_ObjectHideFlags: 0

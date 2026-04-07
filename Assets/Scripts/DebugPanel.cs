@@ -63,5 +63,6 @@ public class DebugPanel : MonoBehaviour
 
         totalTaps = Sphere.GetTotalTaps();
         totalRuns = Sphere.GetTotalRuns();
+
     }
 }

@@ -30,6 +30,9 @@ public class Sphere : MonoBehaviour
     // Rewind
     public RewindSystem mRewindSystem;
 
+    // Time Warp
+    public FrenzyTimer mFrenzyTimer;
+
     // Persistent stats
     private const string STAT_TAPS = "TotalTaps";
     private const string STAT_RUNS = "TotalRuns";
@@ -64,36 +67,45 @@ public class Sphere : MonoBehaviour
 
     void Update()
     {
-        // Block all input during splash screen
+        // Block all input during splash screen or settings
         ScoreSync splashCheck = FindAnyObjectByType<ScoreSync>();
-        if (splashCheck != null && splashCheck.IsSplash()) return;
+        if (splashCheck != null && (splashCheck.IsSplash() || splashCheck.IsSettingsOpen())) return;
 
-        // Title state — any tap starts the game
+        // Time Warp: check timer expiry
+        if (!mGameOver && !mWaitingToStart && GameConfig.IsTimeWarp()
+            && mFrenzyTimer != null && mFrenzyTimer.IsExpired())
+        {
+            TriggerGameOver();
+        }
+
+        // Title state — tap anywhere to start
         if (mWaitingToStart)
         {
-            bool tapped = Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
-                          (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
-                          (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began);
-
-            if (tapped)
+            if (Input.GetKeyDown(KeyCode.A))
             {
-                mWaitingToStart = false;
-                mTorusScript.SetPaused(false);
-                if (mRewindSystem != null)
-                    mRewindSystem.StartRecording();
-                IncrementRuns();
-
-                // Apply first impulse based on tap side
-                bool leftSide = false;
-                if (Input.touchCount == 1)
-                    leftSide = Input.touches[0].position.x < Screen.width * 0.5f;
-                else if (Input.touchCount == 0 && Input.GetMouseButtonDown(0))
-                    leftSide = Input.mousePosition.x < Screen.width * 0.5f;
-                else if (Input.GetKeyDown(KeyCode.A))
-                    leftSide = true;
-
-                ApplyForceWithForwardVector(new Vector3(leftSide ? 1.0f : -1.0f, 0.0f, 0.0f));
-                return;
+                StartGame();
+                ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+            }
+            else if (Input.GetKeyDown(KeyCode.D))
+            {
+                StartGame();
+                ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+            }
+            else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
+            {
+                StartGame();
+                if (Input.mousePosition.x < Screen.width * 0.5f)
+                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                else
+                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+            }
+            else if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
+            {
+                StartGame();
+                if (Input.touches[0].position.x < Screen.width * 0.5f)
+                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                else
+                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
             }
             return;
         }
@@ -101,17 +113,7 @@ public class Sphere : MonoBehaviour
         // DEBUG: W key simulates death
         if (mDebugGodMode && !mGameOver && Input.GetKeyDown(KeyCode.W))
         {
-            mGameOver = true;
-            mTorusScript.GameOver();
-            mRigid.linearDamping = 8f;
-            mRigid.angularDamping = 8f;
-            CameraSwing swing = mCamera.GetComponent<CameraSwing>();
-            if (swing != null) swing.mDiff = Vector3.zero;
-            DeathEffect death = mCamera.GetComponent<DeathEffect>();
-            if (death != null) death.TriggerDeath(transform.position);
-            if (mRewindSystem != null) mRewindSystem.OnDeath();
-            GameAudio debugAudio = FindAnyObjectByType<GameAudio>();
-            if (debugAudio != null) debugAudio.PlayGameOver();
+            TriggerGameOver();
         }
 
         // Game over state — any tap resets
@@ -220,18 +222,25 @@ public class Sphere : MonoBehaviour
     public void DoReset()
     {
         IncrementRuns();
-        bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
 
-        if (mRewindSystem != null)
+        if (GameConfig.IsTimeWarp())
         {
-            mRewindSystem.ResetSystem();
-            mRewindSystem.StartRecording();
+            mTorusScript.ResetTimeWarp();
+            if (mFrenzyTimer != null)
+                mFrenzyTimer.StartTimer();
         }
-
-        if (!rewindHandled)
+        else
         {
-            // Fallback if no rewind — full torus reset
-            mTorusScript.Reset();
+            bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
+
+            if (mRewindSystem != null)
+            {
+                mRewindSystem.ResetSystem();
+                mRewindSystem.StartRecording();
+            }
+
+            if (!rewindHandled)
+                mTorusScript.Reset();
         }
 
         mTorusScript.SetPaused(false);
@@ -260,8 +269,56 @@ public class Sphere : MonoBehaviour
 
     }
 
+    void TriggerGameOver()
+    {
+        mGameOver = true;
+        mTorusScript.GameOver();
+
+        mRigid.linearDamping = 8f;
+        mRigid.angularDamping = 8f;
+
+        CameraSwing swing = mCamera.GetComponent<CameraSwing>();
+        if (swing != null) swing.mDiff = Vector3.zero;
+
+        DeathEffect death = mCamera.GetComponent<DeathEffect>();
+        if (death != null) death.TriggerDeath(transform.position);
+
+        // Rewind only in Pure Hell
+        if (!GameConfig.IsTimeWarp() && mRewindSystem != null)
+            mRewindSystem.OnDeath();
+
+        // Stop timer in Time Warp
+        if (GameConfig.IsTimeWarp() && mFrenzyTimer != null)
+            mFrenzyTimer.StopTimer();
+
+        GameAudio audio = FindAnyObjectByType<GameAudio>();
+        if (audio != null) audio.PlayGameOver();
+    }
+
     public bool IsWaiting() { return mWaitingToStart; }
     public bool IsGameOver() { return mGameOver; }
+
+    /// <summary>Start game from UI button (mode selection).</summary>
+    public void StartGame()
+    {
+        if (!mWaitingToStart) return;
+        mWaitingToStart = false;
+        mTorusScript.SetPaused(false);
+
+        if (GameConfig.IsTimeWarp())
+        {
+            mTorusScript.InitTimeWarp();
+            if (mFrenzyTimer != null)
+                mFrenzyTimer.StartTimer();
+        }
+        else
+        {
+            if (mRewindSystem != null)
+                mRewindSystem.StartRecording();
+        }
+
+        IncrementRuns();
+    }
     public bool IsRewinding()
     {
         return mRewindSystem != null && mRewindSystem.IsPausingOrRewinding();
@@ -276,26 +333,7 @@ public class Sphere : MonoBehaviour
 
         if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh"))
         {
-            mGameOver = true;
-            mTorusScript.GameOver();
-
-            mRigid.linearDamping = 8f;
-            mRigid.angularDamping = 8f;
-
-            CameraSwing swing = mCamera.GetComponent<CameraSwing>();
-            if (swing != null)
-                swing.mDiff = Vector3.zero;
-
-            DeathEffect death = mCamera.GetComponent<DeathEffect>();
-            if (death != null)
-                death.TriggerDeath(transform.position);
-
-            if (mRewindSystem != null)
-                mRewindSystem.OnDeath();
-
-            GameAudio audio = FindAnyObjectByType<GameAudio>();
-            if (audio != null)
-                audio.PlayGameOver();
+            TriggerGameOver();
         }
     }
 
