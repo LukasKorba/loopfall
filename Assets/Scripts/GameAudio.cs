@@ -210,9 +210,7 @@ public class GameAudio : MonoBehaviour
         UpdateRollingSound();
         UpdateRewindSound();
 
-        // Auto-advance to next track when current ends (skip if external music is playing)
-        if (!externalMusicPlaying && musicClips != null && musicClips.Length > 0 && !musicSource.isPlaying && musicSource.clip != null)
-            PlayNextTrack();
+        // Music loops — no track switching mid-game
     }
 
     void PlayNextTrack()
@@ -232,10 +230,8 @@ public class GameAudio : MonoBehaviour
 
         lastMusicIndex = index;
         musicSource.clip = musicClips[index];
+        musicSource.loop = true;
         musicSource.Play();
-
-        // Loop if only one track
-        musicSource.loop = (musicClips.Length == 1);
     }
 
     void UpdateRewindSound()

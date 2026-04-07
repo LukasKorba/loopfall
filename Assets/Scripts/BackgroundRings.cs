@@ -34,12 +34,12 @@ public class BackgroundRings : MonoBehaviour
         nebulaObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
         Material mat = new Material(Shader.Find("Loopfall/Nebula"));
-        mat.SetFloat("_Speed", 0.05f);
-        mat.SetFloat("_Scale", 1.8f);
-        mat.SetFloat("_Brightness", 1.0f);
-        mat.SetColor("_Color1", new Color(0.15f, 0.03f, 0.35f));  // Vivid purple
-        mat.SetColor("_Color2", new Color(0.02f, 0.2f, 0.35f));   // Vivid teal
-        mat.SetColor("_Color3", new Color(0.3f, 0.03f, 0.15f));   // Vivid magenta
+        mat.SetFloat("_Speed", 0.03f);
+        mat.SetFloat("_Scale", 2.2f);
+        mat.SetFloat("_Brightness", 0.45f);
+        mat.SetColor("_Color1", new Color(0.02f, 0.01f, 0.06f));  // Near-black indigo
+        mat.SetColor("_Color2", new Color(0.01f, 0.04f, 0.08f));  // Deep space blue
+        mat.SetColor("_Color3", new Color(0.05f, 0.01f, 0.03f));  // Faint deep red
         mat.renderQueue = 1000; // Background queue
 
         MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
@@ -68,17 +68,17 @@ public class BackgroundRings : MonoBehaviour
         raysObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
         Material mat = new Material(Shader.Find("Loopfall/GodRays"));
-        mat.SetFloat("_RayCount", 8);
-        mat.SetFloat("_RaySharpness", 5);
-        mat.SetFloat("_RayLength", 0.75f);
-        mat.SetFloat("_Intensity", 0.4f);
-        mat.SetFloat("_RotationSpeed", 0.025f);
-        mat.SetColor("_Color1", new Color(0.2f, 0.05f, 0.4f));   // Purple rays
-        mat.SetColor("_Color2", new Color(0.03f, 0.2f, 0.3f));   // Teal rays
+        mat.SetFloat("_RayCount", 6);
+        mat.SetFloat("_RaySharpness", 8);
+        mat.SetFloat("_RayLength", 0.6f);
+        mat.SetFloat("_Intensity", 0.12f);
+        mat.SetFloat("_RotationSpeed", 0.015f);
+        mat.SetColor("_Color1", new Color(0.04f, 0.02f, 0.1f));   // Dim indigo rays
+        mat.SetColor("_Color2", new Color(0.02f, 0.06f, 0.1f));   // Dim blue rays
         mat.SetFloat("_CenterX", 0.5f);
-        mat.SetFloat("_CenterY", 0.42f);  // Slightly below center — where the track converges
-        mat.SetFloat("_PulseSpeed", 0.3f);
-        mat.SetFloat("_PulseAmount", 0.12f);
+        mat.SetFloat("_CenterY", 0.42f);  // Where the track converges — wormhole center
+        mat.SetFloat("_PulseSpeed", 0.2f);
+        mat.SetFloat("_PulseAmount", 0.08f);
         mat.renderQueue = 2900; // After nebula (1000), before stars (2950)
 
         MeshRenderer mr = raysObj.AddComponent<MeshRenderer>();
@@ -92,7 +92,7 @@ public class BackgroundRings : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null) return;
 
-        int starCount = 250;
+        int starCount = 180;
         stars = new Transform[starCount];
         starBasePositions = new Vector3[starCount];
         starTwinklePhase = new float[starCount];
