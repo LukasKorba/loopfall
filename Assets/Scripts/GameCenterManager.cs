@@ -1,5 +1,5 @@
 using UnityEngine;
-#if UNITY_IOS || UNITY_STANDALONE_OSX
+#if UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX
 using UnityEngine.SocialPlatforms.GameCenter;
 #endif
 
@@ -39,7 +39,7 @@ public class GameCenterManager : MonoBehaviour
 
     void Authenticate()
     {
-#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         Social.localUser.Authenticate((bool success) =>
         {
             mAuthenticated = success;
@@ -73,7 +73,7 @@ public class GameCenterManager : MonoBehaviour
 
     void Report(int value, string leaderboardID)
     {
-#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         if (!mAuthenticated) return;
 
         Social.ReportScore(value, leaderboardID, (bool success) =>
@@ -93,7 +93,7 @@ public class GameCenterManager : MonoBehaviour
     /// </summary>
     public void ShowLeaderboard()
     {
-#if (UNITY_IOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         if (!mAuthenticated)
         {
             Debug.Log("[GameCenter] Not authenticated — cannot show leaderboard");

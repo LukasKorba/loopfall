@@ -16,7 +16,7 @@ using System.Runtime.InteropServices;
 /// </summary>
 public class GameAudio : MonoBehaviour
 {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_TVOS) && !UNITY_EDITOR
     [DllImport("__Internal")]
     private static extern bool _IsOtherAudioPlaying();
 #endif
@@ -462,7 +462,7 @@ public class GameAudio : MonoBehaviour
 
     bool IsExternalMusicPlaying()
     {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_TVOS) && !UNITY_EDITOR
         return _IsOtherAudioPlaying();
 #else
         return false;

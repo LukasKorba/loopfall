@@ -399,6 +399,8 @@ public class SceneSetup : MonoBehaviour
         mainCam.transform.rotation = new Quaternion(0, 0.707106829f, 0, 0.707106709f);
 #if UNITY_IOS && !UNITY_EDITOR
         mainCam.fieldOfView = 55.0f;
+#elif UNITY_TVOS && !UNITY_EDITOR
+        mainCam.fieldOfView = 70.0f;
 #else
         mainCam.fieldOfView = 65.0f;
 #endif

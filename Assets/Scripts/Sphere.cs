@@ -27,6 +27,7 @@ public class Sphere : MonoBehaviour
     // DEBUG: disable obstacle collision, press W to simulate death
     private bool mDebugGodMode = false;
 
+
     // Rewind
     public RewindSystem mRewindSystem;
 
@@ -43,6 +44,11 @@ public class Sphere : MonoBehaviour
         QualitySettings.vSyncCount = 0; // Disable VSync so targetFrameRate is respected
         Application.targetFrameRate = 60;
         Input.multiTouchEnabled = false;
+
+#if UNITY_TVOS
+        UnityEngine.tvOS.Remote.reportAbsoluteDpadValues = true;
+        UnityEngine.tvOS.Remote.allowExitToHome = true;
+#endif
     }
 
     void Start()
@@ -81,6 +87,14 @@ public class Sphere : MonoBehaviour
         // Title state — tap anywhere to start
         if (mWaitingToStart)
         {
+#if UNITY_TVOS
+            int remoteTap = GetRemoteTap();
+            if (remoteTap != 0)
+            {
+                StartGame();
+                ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+            }
+#else
             if (Input.GetKeyDown(KeyCode.A))
             {
                 StartGame();
@@ -107,6 +121,7 @@ public class Sphere : MonoBehaviour
                 else
                     ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
             }
+#endif
             return;
         }
 
@@ -123,6 +138,13 @@ public class Sphere : MonoBehaviour
             ScoreSync sync = FindAnyObjectByType<ScoreSync>();
             if (sync != null && !sync.CanRestart()) return;
 
+#if UNITY_TVOS
+            if (GetRemoteTap() != 0)
+            {
+                DoReset();
+                return;
+            }
+#else
             if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
                 (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
                 (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
@@ -130,10 +152,16 @@ public class Sphere : MonoBehaviour
                 DoReset();
                 return;
             }
+#endif
         }
 
         if (!mGameOver)
         {
+#if UNITY_TVOS
+            int remoteTap = GetRemoteTap();
+            if (remoteTap != 0)
+                ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+#else
             // Keyboard: A = left, D = right
             if (Input.GetKeyDown(KeyCode.A))
                 ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
@@ -157,6 +185,7 @@ public class Sphere : MonoBehaviour
                 else
                     ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
             }
+#endif
         }
 
         // Camera diff (swing effect) — only while alive
@@ -174,6 +203,25 @@ public class Sphere : MonoBehaviour
         if (mRigid.IsSleeping())
             mRigid.WakeUp();
     }
+
+#if UNITY_TVOS
+    /// <summary>
+    /// Detect Siri Remote input. Remote held horizontally:
+    /// Clickpad press (JoystickButton14) = left impulse
+    /// Play/Pause   (JoystickButton15) = right impulse
+    /// Returns -1 (left), 1 (right), or 0 (none).
+    /// </summary>
+    int GetRemoteTap()
+    {
+        // Two-button mode: clickpad = left, Play/Pause = right
+        if (Input.GetKeyDown(KeyCode.JoystickButton14))
+            return -1;
+        if (Input.GetKeyDown(KeyCode.JoystickButton15))
+            return 1;
+
+        return 0;
+    }
+#endif
 
     void ApplyForceWithForwardVector(Vector3 forward)
     {

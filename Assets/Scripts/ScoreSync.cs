@@ -167,6 +167,13 @@ public class ScoreSync : MonoBehaviour
     {
         if (canvas == null) return;
 
+        // Menu button (tvOS) / Escape = close settings if open
+        if (Input.GetKeyDown(KeyCode.Escape) && IsSettingsOpen())
+        {
+            CloseSettings();
+            return;
+        }
+
         // Splash is self-timed — don't poll sphere state
         if (state == State.Splash)
         {
@@ -497,12 +504,18 @@ public class ScoreSync : MonoBehaviour
         titleTimeWarpBtn.gameObject.SetActive(false);
 
         // Tap to play
-        titleTapText = CreateText(titleGroup, "TitleTap", "TAP TO PLAY",
+#if UNITY_TVOS
+        string tapPrompt = "SWIPE TO PLAY";
+#else
+        string tapPrompt = "TAP TO PLAY";
+#endif
+        titleTapText = CreateText(titleGroup, "TitleTap", tapPrompt,
             36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(titleTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         titleTapText.characterSpacing = 8f;
 
-        // Icon buttons — top right, side by side
+        // Icon buttons — top right, side by side (hidden on tvOS — no touch)
+#if !UNITY_TVOS
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
             trophyTex, out titleLBIcon);
@@ -512,8 +525,9 @@ public class ScoreSync : MonoBehaviour
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-170, -140), new Vector2(140, 140),
             cogTex, out titleSettingsIcon);
         titleSettingsBtn.onClick.AddListener(OnSettingsTap);
+#endif
 
-#if !UNITY_IOS || UNITY_EDITOR
+#if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
         titleQuitBtn = CreateIconButton(titleGroup, "TitleQuitBtn",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
             quitTex, out titleQuitIcon);
@@ -615,12 +629,18 @@ public class ScoreSync : MonoBehaviour
         }
 
         // Tap to play again
-        goTapText = CreateText(gameOverGroup, "GOTap", "TAP TO PLAY",
+#if UNITY_TVOS
+        string goTapPrompt = "SWIPE TO PLAY";
+#else
+        string goTapPrompt = "TAP TO PLAY";
+#endif
+        goTapText = CreateText(gameOverGroup, "GOTap", goTapPrompt,
             36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         goTapText.characterSpacing = 8f;
 
-        // Icon buttons — top right, side by side
+        // Icon buttons — top right, side by side (hidden on tvOS — no touch)
+#if !UNITY_TVOS
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
             trophyTex, out goLBIcon);
@@ -630,8 +650,9 @@ public class ScoreSync : MonoBehaviour
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-170, -140), new Vector2(140, 140),
             cogTex, out goSettingsIcon);
         goSettingsBtn.onClick.AddListener(OnSettingsTap);
+#endif
 
-#if !UNITY_IOS || UNITY_EDITOR
+#if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
         goQuitBtn = CreateIconButton(gameOverGroup, "GOQuitBtn",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
             quitTex, out goQuitIcon);
