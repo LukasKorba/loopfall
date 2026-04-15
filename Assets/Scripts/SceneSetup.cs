@@ -75,15 +75,23 @@ public class SceneSetup : MonoBehaviour
     Material itemTimeMinusMaterial;
     Shader depthHueShiftShader;
 
+    public static ThemeData activeTheme;
+
     void CreateMaterials()
     {
+        // Load saved theme
+        ThemeData[] themes = ThemeData.All();
+        int idx = Mathf.Clamp(ThemeData.LoadSavedIndex(), 0, themes.Length - 1);
+        activeTheme = themes[idx];
+        ThemeData t = activeTheme;
+
         // Track: dark base with glowing grid lines
         Shader trackGridShader = trackGridShaderRef != null ? trackGridShaderRef : Shader.Find("Loopfall/TrackGrid");
         trackMaterial = new Material(trackGridShader);
-        trackMaterial.SetColor("_BaseColor", new Color(0.14f, 0.13f, 0.15f));
-        trackMaterial.SetColor("_GridColor1", new Color(0.0f, 0.45f, 0.7f, 0.55f));   // Cyan major
-        trackMaterial.SetColor("_GridColor2", new Color(0.8f, 0.15f, 0.5f, 0.5f));   // Pink minor (boosted alpha)
-        trackMaterial.SetColor("_GridColor3", new Color(0.85f, 0.65f, 0.1f, 0.35f)); // Warm yellow accent (boosted)
+        trackMaterial.SetColor("_BaseColor", t.trackBase);
+        trackMaterial.SetColor("_GridColor1", t.gridColor1);
+        trackMaterial.SetColor("_GridColor2", t.gridColor2);
+        trackMaterial.SetColor("_GridColor3", t.gridColor3);
         trackMaterial.SetFloat("_MajorGridU", 16);
         trackMaterial.SetFloat("_MajorGridV", 8);
         trackMaterial.SetFloat("_MinorGridU", 4);
@@ -98,19 +106,22 @@ public class SceneSetup : MonoBehaviour
         trackMaterial.SetFloat("_Metallic", 0.05f);
         trackMaterial.SetFloat("_DepthFadeStart", 1.5f);
         trackMaterial.SetFloat("_DepthFadeEnd", 14.0f);
-        trackMaterial.SetColor("_FarColor", new Color(0.2f, 0.05f, 0.3f, 0.25f)); // Muted purple at distance
+        trackMaterial.SetColor("_FarColor", t.gridFarColor);
+        trackMaterial.SetColor("_SparkColor1", t.sparkColor1);
+        trackMaterial.SetColor("_SparkColor2", t.sparkColor2);
+        trackMaterial.SetColor("_SparkColor3", t.sparkColor3);
 
         // Obstacle front: custom shader — identical rendering on all platforms
         Shader gateShader = gateShaderRef != null ? gateShaderRef : Shader.Find("Loopfall/Gate");
         obstacleFrontMaterial = new Material(gateShader);
-        obstacleFrontMaterial.SetColor("_Color", new Color(1.0f, 0.6f, 0.15f));
-        obstacleFrontMaterial.SetColor("_EmissionColor", new Color(0.9f, 0.4f, 0.08f));
+        obstacleFrontMaterial.SetColor("_Color", t.gateFrontColor);
+        obstacleFrontMaterial.SetColor("_EmissionColor", t.gateFrontEmission);
         obstacleFrontMaterial.SetFloat("_EmissionIntensity", 1.0f);
 
-        // Obstacle top: brighter gold
+        // Obstacle top: brighter
         obstacleTopMaterial = new Material(gateShader);
-        obstacleTopMaterial.SetColor("_Color", new Color(1.0f, 0.75f, 0.25f));
-        obstacleTopMaterial.SetColor("_EmissionColor", new Color(1.0f, 0.55f, 0.1f));
+        obstacleTopMaterial.SetColor("_Color", t.gateTopColor);
+        obstacleTopMaterial.SetColor("_EmissionColor", t.gateTopEmission);
         obstacleTopMaterial.SetFloat("_EmissionIntensity", 1.0f);
 
         // Obstacle shadow: double-sided transparent dark strip — custom shader (no Standard on iOS)
@@ -123,30 +134,29 @@ public class SceneSetup : MonoBehaviour
         // Ball: neon-rimmed sphere — fresnel glow matches the tunnel aesthetic
         Shader ballShader = ballShaderRef != null ? ballShaderRef : Shader.Find("Loopfall/Ball");
         ballMaterial = new Material(ballShader);
-        ballMaterial.SetColor("_Color", new Color(0.9f, 0.92f, 1.0f));
-        ballMaterial.SetColor("_RimColor", new Color(0.0f, 0.75f, 1.0f));
+        ballMaterial.SetColor("_Color", t.ballColor);
+        ballMaterial.SetColor("_RimColor", t.ballRimColor);
         ballMaterial.SetFloat("_RimPower", 2.5f);
         ballMaterial.SetFloat("_RimStrength", 1.2f);
         ballMaterial.SetFloat("_Glossiness", 0.85f);
         ballMaterial.SetFloat("_Metallic", 0.3f);
-        ballMaterial.SetColor("_EmissionBase", new Color(0.15f, 0.15f, 0.2f));
+        ballMaterial.SetColor("_EmissionBase", t.ballEmissionBase);
 
-        // Rail: glowing red edge, double-sided so visible from inside torus
         // Edge rails: distance-fading opaque tubes
         Shader railShader = railShaderRef != null ? railShaderRef : Shader.Find("Loopfall/Rail");
         railMaterialLeft = new Material(railShader);
-        railMaterialLeft.SetColor("_NearColor", new Color(0.95f, 0.1f, 0.55f));      // Magenta near
-        railMaterialLeft.SetColor("_FarColor", new Color(0.25f, 0.05f, 0.35f));       // Deep purple far
-        railMaterialLeft.SetColor("_NearEmission", new Color(0.55f, 0.03f, 0.3f));
-        railMaterialLeft.SetColor("_FarEmission", new Color(0.08f, 0.01f, 0.12f));
+        railMaterialLeft.SetColor("_NearColor", t.railLeftNear);
+        railMaterialLeft.SetColor("_FarColor", t.railLeftFar);
+        railMaterialLeft.SetColor("_NearEmission", t.railLeftEmissionNear);
+        railMaterialLeft.SetColor("_FarEmission", t.railLeftEmissionFar);
         railMaterialLeft.SetFloat("_Glossiness", 0.7f);
         railMaterialLeft.SetFloat("_Metallic", 0.3f);
 
         railMaterialRight = new Material(railShader);
-        railMaterialRight.SetColor("_NearColor", new Color(0.2f, 0.9f, 0.4f));       // Green near
-        railMaterialRight.SetColor("_FarColor", new Color(0.05f, 0.2f, 0.35f));       // Teal-blue far
-        railMaterialRight.SetColor("_NearEmission", new Color(0.05f, 0.45f, 0.15f));
-        railMaterialRight.SetColor("_FarEmission", new Color(0.01f, 0.06f, 0.12f));
+        railMaterialRight.SetColor("_NearColor", t.railRightNear);
+        railMaterialRight.SetColor("_FarColor", t.railRightFar);
+        railMaterialRight.SetColor("_NearEmission", t.railRightEmissionNear);
+        railMaterialRight.SetColor("_FarEmission", t.railRightEmissionFar);
         railMaterialRight.SetFloat("_Glossiness", 0.7f);
         railMaterialRight.SetFloat("_Metallic", 0.3f);
 
@@ -409,7 +419,7 @@ public class SceneSetup : MonoBehaviour
 #endif
         mainCam.nearClipPlane = 0.3f;
         mainCam.allowHDR = true; // Emission values >1.0 render without clamping
-        mainCam.backgroundColor = new Color(0.05f, 0.05f, 0.08f); // Near black
+        mainCam.backgroundColor = activeTheme.cameraBg;
         mainCam.clearFlags = CameraClearFlags.SolidColor;
 
         // Camera swing script

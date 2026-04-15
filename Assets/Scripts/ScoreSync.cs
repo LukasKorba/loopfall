@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using TMPro;
 using System.Collections.Generic;
 
@@ -125,6 +126,7 @@ public class ScoreSync : MonoBehaviour
     private RectTransform settingsPanel;
     private TMP_Text settingsMusicLabel;
     private TMP_Text settingsSoundLabel;
+    private TMP_Text settingsThemeLabel;
     private TMP_Text settingsFullscreenLabel;
     private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
@@ -2175,7 +2177,7 @@ public class ScoreSync : MonoBehaviour
 #if UNITY_STANDALONE && !UNITY_EDITOR
         showDisplay = true;
 #endif
-        cardRT.sizeDelta = showDisplay ? new Vector2(500, 560) : new Vector2(500, 320);
+        cardRT.sizeDelta = showDisplay ? new Vector2(500, 620) : new Vector2(500, 400);
 
         Image cardBg = card.AddComponent<Image>();
         cardBg.color = new Color(0.06f, 0.03f, 0.10f, 0.96f);
@@ -2235,17 +2237,28 @@ public class ScoreSync : MonoBehaviour
             Button vsyncBtn = CreateSettingsToggle(cardRT, "VSyncBtn",
                 new Vector2(0.5f, 0.23f), out settingsVSyncLabel);
             vsyncBtn.onClick.AddListener(OnToggleVSync);
+
+            // Theme divider + toggle
+            CreateSettingsDivider(cardRT, 0.175f, DIM_TEXT, 0.08f);
+            Button themeBtn = CreateSettingsToggle(cardRT, "ThemeBtn",
+                new Vector2(0.5f, 0.12f), out settingsThemeLabel);
+            themeBtn.onClick.AddListener(OnCycleTheme);
         }
         else
         {
-            // Mobile layout — audio only
+            // Mobile layout — audio + theme
             Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
-                new Vector2(0.5f, 0.55f), out settingsMusicLabel);
+                new Vector2(0.5f, 0.65f), out settingsMusicLabel);
             musicBtn.onClick.AddListener(ToggleMusic);
 
             Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
-                new Vector2(0.5f, 0.35f), out settingsSoundLabel);
+                new Vector2(0.5f, 0.48f), out settingsSoundLabel);
             soundBtn.onClick.AddListener(ToggleSound);
+
+            CreateSettingsDivider(cardRT, 0.375f, DIM_TEXT, 0.08f);
+            Button themeBtn = CreateSettingsToggle(cardRT, "ThemeBtn",
+                new Vector2(0.5f, 0.28f), out settingsThemeLabel);
+            themeBtn.onClick.AddListener(OnCycleTheme);
         }
 
         // Close label
@@ -2587,6 +2600,16 @@ public class ScoreSync : MonoBehaviour
         RefreshSettingsLabels();
     }
 
+    void OnCycleTheme()
+    {
+        ThemeData[] themes = ThemeData.All();
+        int current = ThemeData.LoadSavedIndex();
+        int next = (current + 1) % themes.Length;
+        ThemeData.SaveIndex(next);
+        // Reload the scene so all materials/stars rebuild with the new theme
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
     void RefreshSettingsLabels()
     {
         if (mAudio == null) return;
@@ -2625,6 +2648,13 @@ public class ScoreSync : MonoBehaviour
                 settingsVSyncLabel.text = vs ? "VSYNC   ON" : "VSYNC   OFF";
                 StyleSettingsToggle(settingsVSyncLabel, vs);
             }
+        }
+
+        if (settingsThemeLabel != null)
+        {
+            string themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
+            settingsThemeLabel.text = "THEME   " + themeName;
+            StyleSettingsToggle(settingsThemeLabel, true);
         }
     }
 

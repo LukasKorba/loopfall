@@ -34,13 +34,14 @@ public class BackgroundRings : MonoBehaviour
         nebulaObj.transform.localRotation = Quaternion.identity;
         nebulaObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
+        ThemeData t = SceneSetup.activeTheme;
         Material mat = new Material(Shader.Find("Loopfall/Nebula"));
         mat.SetFloat("_Speed", 0.04f);
         mat.SetFloat("_Scale", 1.8f);
-        mat.SetFloat("_Brightness", 0.7f);
-        mat.SetColor("_Color1", new Color(0.06f, 0.02f, 0.12f));  // Deep purple base
-        mat.SetColor("_Color2", new Color(0.02f, 0.08f, 0.14f));  // Dark cyan drift
-        mat.SetColor("_Color3", new Color(0.10f, 0.02f, 0.08f));  // Magenta wisps
+        mat.SetFloat("_Brightness", t.nebulaBrightness);
+        mat.SetColor("_Color1", t.nebulaColor1);
+        mat.SetColor("_Color2", t.nebulaColor2);
+        mat.SetColor("_Color3", t.nebulaColor3);
         mat.renderQueue = 1000; // Background queue
 
         MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
@@ -68,14 +69,15 @@ public class BackgroundRings : MonoBehaviour
         raysObj.transform.localRotation = Quaternion.identity;
         raysObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
+        ThemeData t = SceneSetup.activeTheme;
         Material mat = new Material(Shader.Find("Loopfall/GodRays"));
         mat.SetFloat("_RayCount", 8);
         mat.SetFloat("_RaySharpness", 5);
         mat.SetFloat("_RayLength", 0.7f);
-        mat.SetFloat("_Intensity", 0.35f);
+        mat.SetFloat("_Intensity", t.rayIntensity);
         mat.SetFloat("_RotationSpeed", 0.02f);
-        mat.SetColor("_Color1", new Color(0.08f, 0.03f, 0.18f));  // Purple rays
-        mat.SetColor("_Color2", new Color(0.03f, 0.10f, 0.18f));  // Cyan rays
+        mat.SetColor("_Color1", t.rayColor1);
+        mat.SetColor("_Color2", t.rayColor2);
         mat.SetFloat("_CenterX", 0.5f);
         mat.SetFloat("_CenterY", 0.42f);  // Where the track converges — wormhole center
         mat.SetFloat("_PulseSpeed", 0.3f);
@@ -154,36 +156,25 @@ public class BackgroundRings : MonoBehaviour
             star.transform.rotation = cam.transform.rotation;
             star.transform.localScale = Vector3.one * size;
 
-            // Color palette matching the game's neon identity
+            // Color palette from active theme
+            ThemeData t = SceneSetup.activeTheme;
             Color starColor;
             float colorRoll = Random.value;
             if (colorRoll < 0.12f)
-            {
-                // Gold — matches gate/score color
-                starColor = new Color(1.0f, 0.85f, 0.3f, alpha);
-            }
+                starColor = new Color(t.starAccent1.r, t.starAccent1.g, t.starAccent1.b, alpha);
             else if (colorRoll < 0.28f)
-            {
-                // Cyan — matches ball rim, UI accents
-                starColor = new Color(0.3f, 0.8f, 1.0f, alpha);
-            }
+                starColor = new Color(t.starAccent2.r, t.starAccent2.g, t.starAccent2.b, alpha);
             else if (colorRoll < 0.40f)
-            {
-                // Magenta — matches left rail
-                starColor = new Color(0.9f, 0.3f, 0.6f, alpha);
-            }
+                starColor = new Color(t.starAccent3.r, t.starAccent3.g, t.starAccent3.b, alpha);
             else if (colorRoll < 0.50f)
-            {
-                // Green — matches right rail
-                starColor = new Color(0.3f, 0.9f, 0.5f, alpha);
-            }
+                starColor = new Color(t.starAccent4.r, t.starAccent4.g, t.starAccent4.b, alpha);
             else
             {
-                // Cool white-blue — deep space default
+                Color b = t.starBase;
                 starColor = new Color(
-                    0.5f + Random.Range(0f, 0.2f),
-                    0.6f + Random.Range(0f, 0.2f),
-                    0.9f + Random.Range(0f, 0.1f),
+                    b.r + Random.Range(-0.1f, 0.1f),
+                    b.g + Random.Range(-0.1f, 0.1f),
+                    b.b + Random.Range(-0.05f, 0.05f),
                     alpha
                 );
             }
