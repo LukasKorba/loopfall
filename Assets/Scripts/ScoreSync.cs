@@ -18,6 +18,7 @@ public class ScoreSync : MonoBehaviour
 
     // ── LEADERBOARD ──────────────────────────────────────────
     private List<int> topScores = new List<int>();
+    private List<long> topTimestamps = new List<long>();
     private const int MAX_SCORES = 10;
     private const string SCORES_KEY = "TopScores";
 
@@ -114,6 +115,7 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text goNewBestText;
     private TMP_Text goTapText;
     private TMP_Text[] goLeaderboardTexts;
+    private TMP_Text[] goLeaderboardDateTexts;
     private const int LEADERBOARD_SHOW = 5;
     private Button goSettingsBtn;
     private CanvasGroup goSettingsIcon;
@@ -159,6 +161,19 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text goScoreYellowText;
     private int goLastDisplayScore = -1; // Track count-up ticks for SFX
     private bool goNewBestSfxPlayed = false;
+
+    // ── NEW BEST GLITTER ─────────────────────────────────────
+    private const int GLITTER_COUNT = 120;
+    private RectTransform[] glitterRTs;
+    private Image[] glitterImages;
+    private Vector2[] glitterVel;
+    private float[] glitterLife;
+    private float[] glitterMaxLife;
+    private float[] glitterRot;
+    private float[] glitterRotSpeed;
+    private float[] glitterSize;
+    private float glitterSpawnTimer;
+    private bool glitterActive;
 
     // ── VHS GLITCH ────────────────────────────────────────────
     private float glitchTimer = 0f;          // Countdown to next burst
@@ -285,6 +300,7 @@ public class ScoreSync : MonoBehaviour
             }
             if (state == State.Playing)
             {
+                StopGlitter();
                 lastPlayingScore = "0";
                 if (playingScoreText != null) playingScoreText.text = "0";
                 scoreAnimTimer = -1f;
@@ -364,6 +380,18 @@ public class ScoreSync : MonoBehaviour
     string FormatTimeScore(int deciseconds)
     {
         return (deciseconds / 10f).ToString("F1") + "s";
+    }
+
+    string FormatTimestamp(long unixSeconds)
+    {
+        if (unixSeconds <= 0) return "---";
+        var dt = new System.DateTimeOffset(1970, 1, 1, 0, 0, 0, System.TimeSpan.Zero)
+            .AddSeconds(unixSeconds).LocalDateTime;
+        var now = System.DateTime.Now;
+        string month = dt.ToString("MMM").ToUpper();
+        if (dt.Year != now.Year)
+            return month + " '" + (dt.Year % 100).ToString("D2");
+        return month + " " + dt.Day;
     }
 
     public bool IsSplash() { return state == State.Splash; }
@@ -768,16 +796,29 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(goNewBestText.rectTransform, new Vector2(0.5f, 0.475f), new Vector2(500, 50));
         goNewBestText.characterSpacing = 10f;
 
-        // Leaderboard rows — staggered slide-in, left-aligned for asymmetry
+        // Golden glitter particles for NEW BEST celebration
+        BuildGlitter(gameOverGroup);
+
+        // Leaderboard rows — score left, date right, centered as a pair
         goLeaderboardTexts = new TMP_Text[LEADERBOARD_SHOW];
+        goLeaderboardDateTexts = new TMP_Text[LEADERBOARD_SHOW];
         for (int i = 0; i < LEADERBOARD_SHOW; i++)
         {
+            float rowY = 0.38f - i * 0.038f;
+
             TMP_Text row = CreateText(gameOverGroup, "LB" + i, "",
                 28, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
-            SetAnchored(row.rectTransform, new Vector2(0.47f, 0.38f - i * 0.038f), new Vector2(350, 40));
+            SetAnchored(row.rectTransform, new Vector2(0.42f, rowY), new Vector2(200, 40));
             row.alignment = TextAlignmentOptions.Left;
             row.characterSpacing = 2f;
             goLeaderboardTexts[i] = row;
+
+            TMP_Text dateRow = CreateText(gameOverGroup, "LBDate" + i, "",
+                22, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
+            SetAnchored(dateRow.rectTransform, new Vector2(0.58f, rowY), new Vector2(160, 40));
+            dateRow.alignment = TextAlignmentOptions.Right;
+            dateRow.characterSpacing = 1f;
+            goLeaderboardDateTexts[i] = dateRow;
         }
 
         // Tap to play again
@@ -845,26 +886,28 @@ public class ScoreSync : MonoBehaviour
             brt.anchoredPosition = new Vector2(sx * Mathf.Abs(bracketInset), sy * 90f);
             brt.sizeDelta = new Vector2(bracketLen, bracketLen);
 
-            // Horizontal bar
+            // Corner point within parent rect
+            float cx = sx > 0 ? 1f : 0f;
+            float cy = sy > 0 ? 1f : 0f;
+
+            // Horizontal bar — anchored at corner, extends inward
             GameObject hBar = new GameObject("H");
             RectTransform hrt = hBar.AddComponent<RectTransform>();
             hrt.SetParent(brt, false);
-            hrt.anchorMin = new Vector2(sx > 0 ? 1f - 1f : 0f, sy > 0 ? 1f : 0f);
-            hrt.anchorMax = hrt.anchorMin;
-            hrt.pivot = new Vector2(sx > 0 ? 1f : 0f, 0.5f);
+            hrt.anchorMin = hrt.anchorMax = new Vector2(cx, cy);
+            hrt.pivot = new Vector2(cx, 0.5f);
             hrt.sizeDelta = new Vector2(bracketLen, bracketThick);
             hrt.anchoredPosition = Vector2.zero;
             Image hImg = hBar.AddComponent<Image>();
             hImg.color = bracketColor;
             hImg.raycastTarget = false;
 
-            // Vertical bar
+            // Vertical bar — anchored at corner, extends inward
             GameObject vBar = new GameObject("V");
             RectTransform vrt = vBar.AddComponent<RectTransform>();
             vrt.SetParent(brt, false);
-            vrt.anchorMin = new Vector2(sx > 0 ? 1f : 0f, sy > 0 ? 1f - 1f : 0f);
-            vrt.anchorMax = vrt.anchorMin;
-            vrt.pivot = new Vector2(0.5f, sy > 0 ? 1f : 0f);
+            vrt.anchorMin = vrt.anchorMax = new Vector2(cx, cy);
+            vrt.pivot = new Vector2(0.5f, cy);
             vrt.sizeDelta = new Vector2(bracketThick, bracketLen);
             vrt.anchoredPosition = Vector2.zero;
             Image vImg = vBar.AddComponent<Image>();
@@ -1050,7 +1093,10 @@ public class ScoreSync : MonoBehaviour
                 ApplyGlitchToText(goNewBestText);
                 ApplyGlitchToText(goTapText);
                 for (int i = 0; i < LEADERBOARD_SHOW; i++)
+                {
                     ApplyGlitchToText(goLeaderboardTexts[i]);
+                    ApplyGlitchToText(goLeaderboardDateTexts[i]);
+                }
             }
             ApplyGlitchToBackdrop();
         }
@@ -1708,6 +1754,9 @@ public class ScoreSync : MonoBehaviour
                 // Scale pop on new best
                 float popScale = Mathf.Lerp(1.5f, 1.0f, EaseOutBack(p));
                 goNewBestText.rectTransform.localScale = new Vector3(popScale, popScale, 1f);
+
+                // Start glitter on first frame the label appears
+                if (!glitterActive) StartGlitter();
             }
             else
             {
@@ -1734,14 +1783,15 @@ public class ScoreSync : MonoBehaviour
             goNewBestText.rectTransform.localScale = Vector3.one;
         }
 
-        // Corner brackets — fade in with score, subtle breathe
+        // Corner brackets — fade in with score, subtle breathe; gold for new best
         if (goCornerBrackets != null)
         {
             float bracketP = Mathf.Clamp01((t - 0.4f) / 0.5f);
             float bracketAlpha = EaseOutCubic(bracketP) * 0.3f;
             if (bracketP >= 1f)
                 bracketAlpha += Mathf.Sin(Time.time * 1.2f) * 0.05f;
-            Color bc = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, bracketAlpha);
+            Color bracketBase = isNewBest ? NEON_GOLD : NEON_CYAN;
+            Color bc = new Color(bracketBase.r, bracketBase.g, bracketBase.b, bracketAlpha);
             foreach (RectTransform brt in goCornerBrackets)
             {
                 if (brt == null) continue;
@@ -1791,6 +1841,9 @@ public class ScoreSync : MonoBehaviour
         {
             SetAlpha(goTapText, 0f);
         }
+
+        // Golden glitter — loops while on game over screen
+        UpdateGlitter();
     }
 
     void AnimateLeaderboard(float t)
@@ -1802,6 +1855,7 @@ public class ScoreSync : MonoBehaviour
             if (i >= topScores.Count)
             {
                 SetAlpha(goLeaderboardTexts[i], 0f);
+                if (goLeaderboardDateTexts[i] != null) SetAlpha(goLeaderboardDateTexts[i], 0f);
                 continue;
             }
 
@@ -1810,6 +1864,11 @@ public class ScoreSync : MonoBehaviour
             {
                 SetAlpha(goLeaderboardTexts[i], 0f);
                 goLeaderboardTexts[i].rectTransform.anchoredPosition = new Vector2(30f, 0f);
+                if (goLeaderboardDateTexts[i] != null)
+                {
+                    SetAlpha(goLeaderboardDateTexts[i], 0f);
+                    goLeaderboardDateTexts[i].rectTransform.anchoredPosition = new Vector2(30f, 0f);
+                }
                 continue;
             }
 
@@ -1822,10 +1881,15 @@ public class ScoreSync : MonoBehaviour
             string scoreStr = GameConfig.IsTimeWarp() ? FormatTimeScore(score) : score.ToString();
             goLeaderboardTexts[i].text = (i + 1) + ".   " + scoreStr;
 
-            // Color hierarchy: current run = cyan, #1 = gold, rest = dim
+            // Color hierarchy: new best = gold, current run = cyan, #1 = gold, rest = dim
             Color rowColor;
             float maxAlpha;
-            if (isCurrent)
+            if (isCurrent && isNewBest)
+            {
+                rowColor = NEON_GOLD;
+                maxAlpha = 1.0f;
+            }
+            else if (isCurrent)
             {
                 rowColor = NEON_CYAN;
                 maxAlpha = 0.95f;
@@ -1843,10 +1907,174 @@ public class ScoreSync : MonoBehaviour
 
             goLeaderboardTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
                 rowAlpha * maxAlpha);
+            goLeaderboardTexts[i].fontStyle = (isCurrent && isNewBest)
+                ? FontStyles.Bold : FontStyles.Normal;
 
             // Slide in from right
             float slideX = Mathf.Lerp(30f, 0f, EaseOutCubic(rowP));
             goLeaderboardTexts[i].rectTransform.anchoredPosition = new Vector2(slideX, 0f);
+
+            // Date column
+            if (goLeaderboardDateTexts[i] != null)
+            {
+                long ts = i < topTimestamps.Count ? topTimestamps[i] : 0;
+                goLeaderboardDateTexts[i].text = FormatTimestamp(ts);
+                float dateAlpha = maxAlpha * 0.6f; // Subtler than score
+                goLeaderboardDateTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
+                    rowAlpha * dateAlpha);
+                goLeaderboardDateTexts[i].rectTransform.anchoredPosition = new Vector2(slideX, 0f);
+            }
+        }
+    }
+
+    // ── NEW BEST GLITTER ─────────────────────────────────────
+
+    void BuildGlitter(RectTransform parent)
+    {
+        glitterRTs = new RectTransform[GLITTER_COUNT];
+        glitterImages = new Image[GLITTER_COUNT];
+        glitterVel = new Vector2[GLITTER_COUNT];
+        glitterLife = new float[GLITTER_COUNT];
+        glitterMaxLife = new float[GLITTER_COUNT];
+        glitterRot = new float[GLITTER_COUNT];
+        glitterRotSpeed = new float[GLITTER_COUNT];
+        glitterSize = new float[GLITTER_COUNT];
+        glitterActive = false;
+
+        for (int i = 0; i < GLITTER_COUNT; i++)
+        {
+            GameObject g = new GameObject("Glitter" + i);
+            RectTransform rt = g.AddComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.475f);
+            rt.sizeDelta = new Vector2(4f, 4f);
+
+            Image img = g.AddComponent<Image>();
+            img.color = new Color(1f, 0.85f, 0.2f, 0f);
+            img.raycastTarget = false;
+
+            glitterRTs[i] = rt;
+            glitterImages[i] = img;
+            glitterLife[i] = -1f;
+        }
+    }
+
+    void StartGlitter()
+    {
+        glitterActive = true;
+        glitterSpawnTimer = 0f;
+        // Initial burst
+        for (int i = 0; i < 40; i++)
+            SpawnGlitter(i);
+    }
+
+    void StopGlitter()
+    {
+        glitterActive = false;
+        for (int i = 0; i < GLITTER_COUNT; i++)
+        {
+            glitterLife[i] = -1f;
+            if (glitterImages[i] != null)
+                glitterImages[i].color = new Color(1f, 0.85f, 0.2f, 0f);
+        }
+    }
+
+    void SpawnGlitter(int i)
+    {
+        // Emit from NEW BEST text area, spreading left and right
+        float side = Random.value < 0.5f ? -1f : 1f;
+        float spreadX = Random.Range(80f, 220f) * side;
+        float spreadY = Random.Range(-15f, 30f);
+
+        glitterRTs[i].anchoredPosition = new Vector2(
+            Random.Range(-100f, 100f),
+            Random.Range(-10f, 10f)
+        );
+
+        glitterVel[i] = new Vector2(spreadX, spreadY + Random.Range(40f, 120f));
+        glitterMaxLife[i] = Random.Range(1.2f, 2.5f);
+        glitterLife[i] = glitterMaxLife[i];
+        glitterSize[i] = Random.Range(4.5f, 10.5f);
+        glitterRot[i] = Random.Range(0f, 360f);
+        glitterRotSpeed[i] = Random.Range(-300f, 300f);
+
+        // Gold color with slight variation
+        float hueShift = Random.Range(-0.06f, 0.06f);
+        glitterImages[i].color = new Color(
+            1.0f + hueShift,
+            0.78f + Random.Range(-0.1f, 0.15f),
+            0.15f + Random.Range(-0.1f, 0.1f),
+            0.9f
+        );
+
+        glitterRTs[i].sizeDelta = new Vector2(glitterSize[i], glitterSize[i]);
+    }
+
+    void UpdateGlitter()
+    {
+        if (glitterRTs == null) return;
+
+        float dt = Time.deltaTime;
+        float gravity = -180f;
+
+        // Continuous spawn — 24 per second for steady stream
+        if (glitterActive)
+        {
+            glitterSpawnTimer += dt;
+            float spawnInterval = 1f / 24f;
+            while (glitterSpawnTimer >= spawnInterval)
+            {
+                glitterSpawnTimer -= spawnInterval;
+                // Find a dead particle to recycle
+                for (int j = 0; j < GLITTER_COUNT; j++)
+                {
+                    if (glitterLife[j] <= 0f)
+                    {
+                        SpawnGlitter(j);
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < GLITTER_COUNT; i++)
+        {
+            if (glitterLife[i] <= 0f)
+            {
+                if (glitterImages[i] != null)
+                    glitterImages[i].color = new Color(glitterImages[i].color.r,
+                        glitterImages[i].color.g, glitterImages[i].color.b, 0f);
+                continue;
+            }
+
+            glitterLife[i] -= dt;
+            float lifeT = 1f - (glitterLife[i] / glitterMaxLife[i]);
+
+            // Physics: velocity + gravity
+            glitterVel[i].x *= (1f - 1.5f * dt); // Air drag
+            glitterVel[i].y += gravity * dt;
+            Vector2 pos = glitterRTs[i].anchoredPosition;
+            pos += glitterVel[i] * dt;
+            glitterRTs[i].anchoredPosition = pos;
+
+            // Rotation — tumble
+            glitterRot[i] += glitterRotSpeed[i] * dt;
+            glitterRTs[i].localRotation = Quaternion.Euler(0, 0, glitterRot[i]);
+
+            // Scale: slight shrink at end
+            float scale = lifeT > 0.7f ? Mathf.Lerp(1f, 0.3f, (lifeT - 0.7f) / 0.3f) : 1f;
+            glitterRTs[i].sizeDelta = new Vector2(glitterSize[i] * scale, glitterSize[i] * scale);
+
+            // Alpha: full for most of life, fade at end
+            float alpha = 1f;
+            if (lifeT < 0.1f) alpha = lifeT / 0.1f; // Fade in
+            else if (lifeT > 0.6f) alpha = Mathf.Lerp(1f, 0f, (lifeT - 0.6f) / 0.4f); // Fade out
+
+            // Shimmer — flicker brightness
+            float shimmer = 0.7f + 0.3f * Mathf.Sin(Time.time * 15f + i * 2.3f);
+
+            Color c = glitterImages[i].color;
+            glitterImages[i].color = new Color(c.r, c.g, c.b, alpha * shimmer * 0.85f);
         }
     }
 
@@ -2712,38 +2940,76 @@ public class ScoreSync : MonoBehaviour
     void LoadScores()
     {
         topScores.Clear();
+        topTimestamps.Clear();
         string saved = PlayerPrefs.GetString(GameConfig.GetScoresKey(), "");
         if (!string.IsNullOrEmpty(saved))
         {
             string[] parts = saved.Split(',');
             foreach (string p in parts)
             {
+                // Format: "score:timestamp" or legacy "score"
+                string[] pair = p.Split(':');
                 int val;
-                if (int.TryParse(p, out val))
+                if (int.TryParse(pair[0], out val))
+                {
                     topScores.Add(val);
+                    long ts = 0;
+                    if (pair.Length > 1) long.TryParse(pair[1], out ts);
+                    topTimestamps.Add(ts);
+                }
             }
         }
-        topScores.Sort((a, b) => b.CompareTo(a));
+        SortScoresWithTimestamps();
     }
 
     void SaveScores()
     {
-        string joined = string.Join(",", topScores);
-        PlayerPrefs.SetString(GameConfig.GetScoresKey(), joined);
+        var entries = new string[topScores.Count];
+        for (int i = 0; i < topScores.Count; i++)
+        {
+            long ts = i < topTimestamps.Count ? topTimestamps[i] : 0;
+            entries[i] = topScores[i] + ":" + ts;
+        }
+        PlayerPrefs.SetString(GameConfig.GetScoresKey(), string.Join(",", entries));
         PlayerPrefs.Save();
+    }
+
+    void SortScoresWithTimestamps()
+    {
+        // Sort both lists together by score descending
+        var paired = new List<System.Tuple<int, long>>();
+        for (int i = 0; i < topScores.Count; i++)
+        {
+            long ts = i < topTimestamps.Count ? topTimestamps[i] : 0;
+            paired.Add(new System.Tuple<int, long>(topScores[i], ts));
+        }
+        paired.Sort((a, b) => b.Item1.CompareTo(a.Item1));
+        topScores.Clear();
+        topTimestamps.Clear();
+        foreach (var p in paired)
+        {
+            topScores.Add(p.Item1);
+            topTimestamps.Add(p.Item2);
+        }
     }
 
     int InsertScore(int score)
     {
         if (score <= 0) return 0;
 
+        long now = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         topScores.Add(score);
-        topScores.Sort((a, b) => b.CompareTo(a));
+        topTimestamps.Add(now);
+        SortScoresWithTimestamps();
 
-        int rank = topScores.IndexOf(score) + 1;
+        int rank = topScores.LastIndexOf(score) + 1;
 
         while (topScores.Count > MAX_SCORES)
+        {
             topScores.RemoveAt(topScores.Count - 1);
+            if (topTimestamps.Count > MAX_SCORES)
+                topTimestamps.RemoveAt(topTimestamps.Count - 1);
+        }
 
         SaveScores();
 
@@ -2761,6 +3027,7 @@ public class ScoreSync : MonoBehaviour
     public void ClearAllScores()
     {
         topScores.Clear();
+        topTimestamps.Clear();
         PlayerPrefs.DeleteKey(GameConfig.GetScoresKey());
         PlayerPrefs.Save();
     }

@@ -19,12 +19,10 @@ public class SteamService : MonoBehaviour, IPlatformService
     // ── LEADERBOARD HANDLES ──────────────────────────────────
 
     private SteamLeaderboard_t mLBPureHell;
-    private SteamLeaderboard_t mLBTimeWarp;
     private SteamLeaderboard_t mLBTapMaster;
     private SteamLeaderboard_t mLBRuns;
 
     private bool mLBPureHellReady = false;
-    private bool mLBTimeWarpReady = false;
     private bool mLBTapMasterReady = false;
     private bool mLBRunsReady = false;
 
@@ -33,7 +31,6 @@ public class SteamService : MonoBehaviour, IPlatformService
 
     // Callbacks
     private CallResult<LeaderboardFindResult_t> mFindPureHell;
-    private CallResult<LeaderboardFindResult_t> mFindTimeWarp;
     private CallResult<LeaderboardFindResult_t> mFindTapMaster;
     private CallResult<LeaderboardFindResult_t> mFindRuns;
     private CallResult<LeaderboardScoreUploaded_t> mUploadResult;
@@ -61,7 +58,6 @@ public class SteamService : MonoBehaviour, IPlatformService
         // Find leaderboards — Steam creates them if they don't exist
         // (must also be created in Steamworks partner site for production)
         mFindPureHell = CallResult<LeaderboardFindResult_t>.Create(OnFindPureHell);
-        mFindTimeWarp = CallResult<LeaderboardFindResult_t>.Create(OnFindTimeWarp);
         mFindTapMaster = CallResult<LeaderboardFindResult_t>.Create(OnFindTapMaster);
         mFindRuns = CallResult<LeaderboardFindResult_t>.Create(OnFindRuns);
         mUploadResult = CallResult<LeaderboardScoreUploaded_t>.Create(OnScoreUploaded);
@@ -70,11 +66,6 @@ public class SteamService : MonoBehaviour, IPlatformService
             ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
             ELeaderboardDisplayType.k_ELeaderboardDisplayTypeNumeric);
         mFindPureHell.Set(call1);
-
-        var call2 = SteamUserStats.FindOrCreateLeaderboard("TimeWarp_HighScore",
-            ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
-            ELeaderboardDisplayType.k_ELeaderboardDisplayTypeNumeric);
-        mFindTimeWarp.Set(call2);
 
         var call3 = SteamUserStats.FindOrCreateLeaderboard("TapMaster_Total",
             ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
@@ -106,17 +97,6 @@ public class SteamService : MonoBehaviour, IPlatformService
             mLBPureHell = result.m_hSteamLeaderboard;
             mLBPureHellReady = true;
             Debug.Log("[Steam] Pure Hell leaderboard found");
-            FlushPending();
-        }
-    }
-
-    void OnFindTimeWarp(LeaderboardFindResult_t result, bool ioFailure)
-    {
-        if (!ioFailure && result.m_bLeaderboardFound == 1)
-        {
-            mLBTimeWarp = result.m_hSteamLeaderboard;
-            mLBTimeWarpReady = true;
-            Debug.Log("[Steam] Time Warp leaderboard found");
             FlushPending();
         }
     }
@@ -195,16 +175,8 @@ public class SteamService : MonoBehaviour, IPlatformService
 #if STEAMWORKS
         if (score <= 0 || !SteamManager.Initialized) return;
 
-        if (GameConfig.IsTimeWarp())
-            UploadScore(mLBTimeWarp, mLBTimeWarpReady, score);
-        else
-            UploadScore(mLBPureHell, mLBPureHellReady, score);
-
-        // Check score-based achievements
-        if (!GameConfig.IsTimeWarp())
-            CheckPureHellAchievements(score);
-        else
-            CheckTimeWarpAchievements(score);
+        UploadScore(mLBPureHell, mLBPureHellReady, score);
+        CheckPureHellAchievements(score);
 #endif
     }
 
@@ -327,13 +299,5 @@ public class SteamService : MonoBehaviour, IPlatformService
         if (gates >= 100) UnlockAchievement(PlatformManager.ACH_EVENT_HORIZON);
     }
 
-    void CheckTimeWarpAchievements(int scoreTimesX10)
-    {
-        // Score in Time Warp = elapsed seconds * 10
-        float seconds = scoreTimesX10 / 10f;
-        if (seconds >= 30f)  UnlockAchievement(PlatformManager.ACH_TIME_LORD);
-        if (seconds >= 60f)  UnlockAchievement(PlatformManager.ACH_CHRONO_MASTER);
-        if (seconds >= 120f) UnlockAchievement(PlatformManager.ACH_TIME_PARADOX);
-    }
 #endif
 }

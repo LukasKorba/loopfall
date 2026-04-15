@@ -95,11 +95,6 @@ public class PlatformManager : MonoBehaviour
     public const string ACH_TUNNEL_VISION = "ACH_TUNNEL_VISION";   // 50 gates
     public const string ACH_EVENT_HORIZON = "ACH_EVENT_HORIZON";   // 100 gates
 
-    // Time Warp milestones
-    public const string ACH_TIME_LORD = "ACH_TIME_LORD";           // 30s survived
-    public const string ACH_CHRONO_MASTER = "ACH_CHRONO_MASTER";   // 60s survived
-    public const string ACH_TIME_PARADOX = "ACH_TIME_PARADOX";     // 120s survived
-
     // Career milestones
     public const string ACH_SWING_KING = "ACH_SWING_KING";         // 10 swing detections
     public const string ACH_TAP_MASTER = "ACH_TAP_MASTER";         // 1000 total taps

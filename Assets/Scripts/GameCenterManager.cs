@@ -17,7 +17,6 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
 
     // Apple leaderboard IDs — set in App Store Connect
     private const string LB_PURE_HELL = "com.lukaskorba.loopfall.purehell";
-    private const string LB_TIME_WARP = "com.lukaskorba.loopfall.timewarp";
     private const string LB_TAP_MASTER = "com.lukaskorba.loopfall.tapmaster";
     private const string LB_RUNS = "com.lukaskorba.loopfall.runs";
 
@@ -57,8 +56,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
     public void ReportScore(int score)
     {
         if (score <= 0) return;
-        string lb = GameConfig.IsTimeWarp() ? LB_TIME_WARP : LB_PURE_HELL;
-        Report(score, lb);
+        Report(score, LB_PURE_HELL);
     }
 
     public void ReportTaps(int totalTaps)
