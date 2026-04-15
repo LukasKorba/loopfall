@@ -177,6 +177,9 @@ public class RewindSystem : MonoBehaviour
 
     void Update()
     {
+        // Skip entirely when game is paused (timeScale = 0)
+        if (Time.timeScale == 0f) return;
+
         // Grace period — ignore leftover taps from gameplay
         if (mDeathGrace > 0f)
         {

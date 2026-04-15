@@ -225,7 +225,12 @@ public class ScoreSync : MonoBehaviour
         {
             if (Input.GetMouseButtonDown(0) || (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
                 ResumeGame();
-            return;
+            // If player died while paused, force-clear pause so rewind can proceed
+            if (mSphere != null && (mSphere.IsGameOver() || mSphere.IsRewinding()))
+                ResumeGame();
+            // Keep animating pause overlay even while paused
+            AnimatePause();
+            if (isPaused) return;
         }
 
         // Splash is self-timed — don't poll sphere state
@@ -2250,16 +2255,12 @@ public class ScoreSync : MonoBehaviour
         isPaused = true;
         pauseAnimTimer = 0f;
 
-        // Freeze torus rotation
+        // Freeze shaders, physics timers (Time.deltaTime → 0, _Time.y stops)
+        Time.timeScale = 0f;
+
+        // Freeze torus manual rotation (its Update uses constant step, not deltaTime)
         Torus torus = FindAnyObjectByType<Torus>();
         if (torus != null) torus.SetPaused(true);
-
-        // Freeze ball physics
-        if (mSphere != null)
-        {
-            Rigidbody rb = mSphere.GetComponent<Rigidbody>();
-            if (rb != null) rb.isKinematic = true;
-        }
 
         if (pauseGroup != null)
         {
@@ -2277,16 +2278,11 @@ public class ScoreSync : MonoBehaviour
         isPaused = false;
         pauseAnimTimer = -1f;
 
-        // Unfreeze torus
+        // Unfreeze everything
+        Time.timeScale = 1f;
+
         Torus torus = FindAnyObjectByType<Torus>();
         if (torus != null) torus.SetPaused(false);
-
-        // Unfreeze ball physics
-        if (mSphere != null)
-        {
-            Rigidbody rb = mSphere.GetComponent<Rigidbody>();
-            if (rb != null) rb.isKinematic = false;
-        }
 
         if (pauseGroup != null) pauseGroup.gameObject.SetActive(false);
     }
@@ -2299,9 +2295,9 @@ public class ScoreSync : MonoBehaviour
         float p = Mathf.Clamp01(pauseAnimTimer / PAUSE_ANIM_DURATION);
         float eased = EaseOutCubic(p);
 
-        // Dim overlay fades in
+        // Dim overlay fades in — high alpha to hide track shader sparks
         if (pauseDimImage != null)
-            pauseDimImage.color = new Color(0f, 0f, 0f, eased * 0.6f);
+            pauseDimImage.color = new Color(0f, 0f, 0f, eased * 0.85f);
 
         // "PAUSED" — scale down from 1.4x with letter spacing expanding
         if (pausedText != null)

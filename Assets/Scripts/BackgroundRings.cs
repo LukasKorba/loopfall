@@ -6,6 +6,7 @@ public class BackgroundRings : MonoBehaviour
     private Vector3[] starBasePositions;
     private float[] starTwinklePhase;
     private float[] starBaseIntensity;
+    private float[] starDriftSpeed;
 
     public void Setup()
     {
@@ -34,12 +35,12 @@ public class BackgroundRings : MonoBehaviour
         nebulaObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
         Material mat = new Material(Shader.Find("Loopfall/Nebula"));
-        mat.SetFloat("_Speed", 0.03f);
-        mat.SetFloat("_Scale", 2.2f);
-        mat.SetFloat("_Brightness", 0.45f);
-        mat.SetColor("_Color1", new Color(0.02f, 0.01f, 0.06f));  // Near-black indigo
-        mat.SetColor("_Color2", new Color(0.01f, 0.04f, 0.08f));  // Deep space blue
-        mat.SetColor("_Color3", new Color(0.05f, 0.01f, 0.03f));  // Faint deep red
+        mat.SetFloat("_Speed", 0.04f);
+        mat.SetFloat("_Scale", 1.8f);
+        mat.SetFloat("_Brightness", 0.7f);
+        mat.SetColor("_Color1", new Color(0.06f, 0.02f, 0.12f));  // Deep purple base
+        mat.SetColor("_Color2", new Color(0.02f, 0.08f, 0.14f));  // Dark cyan drift
+        mat.SetColor("_Color3", new Color(0.10f, 0.02f, 0.08f));  // Magenta wisps
         mat.renderQueue = 1000; // Background queue
 
         MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
@@ -68,17 +69,17 @@ public class BackgroundRings : MonoBehaviour
         raysObj.transform.localScale = new Vector3(width * 1.5f, height * 1.5f, 1f);
 
         Material mat = new Material(Shader.Find("Loopfall/GodRays"));
-        mat.SetFloat("_RayCount", 6);
-        mat.SetFloat("_RaySharpness", 8);
-        mat.SetFloat("_RayLength", 0.6f);
-        mat.SetFloat("_Intensity", 0.12f);
-        mat.SetFloat("_RotationSpeed", 0.015f);
-        mat.SetColor("_Color1", new Color(0.04f, 0.02f, 0.1f));   // Dim indigo rays
-        mat.SetColor("_Color2", new Color(0.02f, 0.06f, 0.1f));   // Dim blue rays
+        mat.SetFloat("_RayCount", 8);
+        mat.SetFloat("_RaySharpness", 5);
+        mat.SetFloat("_RayLength", 0.7f);
+        mat.SetFloat("_Intensity", 0.35f);
+        mat.SetFloat("_RotationSpeed", 0.02f);
+        mat.SetColor("_Color1", new Color(0.08f, 0.03f, 0.18f));  // Purple rays
+        mat.SetColor("_Color2", new Color(0.03f, 0.10f, 0.18f));  // Cyan rays
         mat.SetFloat("_CenterX", 0.5f);
         mat.SetFloat("_CenterY", 0.42f);  // Where the track converges — wormhole center
-        mat.SetFloat("_PulseSpeed", 0.2f);
-        mat.SetFloat("_PulseAmount", 0.08f);
+        mat.SetFloat("_PulseSpeed", 0.3f);
+        mat.SetFloat("_PulseAmount", 0.12f);
         mat.renderQueue = 2900; // After nebula (1000), before stars (2950)
 
         MeshRenderer mr = raysObj.AddComponent<MeshRenderer>();
@@ -92,11 +93,12 @@ public class BackgroundRings : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null) return;
 
-        int starCount = 180;
+        int starCount = 220;
         stars = new Transform[starCount];
         starBasePositions = new Vector3[starCount];
         starTwinklePhase = new float[starCount];
         starBaseIntensity = new float[starCount];
+        starDriftSpeed = new float[starCount];
 
         Shader glowShader = Shader.Find("Loopfall/TrailGlow");
 
@@ -115,16 +117,17 @@ public class BackgroundRings : MonoBehaviour
             float depth;
 
             float roll = Random.value;
-            if (roll < 0.05f)
+            if (roll < 0.06f)
             {
-                // Bright stars — push deeper so they never appear as solid squares
+                // Bright feature stars
                 depth = Random.Range(20f, 40f);
-                size = Random.Range(0.06f, 0.12f);
-                brightness = Random.Range(2.0f, 3.5f);
-                alpha = Random.Range(0.5f, 0.8f);
+                size = Random.Range(0.08f, 0.14f);
+                brightness = Random.Range(2.5f, 4.0f);
+                alpha = Random.Range(0.6f, 0.9f);
             }
-            else if (roll < 0.2f)
+            else if (roll < 0.25f)
             {
+                // Medium stars
                 depth = Random.Range(10f, 40f);
                 size = Random.Range(0.05f, 0.1f);
                 brightness = Random.Range(1.5f, 3.0f);
@@ -132,10 +135,11 @@ public class BackgroundRings : MonoBehaviour
             }
             else
             {
+                // Dim dust
                 depth = Random.Range(5f, 40f);
-                size = Random.Range(0.02f, 0.05f);
-                brightness = Random.Range(0.8f, 1.5f);
-                alpha = Random.Range(0.15f, 0.4f);
+                size = Random.Range(0.02f, 0.06f);
+                brightness = Random.Range(0.8f, 1.8f);
+                alpha = Random.Range(0.15f, 0.45f);
             }
 
             float halfH = depth * Mathf.Tan(halfAngle) * 1.3f;
@@ -150,13 +154,32 @@ public class BackgroundRings : MonoBehaviour
             star.transform.rotation = cam.transform.rotation;
             star.transform.localScale = Vector3.one * size;
 
+            // Color palette matching the game's neon identity
             Color starColor;
-            if (Random.value < 0.15f)
+            float colorRoll = Random.value;
+            if (colorRoll < 0.12f)
             {
-                starColor = new Color(1.0f, 0.8f, 0.5f, alpha);
+                // Gold — matches gate/score color
+                starColor = new Color(1.0f, 0.85f, 0.3f, alpha);
+            }
+            else if (colorRoll < 0.28f)
+            {
+                // Cyan — matches ball rim, UI accents
+                starColor = new Color(0.3f, 0.8f, 1.0f, alpha);
+            }
+            else if (colorRoll < 0.40f)
+            {
+                // Magenta — matches left rail
+                starColor = new Color(0.9f, 0.3f, 0.6f, alpha);
+            }
+            else if (colorRoll < 0.50f)
+            {
+                // Green — matches right rail
+                starColor = new Color(0.3f, 0.9f, 0.5f, alpha);
             }
             else
             {
+                // Cool white-blue — deep space default
                 starColor = new Color(
                     0.5f + Random.Range(0f, 0.2f),
                     0.6f + Random.Range(0f, 0.2f),
@@ -179,6 +202,8 @@ public class BackgroundRings : MonoBehaviour
             starBasePositions[i] = star.transform.position;
             starTwinklePhase[i] = Random.Range(0f, Mathf.PI * 2f);
             starBaseIntensity[i] = brightness;
+            // Slow drift speed — deeper stars drift slower (parallax)
+            starDriftSpeed[i] = Random.Range(0.01f, 0.04f) * (1f - depth / 50f);
         }
     }
 
@@ -192,11 +217,18 @@ public class BackgroundRings : MonoBehaviour
         {
             if (stars[i] == null) continue;
 
-            // Twinkle
-            float twinkle = 0.7f + 0.3f * Mathf.Sin(time * (1.2f + (i % 7) * 0.4f) + starTwinklePhase[i]);
+            // Twinkle — varied rates per star
+            float twinkle = 0.65f + 0.35f * Mathf.Sin(time * (1.0f + (i % 7) * 0.5f) + starTwinklePhase[i]);
             MeshRenderer mr = stars[i].GetComponent<MeshRenderer>();
             if (mr != null && mr.material != null)
                 mr.material.SetFloat("_Intensity", starBaseIntensity[i] * twinkle);
+
+            // Slow drift — stars creep sideways, wrapping gives sense of motion
+            Vector3 pos = starBasePositions[i];
+            float drift = starDriftSpeed[i];
+            pos.x += Mathf.Sin(time * drift + starTwinklePhase[i]) * 0.3f;
+            pos.y += Mathf.Cos(time * drift * 0.7f + starTwinklePhase[i] * 1.3f) * 0.15f;
+            stars[i].position = pos;
         }
     }
 
