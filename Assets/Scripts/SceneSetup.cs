@@ -16,12 +16,16 @@ public class SceneSetup : MonoBehaviour
     // MANUAL PARAM: Only render bottom hemisphere of tube (the U-shape)
     public bool halfTubeOnly = true;
 
-    // Direct references — ensures shaders are included in iOS builds
+    // Direct references — ensures shaders are included in builds
     public Shader depthHueShiftRef;
     public Shader gateShaderRef;
     public Shader blackHoleWarpRef;
     public Shader trackItemShaderRef;
     public Shader obstacleShadowShaderRef;
+    public Shader ballShaderRef;
+    public Shader trackGridShaderRef;
+    public Shader railShaderRef;
+    public Shader trailGlowShaderRef;
 
     void Awake()
     {
@@ -74,7 +78,8 @@ public class SceneSetup : MonoBehaviour
     void CreateMaterials()
     {
         // Track: dark base with glowing grid lines
-        trackMaterial = new Material(Shader.Find("Loopfall/TrackGrid"));
+        Shader trackGridShader = trackGridShaderRef != null ? trackGridShaderRef : Shader.Find("Loopfall/TrackGrid");
+        trackMaterial = new Material(trackGridShader);
         trackMaterial.SetColor("_BaseColor", new Color(0.14f, 0.13f, 0.15f));
         trackMaterial.SetColor("_GridColor1", new Color(0.0f, 0.45f, 0.7f, 0.55f));   // Cyan major
         trackMaterial.SetColor("_GridColor2", new Color(0.8f, 0.15f, 0.5f, 0.5f));   // Pink minor (boosted alpha)
@@ -116,7 +121,7 @@ public class SceneSetup : MonoBehaviour
         obstacleShadowMaterial.SetColor("_Color", new Color(0, 0, 0, 0.85f));
 
         // Ball: neon-rimmed sphere — fresnel glow matches the tunnel aesthetic
-        Shader ballShader = Shader.Find("Loopfall/Ball");
+        Shader ballShader = ballShaderRef != null ? ballShaderRef : Shader.Find("Loopfall/Ball");
         ballMaterial = new Material(ballShader);
         ballMaterial.SetColor("_Color", new Color(0.9f, 0.92f, 1.0f));
         ballMaterial.SetColor("_RimColor", new Color(0.0f, 0.75f, 1.0f));
@@ -128,7 +133,7 @@ public class SceneSetup : MonoBehaviour
 
         // Rail: glowing red edge, double-sided so visible from inside torus
         // Edge rails: distance-fading opaque tubes
-        Shader railShader = Shader.Find("Loopfall/Rail");
+        Shader railShader = railShaderRef != null ? railShaderRef : Shader.Find("Loopfall/Rail");
         railMaterialLeft = new Material(railShader);
         railMaterialLeft.SetColor("_NearColor", new Color(0.95f, 0.1f, 0.55f));      // Magenta near
         railMaterialLeft.SetColor("_FarColor", new Color(0.25f, 0.05f, 0.35f));       // Deep purple far
@@ -146,7 +151,8 @@ public class SceneSetup : MonoBehaviour
         railMaterialRight.SetFloat("_Metallic", 0.3f);
 
         // Trail: additive glow — color/alpha set per-segment at runtime
-        trailMaterial = new Material(Shader.Find("Loopfall/TrailGlow"));
+        Shader trailShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        trailMaterial = new Material(trailShader);
         trailMaterial.SetColor("_Color", Color.white);
         trailMaterial.SetFloat("_Intensity", 2.0f);
         trailMaterial.renderQueue = 3000;

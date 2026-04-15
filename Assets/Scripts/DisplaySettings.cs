@@ -15,12 +15,12 @@ public class DisplaySettings : MonoBehaviour
     private const string PREF_RES_W = "DisplayResW";
     private const string PREF_RES_H = "DisplayResH";
 
-    // Common 16:9 resolutions (portrait-first since Loopfall is portrait)
+    // Common 16:9 resolutions — landscape for standalone (macOS/Windows/Linux)
     private static readonly Vector2Int[] RESOLUTIONS = new Vector2Int[]
     {
-        new Vector2Int(720, 1280),
-        new Vector2Int(1080, 1920),
-        new Vector2Int(1440, 2560),
+        new Vector2Int(1280, 720),
+        new Vector2Int(1920, 1080),
+        new Vector2Int(2560, 1440),
     };
 
     private int mCurrentResIndex = 1; // default 1080x1920
@@ -50,8 +50,8 @@ public class DisplaySettings : MonoBehaviour
         mFullscreen = PlayerPrefs.GetInt(PREF_FULLSCREEN, 1) == 1;
         mVSync = PlayerPrefs.GetInt(PREF_VSYNC, 0) == 1;
 
-        int savedW = PlayerPrefs.GetInt(PREF_RES_W, 1080);
-        int savedH = PlayerPrefs.GetInt(PREF_RES_H, 1920);
+        int savedW = PlayerPrefs.GetInt(PREF_RES_W, 1920);
+        int savedH = PlayerPrefs.GetInt(PREF_RES_H, 1080);
 
         mCurrentResIndex = 1; // default
         for (int i = 0; i < RESOLUTIONS.Length; i++)

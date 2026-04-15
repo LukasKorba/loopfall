@@ -44,6 +44,9 @@ public class ScoreSync : MonoBehaviour
     private RawImage vignetteImage;
     private RawImage scanlinesImage;
     private Image blackoutImage;  // Full black to hide torus during splash
+    private Image deathFlashImage; // Brief white flash on death
+    private float deathFlashTimer = -1f;
+    private const float DEATH_FLASH_DURATION = 0.35f;
 
     // ── SPLASH ───────────────────────────────────────────────
     private RectTransform splashGroup;
@@ -64,6 +67,8 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text titleMagentaText;
     private TMP_Text titleYellowText;
     private TMP_Text subtitleText;
+    private Image titleRuleLeft;
+    private Image titleRuleRight;
     private TMP_Text bestScoreText;
     private Image bestScoreLine;
     private Button titleLBBtn;
@@ -113,6 +118,8 @@ public class ScoreSync : MonoBehaviour
     private RawImage goSettingsIcon;
     private Button goLBBtn;
     private RawImage goLBIcon;
+    private RectTransform[] goCornerBrackets;
+    private Image goScoreDivider;
 
     // ── SETTINGS PANEL ───────────────────────────────────────
     private RectTransform settingsPanel;
@@ -163,6 +170,8 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text pausedText;
     private TMP_Text pauseHintText;
     private Image pauseDimImage;
+    private float pauseAnimTimer = -1f;
+    private const float PAUSE_ANIM_DURATION = 0.4f;
 
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
@@ -249,9 +258,15 @@ public class ScoreSync : MonoBehaviour
             stateTimer = 0f;
 
             if (state == State.Rewinding)
+            {
                 OnGameOver();
+                deathFlashTimer = 0f;
+            }
             if (state == State.GameOver && fromState == State.Playing)
+            {
                 OnGameOver();
+                deathFlashTimer = 0f;
+            }
             if (state == State.Playing)
             {
                 lastPlayingScore = "0";
@@ -384,6 +399,12 @@ public class ScoreSync : MonoBehaviour
         StretchFull(blackoutImage.rectTransform);
         blackoutImage.raycastTarget = false;
 
+        // Death flash overlay — white, starts invisible
+        deathFlashImage = CreateImage(canvasObj.transform, "DeathFlash",
+            new Color(0.7f, 0.85f, 1f, 0f));
+        StretchFull(deathFlashImage.rectTransform);
+        deathFlashImage.raycastTarget = false;
+
         // Purple-tinted overlay — retro color grading
         overlayImage = CreateImage(canvasObj.transform, "Overlay",
             new Color(0.06f, 0.02f, 0.10f, 0f));
@@ -447,50 +468,66 @@ public class ScoreSync : MonoBehaviour
 
     RawImage CreateStarsTexture(Transform parent)
     {
-        int w = 256;
-        int h = 512;
+        int w = 512;
+        int h = 1024;
         Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-        // Fill black
         Color[] pixels = new Color[w * h];
-        for (int i = 0; i < pixels.Length; i++)
-            pixels[i] = new Color(0.01f, 0.005f, 0.02f, 1f);
-        // Scatter stars
-        Random.InitState(42);
-        for (int i = 0; i < 200; i++)
+
+        float cx = w * 0.5f;
+        float cy = h * 0.45f; // Vanishing point slightly above center
+        float maxR = w * 0.7f;
+
+        for (int py = 0; py < h; py++)
         {
-            int x = Random.Range(0, w);
-            int y = Random.Range(0, h);
-            float brightness = Random.Range(0.2f, 0.7f);
-            float size = Random.Range(0.5f, 1.5f);
-            // Tint some stars slightly colored
-            float r = brightness * Random.Range(0.85f, 1.0f);
-            float g = brightness * Random.Range(0.85f, 1.0f);
-            float b = brightness * Random.Range(0.9f, 1.0f);
-            pixels[y * w + x] = new Color(r, g, b, 1f);
-            // Larger stars get a dim halo
-            if (size > 1.0f)
+            for (int px = 0; px < w; px++)
             {
-                for (int dx = -1; dx <= 1; dx++)
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        int nx = Mathf.Clamp(x + dx, 0, w - 1);
-                        int ny = Mathf.Clamp(y + dy, 0, h - 1);
-                        if (nx == x && ny == y) continue;
-                        Color existing = pixels[ny * w + nx];
-                        float halo = brightness * 0.2f;
-                        pixels[ny * w + nx] = new Color(
-                            Mathf.Max(existing.r, halo * r),
-                            Mathf.Max(existing.g, halo * g),
-                            Mathf.Max(existing.b, halo * b), 1f);
-                    }
+                float dx = px - cx;
+                float dy = py - cy;
+                float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                float normDist = dist / maxR;
+
+                // Dark void background with subtle purple
+                float bgR = 0.02f + normDist * 0.01f;
+                float bgG = 0.008f + normDist * 0.005f;
+                float bgB = 0.035f + normDist * 0.015f;
+
+                // Concentric rings — tunnel cross-section
+                float ringSpacing = 38f;
+                float ringDist = (dist % ringSpacing) / ringSpacing;
+                float ringEdge = 1f - Mathf.Abs(ringDist - 0.5f) * 2f;
+                float ring = Mathf.Pow(Mathf.Clamp01(ringEdge), 18f);
+                // Rings fade toward center (perspective: closer = wider apart)
+                float ringFade = Mathf.Clamp01((normDist - 0.08f) / 0.4f) * Mathf.Clamp01(1f - (normDist - 0.85f) / 0.15f);
+                ring *= ringFade * 0.35f;
+
+                // Radial lines — like looking down a tunnel
+                float angle = Mathf.Atan2(dy, dx);
+                float radialCount = 12f;
+                float radialDist = Mathf.Abs(Mathf.Sin(angle * radialCount));
+                float radial = Mathf.Pow(Mathf.Clamp01(1f - radialDist), 28f);
+                float radialFade = Mathf.Clamp01((normDist - 0.06f) / 0.3f) * Mathf.Clamp01(1f - (normDist - 0.8f) / 0.2f);
+                radial *= radialFade * 0.2f;
+
+                // Central glow — faint neon at vanishing point
+                float glow = Mathf.Exp(-normDist * normDist * 8f) * 0.12f;
+
+                // Combine: cyan rings, magenta radials, white center glow
+                float r = bgR + ring * 0.0f  + radial * 0.6f + glow * 0.7f;
+                float g = bgG + ring * 0.45f + radial * 0.08f + glow * 0.7f;
+                float b = bgB + ring * 0.65f + radial * 0.35f + glow * 0.85f;
+
+                pixels[py * w + px] = new Color(
+                    Mathf.Clamp01(r),
+                    Mathf.Clamp01(g),
+                    Mathf.Clamp01(b), 1f);
             }
         }
-        Random.InitState((int)System.DateTime.Now.Ticks);
+
         tex.SetPixels(pixels);
         tex.Apply();
         tex.filterMode = FilterMode.Bilinear;
 
-        GameObject obj = new GameObject("Stars");
+        GameObject obj = new GameObject("TunnelBg");
         obj.transform.SetParent(parent, false);
         RawImage img = obj.AddComponent<RawImage>();
         img.texture = tex;
@@ -529,6 +566,25 @@ public class ScoreSync : MonoBehaviour
             32, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
         SetAnchored(subtitleText.rectTransform, new Vector2(0.5f, 0.64f), new Vector2(900, 55));
         subtitleText.characterSpacing = 14f;
+
+        // Thin rule lines flanking the subtitle — expand from center
+        titleRuleLeft = CreateImage(titleGroup.transform, "RuleL",
+            new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
+        RectTransform rlRT = titleRuleLeft.rectTransform;
+        rlRT.anchorMin = new Vector2(0.5f, 0.645f);
+        rlRT.anchorMax = new Vector2(0.5f, 0.645f);
+        rlRT.pivot = new Vector2(1f, 0.5f);
+        rlRT.sizeDelta = new Vector2(0f, 1f);
+        rlRT.anchoredPosition = new Vector2(-260f, 0f);
+
+        titleRuleRight = CreateImage(titleGroup.transform, "RuleR",
+            new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
+        RectTransform rrRT = titleRuleRight.rectTransform;
+        rrRT.anchorMin = new Vector2(0.5f, 0.645f);
+        rrRT.anchorMax = new Vector2(0.5f, 0.645f);
+        rrRT.pivot = new Vector2(0f, 0.5f);
+        rrRT.sizeDelta = new Vector2(0f, 1f);
+        rrRT.anchoredPosition = new Vector2(260f, 0f);
 
         // Best score
         bestScoreText = CreateText(titleGroup, "BestScore", "",
@@ -587,8 +643,11 @@ public class ScoreSync : MonoBehaviour
         titleHintText.enableWordWrapping = true;
         titleHintText.alignment = TextAlignmentOptions.Center;
 
-        // Icon buttons — top right, side by side (hidden on tvOS — no touch)
+        // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
+        CreateDockStrip(titleGroup, "TitleDockR",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-265, -140), new Vector2(330, 100));
+
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
             trophyTex, out titleLBIcon);
@@ -601,6 +660,9 @@ public class ScoreSync : MonoBehaviour
 #endif
 
 #if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
+        CreateDockStrip(titleGroup, "TitleDockL",
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
+
         titleQuitBtn = CreateIconButton(titleGroup, "TitleQuitBtn",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
             quitTex, out titleQuitIcon);
@@ -690,13 +752,14 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(goNewBestText.rectTransform, new Vector2(0.5f, 0.475f), new Vector2(500, 50));
         goNewBestText.characterSpacing = 10f;
 
-        // Leaderboard rows — staggered slide-in
+        // Leaderboard rows — staggered slide-in, left-aligned for asymmetry
         goLeaderboardTexts = new TMP_Text[LEADERBOARD_SHOW];
         for (int i = 0; i < LEADERBOARD_SHOW; i++)
         {
             TMP_Text row = CreateText(gameOverGroup, "LB" + i, "",
                 28, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
-            SetAnchored(row.rectTransform, new Vector2(0.5f, 0.38f - i * 0.038f), new Vector2(350, 40));
+            SetAnchored(row.rectTransform, new Vector2(0.47f, 0.38f - i * 0.038f), new Vector2(350, 40));
+            row.alignment = TextAlignmentOptions.Left;
             row.characterSpacing = 2f;
             goLeaderboardTexts[i] = row;
         }
@@ -714,8 +777,11 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         goTapText.characterSpacing = 8f;
 
-        // Icon buttons — top right, side by side (hidden on tvOS — no touch)
+        // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
+        CreateDockStrip(gameOverGroup, "GODockR",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-265, -140), new Vector2(330, 100));
+
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
             trophyTex, out goLBIcon);
@@ -728,11 +794,76 @@ public class ScoreSync : MonoBehaviour
 #endif
 
 #if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
+        CreateDockStrip(gameOverGroup, "GODockL",
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
+
         goQuitBtn = CreateIconButton(gameOverGroup, "GOQuitBtn",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
             quitTex, out goQuitIcon);
         goQuitBtn.onClick.AddListener(OnQuitTap);
 #endif
+
+        // Corner bracket accents framing the score
+        goCornerBrackets = new RectTransform[4];
+        float bracketLen = 35f;
+        float bracketThick = 2f;
+        float bracketInset = -180f; // From score center
+        Color bracketColor = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f); // Animated in
+
+        // TL, TR, BL, BR — each is an L-shaped pair (horizontal + vertical bar)
+        for (int i = 0; i < 4; i++)
+        {
+            float sx = (i % 2 == 0) ? -1f : 1f;
+            float sy = (i < 2) ? 1f : -1f;
+
+            GameObject bracket = new GameObject("Bracket" + i);
+            RectTransform brt = bracket.AddComponent<RectTransform>();
+            brt.SetParent(goScoreText.rectTransform.parent, false);
+            brt.anchorMin = new Vector2(0.5f, 0.58f);
+            brt.anchorMax = new Vector2(0.5f, 0.58f);
+            brt.anchoredPosition = new Vector2(sx * Mathf.Abs(bracketInset), sy * 90f);
+            brt.sizeDelta = new Vector2(bracketLen, bracketLen);
+
+            // Horizontal bar
+            GameObject hBar = new GameObject("H");
+            RectTransform hrt = hBar.AddComponent<RectTransform>();
+            hrt.SetParent(brt, false);
+            hrt.anchorMin = new Vector2(sx > 0 ? 1f - 1f : 0f, sy > 0 ? 1f : 0f);
+            hrt.anchorMax = hrt.anchorMin;
+            hrt.pivot = new Vector2(sx > 0 ? 1f : 0f, 0.5f);
+            hrt.sizeDelta = new Vector2(bracketLen, bracketThick);
+            hrt.anchoredPosition = Vector2.zero;
+            Image hImg = hBar.AddComponent<Image>();
+            hImg.color = bracketColor;
+            hImg.raycastTarget = false;
+
+            // Vertical bar
+            GameObject vBar = new GameObject("V");
+            RectTransform vrt = vBar.AddComponent<RectTransform>();
+            vrt.SetParent(brt, false);
+            vrt.anchorMin = new Vector2(sx > 0 ? 1f : 0f, sy > 0 ? 1f - 1f : 0f);
+            vrt.anchorMax = vrt.anchorMin;
+            vrt.pivot = new Vector2(0.5f, sy > 0 ? 1f : 0f);
+            vrt.sizeDelta = new Vector2(bracketThick, bracketLen);
+            vrt.anchoredPosition = Vector2.zero;
+            Image vImg = vBar.AddComponent<Image>();
+            vImg.color = bracketColor;
+            vImg.raycastTarget = false;
+
+            goCornerBrackets[i] = brt;
+        }
+
+        // Thin divider below the score/celebration area, above leaderboard
+        GameObject divObj = new GameObject("ScoreDivider");
+        RectTransform divRT = divObj.AddComponent<RectTransform>();
+        divRT.SetParent(gameOverGroup, false);
+        divRT.anchorMin = new Vector2(0.27f, 0.42f);
+        divRT.anchorMax = new Vector2(0.67f, 0.42f);
+        divRT.pivot = new Vector2(0.5f, 0.5f);
+        divRT.sizeDelta = new Vector2(0f, 1f);
+        goScoreDivider = divObj.AddComponent<Image>();
+        goScoreDivider.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f);
+        goScoreDivider.raycastTarget = false;
 
         // Drop shadows on main labels
         ApplyDropShadow(goScoreText);
@@ -841,6 +972,26 @@ public class ScoreSync : MonoBehaviour
 
     void AnimateState()
     {
+        // Death flash — runs across state boundaries
+        if (deathFlashTimer >= 0f)
+        {
+            deathFlashTimer += Time.deltaTime;
+            float p = deathFlashTimer / DEATH_FLASH_DURATION;
+            if (p >= 1f)
+            {
+                deathFlashTimer = -1f;
+                deathFlashImage.color = new Color(0.7f, 0.85f, 1f, 0f);
+            }
+            else
+            {
+                // Sharp attack, fast decay — like a CRT hit
+                float flash = p < 0.08f
+                    ? Mathf.Clamp01(p / 0.08f) * 0.4f  // snap to 0.4 alpha in ~3 frames
+                    : 0.4f * (1f - EaseOutCubic((p - 0.08f) / 0.92f));
+                deathFlashImage.color = new Color(0.7f, 0.85f, 1f, flash);
+            }
+        }
+
         TickGlitch();
 
         switch (state)
@@ -851,6 +1002,9 @@ public class ScoreSync : MonoBehaviour
             case State.Rewinding: AnimateRewinding(); break;
             case State.GameOver: AnimateGameOver(); break;
         }
+
+        // Pause overlay animation (runs on top of playing state)
+        AnimatePause();
 
         // VHS glitch pass — applied after normal animation
         if (IsGlitching())
@@ -887,9 +1041,12 @@ public class ScoreSync : MonoBehaviour
     {
         float t = stateTimer;
 
-        // Stars background fade in
+        // Tunnel background fade in + slow rotation
         float starsFade = Mathf.Clamp01(t / SPLASH_FADE_IN);
         splashStarsImage.color = new Color(1f, 1f, 1f, starsFade);
+        splashStarsImage.rectTransform.localRotation = Quaternion.Euler(0f, 0f, t * -4f);
+        float breathe = 1f + Mathf.Sin(t * 0.6f) * 0.03f;
+        splashStarsImage.rectTransform.localScale = Vector3.one * (1.15f + breathe * 0.05f);
 
         // Keep blackout solid during splash
         blackoutImage.color = new Color(0f, 0f, 0f, 1f);
@@ -988,12 +1145,12 @@ public class ScoreSync : MonoBehaviour
         vignetteImage.color = new Color(1f, 1f, 1f, backdropFade * 0.55f);
         scanlinesImage.color = new Color(1f, 1f, 1f, backdropFade * 0.9f);
 
-        // ── CHROMATIC ABERRATION — bold CMYK separation ──
+        // Chromatic aberration — bold CMYK separation
         float chromaFade = Mathf.Clamp01((stateTimer - 0.4f) / 0.6f);
         float chromaAlpha = chromaFade * 0.65f;
 
         float t = Time.time;
-        float spread = 7f + Mathf.Sin(t * 0.7f) * 3f; // 4-10px spread
+        float spread = 7f + Mathf.Sin(t * 0.7f) * 3f;
 
         Vector2 cyanOff = new Vector2(
             Mathf.Cos(t * 0.4f) * spread,
@@ -1019,6 +1176,17 @@ public class ScoreSync : MonoBehaviour
         float subFloat = Mathf.Sin(Time.time * 0.6f) * 2f;
         subtitleText.rectTransform.anchoredPosition = new Vector2(0, subFloat);
 
+        // Rule lines flanking subtitle — expand outward
+        if (titleRuleLeft != null)
+        {
+            float ruleWidth = Mathf.Lerp(0f, 80f, EaseOutCubic(subFade));
+            titleRuleLeft.rectTransform.sizeDelta = new Vector2(ruleWidth, 1f);
+            titleRuleRight.rectTransform.sizeDelta = new Vector2(ruleWidth, 1f);
+            Color rc = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, subFade * 0.25f);
+            titleRuleLeft.color = rc;
+            titleRuleRight.color = rc;
+        }
+
         // Best score with expanding gold line
         if (topScores.Count > 0)
         {
@@ -1043,11 +1211,11 @@ public class ScoreSync : MonoBehaviour
             bestScoreLine.color = lc;
         }
 
-        // Tap to play — pulsing cyan
+        // Tap to play — heartbeat flash
         if (stateTimer > 1.2f)
         {
             float fadeIn = Mathf.Clamp01((stateTimer - 1.2f) / 0.4f);
-            float pulse = 0.45f + Mathf.Sin(Time.time * 2.5f) * 0.25f;
+            float pulse = HeartbeatPulse(Time.time);
             SetAlpha(titleTapText, fadeIn * pulse);
         }
         else
@@ -1135,6 +1303,18 @@ public class ScoreSync : MonoBehaviour
             float fadeAlpha = 1f - EaseOutCubic(fp);
             titleCanvasGroup.alpha = fadeAlpha;
 
+            // Spatial spread — elements rush away as if diving into tunnel
+            float spread = EaseOutCubic(fp);
+            titleText.rectTransform.anchoredPosition = new Vector2(0f, spread * 200f);
+            if (titleMagentaText != null) titleMagentaText.rectTransform.anchoredPosition = new Vector2(0f, spread * 200f);
+            if (titleCyanText != null) titleCyanText.rectTransform.anchoredPosition = new Vector2(0f, spread * 200f);
+            if (titleYellowText != null) titleYellowText.rectTransform.anchoredPosition = new Vector2(0f, spread * 200f);
+            subtitleText.rectTransform.anchoredPosition = new Vector2(0f, spread * 80f);
+            bestScoreText.rectTransform.anchoredPosition = new Vector2(0f, -spread * 120f);
+            titleTapText.rectTransform.anchoredPosition = new Vector2(0f, -spread * 180f);
+            float zoomScale = 1f + spread * 0.3f;
+            titleText.rectTransform.localScale = new Vector3(zoomScale, zoomScale, 1f);
+
             // Fade overlays with title
             overlayImage.color = new Color(0.06f, 0.02f, 0.10f, fadeAlpha * 0.9f);
             vignetteImage.color = new Color(1f, 1f, 1f, fadeAlpha * 0.55f);
@@ -1145,6 +1325,15 @@ public class ScoreSync : MonoBehaviour
                 titleFadeOutTimer = -1f;
                 titleGroup.gameObject.SetActive(false);
                 titleCanvasGroup.alpha = 1f;
+                // Reset positions for next title show
+                titleText.rectTransform.anchoredPosition = Vector2.zero;
+                titleText.rectTransform.localScale = Vector3.one;
+                if (titleMagentaText != null) titleMagentaText.rectTransform.anchoredPosition = Vector2.zero;
+                if (titleCyanText != null) titleCyanText.rectTransform.anchoredPosition = Vector2.zero;
+                if (titleYellowText != null) titleYellowText.rectTransform.anchoredPosition = Vector2.zero;
+                subtitleText.rectTransform.anchoredPosition = Vector2.zero;
+                bestScoreText.rectTransform.anchoredPosition = Vector2.zero;
+                titleTapText.rectTransform.anchoredPosition = Vector2.zero;
                 overlayImage.color = new Color(0.06f, 0.02f, 0.10f, 0f);
                 vignetteImage.color = new Color(1f, 1f, 1f, 0f);
                 scanlinesImage.color = new Color(1f, 1f, 1f, 0f);
@@ -1380,8 +1569,10 @@ public class ScoreSync : MonoBehaviour
         if (goScoreText == null) return;
         float t = stateTimer;
 
-        // Retro backdrop: heavy vignette + purple overlay + scanlines
-        float backdropP = Mathf.Clamp01(t / 0.6f);
+        // Retro backdrop: snap to intense then settle to normal
+        float backdropSnap = Mathf.Clamp01(t / 0.08f); // Snap on in ~5 frames
+        float backdropSettle = t < 0.08f ? 1f : Mathf.Lerp(1f, 0.7f, Mathf.Clamp01((t - 0.08f) / 0.5f));
+        float backdropP = backdropSnap * backdropSettle;
         vignetteImage.color = new Color(1f, 1f, 1f, backdropP * 0.55f);
         overlayImage.color = new Color(0.06f, 0.02f, 0.10f, backdropP * 0.9f);
         scanlinesImage.color = new Color(1f, 1f, 1f, backdropP * 0.9f);
@@ -1427,11 +1618,14 @@ public class ScoreSync : MonoBehaviour
                 glowAlpha += Mathf.Sin(Time.time * 2f) * 0.03f;
             goScoreGlowText.color = new Color(glowCol.r, glowCol.g, glowCol.b, glowAlpha);
 
-            // Spring entrance scale
+            // Slam entrance: drop from above with elastic settle
             float scaleP = Mathf.Clamp01((t - 0.3f) / 0.6f);
-            float scale = Mathf.Lerp(1.2f, 1.0f, EaseOutBack(scaleP));
+            float scale = Mathf.Lerp(1.35f, 1.0f, EaseOutBack(scaleP));
+            float slamY = (1f - EaseOutBack(scaleP)) * 80f; // Drop from 80px above
             goScoreText.rectTransform.localScale = new Vector3(scale, scale, 1f);
             goScoreGlowText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+            goScoreText.rectTransform.anchoredPosition = new Vector2(0f, slamY);
+            goScoreGlowText.rectTransform.anchoredPosition = new Vector2(0f, slamY);
 
             // Chromatic aberration on score
             if (goScoreCyanText != null)
@@ -1518,6 +1712,33 @@ public class ScoreSync : MonoBehaviour
             goNewBestText.rectTransform.localScale = Vector3.one;
         }
 
+        // Corner brackets — fade in with score, subtle breathe
+        if (goCornerBrackets != null)
+        {
+            float bracketP = Mathf.Clamp01((t - 0.4f) / 0.5f);
+            float bracketAlpha = EaseOutCubic(bracketP) * 0.3f;
+            if (bracketP >= 1f)
+                bracketAlpha += Mathf.Sin(Time.time * 1.2f) * 0.05f;
+            Color bc = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, bracketAlpha);
+            foreach (RectTransform brt in goCornerBrackets)
+            {
+                if (brt == null) continue;
+                foreach (Transform child in brt)
+                {
+                    Image img = child.GetComponent<Image>();
+                    if (img != null) img.color = bc;
+                }
+            }
+        }
+
+        // Score-leaderboard divider
+        if (goScoreDivider != null)
+        {
+            float divP = Mathf.Clamp01((t - 0.8f) / 0.4f);
+            goScoreDivider.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b,
+                EaseOutCubic(divP) * 0.15f);
+        }
+
         // Mini leaderboard — staggered slide-in
         AnimateLeaderboard(t);
 
@@ -1536,10 +1757,10 @@ public class ScoreSync : MonoBehaviour
             SetIconAlpha(goQuitIcon, 0f);
         }
 
-        // Tap to play — pulsing cyan
+        // Tap to play — heartbeat flash
         if (t > 1.8f)
         {
-            float pulse = 0.45f + Mathf.Sin(Time.time * 2.5f) * 0.25f;
+            float pulse = HeartbeatPulse(Time.time);
             SetAlpha(goTapText, pulse);
         }
         else
@@ -1695,6 +1916,35 @@ public class ScoreSync : MonoBehaviour
             mSphere.StartGame();
     }
 
+    void CreateDockStrip(RectTransform parent, string name,
+        Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size)
+    {
+        GameObject strip = new GameObject(name);
+        RectTransform rt = strip.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta = size;
+
+        Image bg = strip.AddComponent<Image>();
+        bg.color = new Color(0.06f, 0.03f, 0.10f, 0.3f);
+        bg.raycastTarget = false;
+
+        // Thin top edge accent
+        GameObject edge = new GameObject("Edge");
+        RectTransform ert = edge.AddComponent<RectTransform>();
+        ert.SetParent(rt, false);
+        ert.anchorMin = new Vector2(0.1f, 1f);
+        ert.anchorMax = new Vector2(0.9f, 1f);
+        ert.pivot = new Vector2(0.5f, 1f);
+        ert.sizeDelta = new Vector2(0f, 1f);
+        Image edgeImg = edge.AddComponent<Image>();
+        edgeImg.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.15f);
+        edgeImg.raycastTarget = false;
+    }
+
     Button CreateIconButton(RectTransform parent, string name,
         Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size,
         Texture2D icon, out RawImage iconImage)
@@ -1803,11 +2053,11 @@ public class ScoreSync : MonoBehaviour
 
         // Dim background tap-to-close
         Image dimBg = panelObj.AddComponent<Image>();
-        dimBg.color = new Color(0f, 0f, 0f, 0.7f);
+        dimBg.color = new Color(0f, 0f, 0f, 0.75f);
         Button closeBg = panelObj.AddComponent<Button>();
         closeBg.onClick.AddListener(CloseSettings);
 
-        // Card — raycast-blocking background (no Button, so events don't bubble to dimBg)
+        // Card — raycast-blocking background
         GameObject card = new GameObject("Card");
         RectTransform cardRT = card.AddComponent<RectTransform>();
         cardRT.SetParent(settingsPanel, false);
@@ -1822,8 +2072,14 @@ public class ScoreSync : MonoBehaviour
         cardRT.sizeDelta = showDisplay ? new Vector2(500, 560) : new Vector2(500, 320);
 
         Image cardBg = card.AddComponent<Image>();
-        cardBg.color = new Color(0.08f, 0.05f, 0.12f, 0.95f);
+        cardBg.color = new Color(0.06f, 0.03f, 0.10f, 0.96f);
         cardBg.raycastTarget = true;
+
+        // ── Cyan border frame ──
+        CreateSettingsBorderEdge(cardRT, "BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(0f, 2f));
+        CreateSettingsBorderEdge(cardRT, "BorderBot", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(0f, 2f));
+        CreateSettingsBorderEdge(cardRT, "BorderL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(2f, 0f));
+        CreateSettingsBorderEdge(cardRT, "BorderR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f));
 
         // Title
         TMP_Text title = CreateText(cardRT, "Title", "SETTINGS",
@@ -1832,12 +2088,16 @@ public class ScoreSync : MonoBehaviour
         title.characterSpacing = 8f;
         title.raycastTarget = false;
 
+        // Title underline accent
+        CreateSettingsDivider(cardRT, showDisplay ? 0.87f : 0.78f, NEON_CYAN, 0.25f);
+
         if (showDisplay)
         {
             // ── AUDIO SECTION ──
             TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", "AUDIO",
-                22, FontStyles.Bold, new Color(0.5f, 0.5f, 0.6f));
+                20, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
             SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.82f), new Vector2(400, 30));
+            audioHeader.characterSpacing = 6f;
             audioHeader.raycastTarget = false;
 
             Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
@@ -1848,10 +2108,14 @@ public class ScoreSync : MonoBehaviour
                 new Vector2(0.5f, 0.63f), out settingsSoundLabel);
             soundBtn.onClick.AddListener(ToggleSound);
 
+            // Section divider between Audio and Display
+            CreateSettingsDivider(cardRT, 0.565f, DIM_TEXT, 0.08f);
+
             // ── DISPLAY SECTION ──
             TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", "DISPLAY",
-                22, FontStyles.Bold, new Color(0.5f, 0.5f, 0.6f));
+                20, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
             SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.52f), new Vector2(400, 30));
+            displayHeader.characterSpacing = 6f;
             displayHeader.raycastTarget = false;
 
             Button resBtn = CreateSettingsToggle(cardRT, "ResBtn",
@@ -1879,10 +2143,44 @@ public class ScoreSync : MonoBehaviour
         }
 
         // Close label
-        TMP_Text closeLabel = CreateText(cardRT, "Close", showDisplay ? "CLICK OUTSIDE TO CLOSE" : "TAP OUTSIDE TO CLOSE",
-            18, FontStyles.Normal, DIM_TEXT);
+        string closeHint = showDisplay ? "CLICK OUTSIDE TO CLOSE" : "TAP OUTSIDE TO CLOSE";
+#if UNITY_TVOS
+        closeHint = "PRESS MENU TO CLOSE";
+#endif
+        TMP_Text closeLabel = CreateText(cardRT, "Close", closeHint,
+            16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
         SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.07f : 0.1f), new Vector2(400, 30));
+        closeLabel.characterSpacing = 3f;
         closeLabel.raycastTarget = false;
+    }
+
+    void CreateSettingsBorderEdge(RectTransform parent, string name,
+        Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 thickness)
+    {
+        GameObject obj = new GameObject(name);
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.pivot = pivot;
+        rt.sizeDelta = thickness;
+        Image img = obj.AddComponent<Image>();
+        img.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.35f);
+        img.raycastTarget = false;
+    }
+
+    void CreateSettingsDivider(RectTransform parent, float yAnchor, Color color, float alpha)
+    {
+        GameObject obj = new GameObject("Divider");
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0.1f, yAnchor);
+        rt.anchorMax = new Vector2(0.9f, yAnchor);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(0f, 1f);
+        Image img = obj.AddComponent<Image>();
+        img.color = new Color(color.r, color.g, color.b, alpha);
+        img.raycastTarget = false;
     }
 
     Button CreateSettingsToggle(RectTransform parent, string name, Vector2 anchor, out TMP_Text label)
@@ -1893,21 +2191,35 @@ public class ScoreSync : MonoBehaviour
         rt.anchorMin = anchor;
         rt.anchorMax = anchor;
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(400, 60);
+        rt.sizeDelta = new Vector2(400, 55);
 
         Image bg = btnObj.AddComponent<Image>();
-        bg.color = new Color(1f, 1f, 1f, 0.06f);
+        bg.color = new Color(1f, 1f, 1f, 0.04f);
         bg.raycastTarget = true;
 
         Button btn = btnObj.AddComponent<Button>();
         ColorBlock cb = btn.colors;
-        cb.highlightedColor = new Color(1f, 1f, 1f, 0.12f);
+        cb.normalColor = Color.white;
+        cb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
         cb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
         btn.colors = cb;
 
+        // Left accent bar — indicates on/off state, colored in RefreshSettingsLabels
+        GameObject accent = new GameObject("Accent");
+        RectTransform accentRT = accent.AddComponent<RectTransform>();
+        accentRT.SetParent(rt, false);
+        accentRT.anchorMin = new Vector2(0f, 0.15f);
+        accentRT.anchorMax = new Vector2(0f, 0.85f);
+        accentRT.pivot = new Vector2(0f, 0.5f);
+        accentRT.sizeDelta = new Vector2(3f, 0f);
+        Image accentImg = accent.AddComponent<Image>();
+        accentImg.color = NEON_CYAN;
+        accentImg.raycastTarget = false;
+
         label = CreateText(rt, "Label", "",
-            28, FontStyles.Normal, Color.white);
+            26, FontStyles.Normal, Color.white);
         StretchFull(label.rectTransform);
+        label.margin = new Vector4(16f, 0f, 0f, 0f);
         label.raycastTarget = false;
 
         return btn;
@@ -1936,6 +2248,7 @@ public class ScoreSync : MonoBehaviour
     {
         if (isPaused || state != State.Playing) return;
         isPaused = true;
+        pauseAnimTimer = 0f;
 
         // Freeze torus rotation
         Torus torus = FindAnyObjectByType<Torus>();
@@ -1948,13 +2261,21 @@ public class ScoreSync : MonoBehaviour
             if (rb != null) rb.isKinematic = true;
         }
 
-        if (pauseGroup != null) pauseGroup.gameObject.SetActive(true);
+        if (pauseGroup != null)
+        {
+            pauseGroup.gameObject.SetActive(true);
+            // Start invisible — animation fills it in
+            if (pauseDimImage != null) pauseDimImage.color = new Color(0f, 0f, 0f, 0f);
+            if (pausedText != null) SetAlpha(pausedText, 0f);
+            if (pauseHintText != null) SetAlpha(pauseHintText, 0f);
+        }
     }
 
     void ResumeGame()
     {
         if (!isPaused) return;
         isPaused = false;
+        pauseAnimTimer = -1f;
 
         // Unfreeze torus
         Torus torus = FindAnyObjectByType<Torus>();
@@ -1968,6 +2289,42 @@ public class ScoreSync : MonoBehaviour
         }
 
         if (pauseGroup != null) pauseGroup.gameObject.SetActive(false);
+    }
+
+    void AnimatePause()
+    {
+        if (pauseAnimTimer < 0f || pauseGroup == null) return;
+        pauseAnimTimer += Time.unscaledDeltaTime;
+
+        float p = Mathf.Clamp01(pauseAnimTimer / PAUSE_ANIM_DURATION);
+        float eased = EaseOutCubic(p);
+
+        // Dim overlay fades in
+        if (pauseDimImage != null)
+            pauseDimImage.color = new Color(0f, 0f, 0f, eased * 0.6f);
+
+        // "PAUSED" — scale down from 1.4x with letter spacing expanding
+        if (pausedText != null)
+        {
+            SetAlpha(pausedText, eased);
+            float scale = Mathf.Lerp(1.4f, 1.0f, eased);
+            pausedText.rectTransform.localScale = new Vector3(scale, scale, 1f);
+            pausedText.characterSpacing = Mathf.Lerp(40f, 16f, eased);
+
+            // Subtle breathe pulse after entrance completes
+            if (p >= 1f)
+            {
+                float breathe = 1f + Mathf.Sin(Time.unscaledTime * 1.5f) * 0.02f;
+                pausedText.rectTransform.localScale = new Vector3(breathe, breathe, 1f);
+            }
+        }
+
+        // Hint text — delayed fade in
+        if (pauseHintText != null)
+        {
+            float hintP = Mathf.Clamp01((pauseAnimTimer - 0.2f) / 0.3f);
+            SetAlpha(pauseHintText, EaseOutCubic(hintP) * 0.7f);
+        }
     }
 
     void ToggleMusic()
@@ -2014,33 +2371,57 @@ public class ScoreSync : MonoBehaviour
 
         if (settingsMusicLabel != null)
         {
-            settingsMusicLabel.text = musicOff ? "MUSIC: OFF" : "MUSIC: ON";
-            settingsMusicLabel.color = musicOff ? DIM_TEXT : Color.white;
+            settingsMusicLabel.text = musicOff ? "MUSIC   OFF" : "MUSIC   ON";
+            StyleSettingsToggle(settingsMusicLabel, !musicOff);
         }
         if (settingsSoundLabel != null)
         {
-            settingsSoundLabel.text = soundOff ? "SOUND: OFF" : "SOUND: ON";
-            settingsSoundLabel.color = soundOff ? DIM_TEXT : Color.white;
+            settingsSoundLabel.text = soundOff ? "SOUND   OFF" : "SOUND   ON";
+            StyleSettingsToggle(settingsSoundLabel, !soundOff);
         }
 
         // Display settings (standalone only)
         if (DisplaySettings.Instance != null)
         {
             if (settingsResLabel != null)
-                settingsResLabel.text = "RES: " + DisplaySettings.Instance.GetResolutionLabel();
+            {
+                settingsResLabel.text = "RES   " + DisplaySettings.Instance.GetResolutionLabel();
+                StyleSettingsToggle(settingsResLabel, true); // Always "on" style
+            }
             if (settingsFullscreenLabel != null)
             {
                 bool fs = DisplaySettings.Instance.IsFullscreen();
-                settingsFullscreenLabel.text = fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF";
-                settingsFullscreenLabel.color = fs ? Color.white : DIM_TEXT;
+                settingsFullscreenLabel.text = fs ? "FULLSCREEN   ON" : "FULLSCREEN   OFF";
+                StyleSettingsToggle(settingsFullscreenLabel, fs);
             }
             if (settingsVSyncLabel != null)
             {
                 bool vs = DisplaySettings.Instance.IsVSync();
-                settingsVSyncLabel.text = vs ? "VSYNC: ON" : "VSYNC: OFF";
-                settingsVSyncLabel.color = vs ? Color.white : DIM_TEXT;
+                settingsVSyncLabel.text = vs ? "VSYNC   ON" : "VSYNC   OFF";
+                StyleSettingsToggle(settingsVSyncLabel, vs);
             }
         }
+    }
+
+    void StyleSettingsToggle(TMP_Text label, bool isOn)
+    {
+        // Text color
+        label.color = isOn ? Color.white : new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.6f);
+
+        // Left accent bar color — find Accent child in button parent
+        Transform accent = label.transform.parent.Find("Accent");
+        if (accent != null)
+        {
+            Image accentImg = accent.GetComponent<Image>();
+            if (accentImg != null)
+                accentImg.color = isOn ? NEON_CYAN : new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.15f);
+        }
+
+        // Button background tint
+        Image btnBg = label.transform.parent.GetComponent<Image>();
+        if (btnBg != null)
+            btnBg.color = isOn ? new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.06f)
+                               : new Color(1f, 1f, 1f, 0.02f);
     }
 
     // ── PROCEDURAL ICONS ────────────────────────────────────
@@ -2461,6 +2842,16 @@ public class ScoreSync : MonoBehaviour
         float c1 = 1.70158f;
         float c3 = c1 + 1f;
         return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+    }
+
+    // Heartbeat: two quick bumps then a rest period (~1.6s cycle)
+    float HeartbeatPulse(float time)
+    {
+        float cycle = time % 1.6f;
+        float bump1 = Mathf.Exp(-Mathf.Pow((cycle - 0.0f) * 8f, 2f));  // First beat at 0.0s
+        float bump2 = Mathf.Exp(-Mathf.Pow((cycle - 0.25f) * 8f, 2f)); // Second beat at 0.25s
+        float beat = Mathf.Max(bump1, bump2);
+        return 0.3f + beat * 0.5f; // Base 0.3, peaks at 0.8
     }
 
     float EaseOutElastic(float t)

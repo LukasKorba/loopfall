@@ -128,6 +128,13 @@ public class Sphere : MonoBehaviour
                     StartGame();
                     ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
                 }
+                else if (Input.anyKeyDown && !Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1))
+                {
+                    // Truly any key — random direction
+                    StartGame();
+                    float dir = Random.value < 0.5f ? 1.0f : -1.0f;
+                    ApplyForceWithForwardVector(new Vector3(dir, 0.0f, 0.0f));
+                }
                 else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
                 {
                     StartGame();
@@ -165,8 +172,7 @@ public class Sphere : MonoBehaviour
             if (GetRemoteTap() != 0 || GetGamepadTap() != 0)
 #else
             if (GetGamepadTap() != 0 ||
-                Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
-                Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow) ||
+                Input.anyKeyDown ||
                 (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
                 (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
 #endif

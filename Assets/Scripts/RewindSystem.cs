@@ -814,7 +814,11 @@ public class RewindSystem : MonoBehaviour
                     a.renderer.SetPropertyBlock(gatePropBlock);
                 }
 
-                if (p < 1f) allDone = false;
+                // Hide fully dissolved obstacles (including shadow/base children)
+                if (p >= 1f)
+                    a.obj.SetActive(false);
+                else
+                    allDone = false;
             }
 
             if (allDone)

@@ -157,6 +157,11 @@ MonoBehaviour:
   gateShaderRef: {fileID: 4800000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
   blackHoleWarpRef: {fileID: 4800000, guid: 9b20835293459464eb02f234fd3e3457, type: 3}
   trackItemShaderRef: {fileID: 4800000, guid: 0cdf545f4ce6042668f2919c32bb9bc0, type: 3}
+  obstacleShadowShaderRef: {fileID: 4800000, guid: 5851542be9b704ffcb17461eaca85cca, type: 3}
+  ballShaderRef: {fileID: 4800000, guid: db9e510bb4f1a4fcb9c88f1d5da5d368, type: 3}
+  trackGridShaderRef: {fileID: 4800000, guid: 68dd14f0d7f2b48949114a0d81606bd7, type: 3}
+  railShaderRef: {fileID: 4800000, guid: fae0febebf4044dccacbe667667c6311, type: 3}
+  trailGlowShaderRef: {fileID: 4800000, guid: 362124fdcbf95483485885fbe229664e, type: 3}
 --- !u!4 &875362060
 Transform:
   m_ObjectHideFlags: 0
