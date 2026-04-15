@@ -27,12 +27,20 @@ public class Sphere : MonoBehaviour
     // DEBUG: disable obstacle collision, press W to simulate death
     private bool mDebugGodMode = false;
 
+    // MFi gamepad — d-pad/stick edge detection
+    private bool mPadLeftFired = false;
+    private bool mPadRightFired = false;
+    private const float PAD_THRESHOLD = 0.5f;
 
     // Rewind
     public RewindSystem mRewindSystem;
 
     // Time Warp
     public FrenzyTimer mFrenzyTimer;
+
+    // Cached references
+    private ScoreSync mScoreSync;
+    private GameAudio mAudio;
 
     // Persistent stats
     private const string STAT_TAPS = "TotalTaps";
@@ -62,6 +70,9 @@ public class Sphere : MonoBehaviour
         mCameraStartPos = mCamera.transform.position;
         mCameraStartRot = mCamera.transform.rotation;
 
+        mScoreSync = FindAnyObjectByType<ScoreSync>();
+        mAudio = FindAnyObjectByType<GameAudio>();
+
         // Start paused — waiting for first tap
         mTorusScript.SetPaused(true);
     }
@@ -73,9 +84,12 @@ public class Sphere : MonoBehaviour
 
     void Update()
     {
-        // Block all input during splash screen or settings
-        ScoreSync splashCheck = FindAnyObjectByType<ScoreSync>();
-        if (splashCheck != null && (splashCheck.IsSplash() || splashCheck.IsSettingsOpen())) return;
+        // Block all input during splash screen, settings, pause, or Steam overlay
+        if (mScoreSync != null && (mScoreSync.IsSplash() || mScoreSync.IsSettingsOpen() || mScoreSync.IsPaused())) return;
+#if STEAMWORKS
+        if (SteamManager.Initialized && Steamworks.SteamUtils.IsOverlayEnabled()
+            && Steamworks.SteamUtils.BOverlayNeedsPresent()) return;
+#endif
 
         // Time Warp: check timer expiry
         if (!mGameOver && !mWaitingToStart && GameConfig.IsTimeWarp()
@@ -94,34 +108,44 @@ public class Sphere : MonoBehaviour
                 StartGame();
                 ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
             }
-#else
-            if (Input.GetKeyDown(KeyCode.A))
-            {
-                StartGame();
-                ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
-            }
-            else if (Input.GetKeyDown(KeyCode.D))
-            {
-                StartGame();
-                ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
-            }
-            else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
-            {
-                StartGame();
-                if (Input.mousePosition.x < Screen.width * 0.5f)
-                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
-                else
-                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
-            }
-            else if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
-            {
-                StartGame();
-                if (Input.touches[0].position.x < Screen.width * 0.5f)
-                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
-                else
-                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
-            }
+            else
 #endif
+            {
+                int padTap = GetGamepadTap();
+                if (padTap != 0)
+                {
+                    StartGame();
+                    ApplyForceWithForwardVector(new Vector3(padTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+                }
+#if !UNITY_TVOS
+                else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
+                {
+                    StartGame();
+                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                }
+                else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
+                {
+                    StartGame();
+                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                }
+                else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
+                {
+                    StartGame();
+                    if (Input.mousePosition.x < Screen.width * 0.5f)
+                        ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                    else
+                        ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                }
+                else if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
+                {
+                    StartGame();
+                    if (Input.touches[0].position.x < Screen.width * 0.5f)
+                        ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                    else
+                        ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                }
+#endif
+            }
             return;
         }
 
@@ -135,24 +159,21 @@ public class Sphere : MonoBehaviour
         if (mGameOver)
         {
             // Wait for game over animation before allowing reset
-            ScoreSync sync = FindAnyObjectByType<ScoreSync>();
-            if (sync != null && !sync.CanRestart()) return;
+            if (mScoreSync != null && !mScoreSync.CanRestart()) return;
 
 #if UNITY_TVOS
-            if (GetRemoteTap() != 0)
-            {
-                DoReset();
-                return;
-            }
+            if (GetRemoteTap() != 0 || GetGamepadTap() != 0)
 #else
-            if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
+            if (GetGamepadTap() != 0 ||
+                Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.D) ||
+                Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow) ||
                 (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
                 (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
+#endif
             {
                 DoReset();
                 return;
             }
-#endif
         }
 
         if (!mGameOver)
@@ -162,10 +183,10 @@ public class Sphere : MonoBehaviour
             if (remoteTap != 0)
                 ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
 #else
-            // Keyboard: A = left, D = right
-            if (Input.GetKeyDown(KeyCode.A))
+            // Keyboard: A/Left = left, D/Right = right
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
                 ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
-            if (Input.GetKeyDown(KeyCode.D))
+            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
                 ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
 
             // Mouse: left half = left, right half = right (desktop only)
@@ -186,6 +207,11 @@ public class Sphere : MonoBehaviour
                     ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
             }
 #endif
+
+            // MFi gamepad (all platforms)
+            int padTap = GetGamepadTap();
+            if (padTap != 0)
+                ApplyForceWithForwardVector(new Vector3(padTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
         }
 
         // Camera diff (swing effect) — only while alive
@@ -223,6 +249,48 @@ public class Sphere : MonoBehaviour
     }
 #endif
 
+    /// <summary>
+    /// MFi gamepad input — all left-side buttons = left, all right-side = right.
+    /// Works on iOS, macOS, and tvOS. Returns -1 (left), 1 (right), or 0 (none).
+    /// </summary>
+    int GetGamepadTap()
+    {
+        // Shoulders
+        if (Input.GetKeyDown(KeyCode.JoystickButton4)) return -1; // L1
+        if (Input.GetKeyDown(KeyCode.JoystickButton5)) return 1;  // R1
+
+        // Triggers
+        if (Input.GetKeyDown(KeyCode.JoystickButton6)) return -1; // L2
+        if (Input.GetKeyDown(KeyCode.JoystickButton7)) return 1;  // R2
+
+        // Face buttons A/B/X/Y — right side of controller
+        // Skip on tvOS to avoid conflict with Siri Remote clickpad/play-pause
+#if !UNITY_TVOS
+        if (Input.GetKeyDown(KeyCode.JoystickButton14) ||
+            Input.GetKeyDown(KeyCode.JoystickButton13) ||
+            Input.GetKeyDown(KeyCode.JoystickButton15) ||
+            Input.GetKeyDown(KeyCode.JoystickButton12))
+            return 1;
+#endif
+
+        // D-pad / left stick — edge triggered
+        float h = Input.GetAxis("Horizontal");
+        if (h < -PAD_THRESHOLD && !mPadLeftFired)
+        {
+            mPadLeftFired = true;
+            return -1;
+        }
+        if (h > PAD_THRESHOLD && !mPadRightFired)
+        {
+            mPadRightFired = true;
+            return 1;
+        }
+        if (h > -0.1f) mPadLeftFired = false;
+        if (h < 0.1f) mPadRightFired = false;
+
+        return 0;
+    }
+
     void ApplyForceWithForwardVector(Vector3 forward)
     {
         bool clearLast = false;
@@ -258,8 +326,7 @@ public class Sphere : MonoBehaviour
 
         mTorusScript.UserInteraction();
 
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio != null) audio.PlayTap();
+        if (mAudio != null) mAudio.PlayTap();
 
         // Track taps — save every 10 to avoid I/O spam
         mSessionTaps++;
@@ -339,8 +406,7 @@ public class Sphere : MonoBehaviour
         if (GameConfig.IsTimeWarp() && mFrenzyTimer != null)
             mFrenzyTimer.StopTimer();
 
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio != null) audio.PlayGameOver();
+        if (mAudio != null) mAudio.PlayGameOver();
     }
 
     public bool IsWaiting() { return mWaitingToStart; }

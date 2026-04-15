@@ -5,18 +5,19 @@ using UnityEngine.SocialPlatforms.GameCenter;
 
 /// <summary>
 /// GameCenter integration — authentication, score submission, leaderboard display.
-/// Works on iOS and macOS. Created by SceneSetup.
+/// Works on iOS, tvOS, and macOS. Implements IPlatformService for cross-platform routing.
 ///
-/// Usage:
-///   GameCenterManager.Instance.ReportScore(score);
-///   GameCenterManager.Instance.ShowLeaderboard();
+/// Usage (via PlatformManager):
+///   PlatformManager.Instance.ReportScore(score);
+///   PlatformManager.Instance.ShowLeaderboard();
 /// </summary>
-public class GameCenterManager : MonoBehaviour
+public class GameCenterManager : MonoBehaviour, IPlatformService
 {
     public static GameCenterManager Instance { get; private set; }
 
     // Apple leaderboard IDs — set in App Store Connect
     private const string LB_PURE_HELL = "com.lukaskorba.loopfall.purehell";
+    private const string LB_TIME_WARP = "com.lukaskorba.loopfall.timewarp";
     private const string LB_TAP_MASTER = "com.lukaskorba.loopfall.tapmaster";
     private const string LB_RUNS = "com.lukaskorba.loopfall.runs";
 
@@ -56,7 +57,8 @@ public class GameCenterManager : MonoBehaviour
     public void ReportScore(int score)
     {
         if (score <= 0) return;
-        Report(score, LB_PURE_HELL);
+        string lb = GameConfig.IsTimeWarp() ? LB_TIME_WARP : LB_PURE_HELL;
+        Report(score, lb);
     }
 
     public void ReportTaps(int totalTaps)
@@ -88,9 +90,6 @@ public class GameCenterManager : MonoBehaviour
 #endif
     }
 
-    /// <summary>
-    /// Show the native GameCenter leaderboard UI.
-    /// </summary>
     public void ShowLeaderboard()
     {
 #if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
@@ -100,11 +99,46 @@ public class GameCenterManager : MonoBehaviour
             return;
         }
 
-        // Show default leaderboard set — user can browse all boards
         GameCenterPlatform.ShowLeaderboardUI(LB_PURE_HELL, UnityEngine.SocialPlatforms.TimeScope.AllTime);
 #else
         Debug.Log("[GameCenter] (Editor) Would show leaderboard");
 #endif
+    }
+
+    public void UnlockAchievement(string achievementID)
+    {
+#if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+        if (!mAuthenticated) return;
+        Social.ReportProgress(achievementID, 100.0, (bool success) =>
+        {
+            Debug.Log($"[GameCenter] Achievement {achievementID}: {(success ? "unlocked" : "failed")}");
+        });
+#else
+        Debug.Log($"[GameCenter] (Editor) Achievement: {achievementID}");
+#endif
+    }
+
+    public void ShowAchievements()
+    {
+#if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
+        if (!mAuthenticated) return;
+        Social.ShowAchievementsUI();
+#else
+        Debug.Log("[GameCenter] (Editor) Would show achievements");
+#endif
+    }
+
+    public void SaveToCloud(string key, string data)
+    {
+        // GameCenter does not support cloud key-value storage.
+        // iCloud KeyValue store requires native plugin — not implemented here.
+        Debug.Log($"[GameCenter] Cloud save not supported (key={key})");
+    }
+
+    public string LoadFromCloud(string key)
+    {
+        Debug.Log($"[GameCenter] Cloud load not supported (key={key})");
+        return null;
     }
 
     public bool IsAuthenticated() { return mAuthenticated; }

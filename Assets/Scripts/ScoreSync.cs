@@ -34,6 +34,9 @@ public class ScoreSync : MonoBehaviour
     private bool isTopFive = false;
     private int goFinalScore = 0;
     private int goRank = 0;
+    private bool isFirstRun = false;
+    private const string PREF_FIRST_RUN = "HasPlayed";
+    private bool isPaused = false;
 
     // ── CANVAS ───────────────────────────────────────────────
     private Canvas canvas;
@@ -68,6 +71,7 @@ public class ScoreSync : MonoBehaviour
     private Button titleSettingsBtn;
     private RawImage titleSettingsIcon;
     private TMP_Text titleTapText;
+    private TMP_Text titleHintText;
     private Button titlePureHellBtn;
     private TMP_Text titlePureHellLabel;
     private Button titleTimeWarpBtn;
@@ -114,6 +118,9 @@ public class ScoreSync : MonoBehaviour
     private RectTransform settingsPanel;
     private TMP_Text settingsMusicLabel;
     private TMP_Text settingsSoundLabel;
+    private TMP_Text settingsFullscreenLabel;
+    private TMP_Text settingsVSyncLabel;
+    private TMP_Text settingsResLabel;
     private Texture2D trophyTex;
     private Texture2D cogTex;
     private Texture2D quitTex;
@@ -151,15 +158,30 @@ public class ScoreSync : MonoBehaviour
     private float[] splashGlitchTimes;
     private int splashGlitchNext;
 
+    // ── PAUSE ────────────────────────────────────────────────
+    private RectTransform pauseGroup;
+    private TMP_Text pausedText;
+    private TMP_Text pauseHintText;
+    private Image pauseDimImage;
+
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
     private Sprite circleSprite;
 
+    // ── CACHED REFS ─────────────────────────────────────────
+    private Sphere mSphere;
+    private GameAudio mAudio;
+
     void Start()
     {
+        // REMOVE! Can't go to the production!!!
+        PlayerPrefs.DeleteKey("HasPlayed");
         LoadScores();
         defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
         circleSprite = CreateCircleSprite(32);
+        mSphere = FindAnyObjectByType<Sphere>();
+        mAudio = FindAnyObjectByType<GameAudio>();
+        isFirstRun = PlayerPrefs.GetInt(PREF_FIRST_RUN, 0) == 0;
         BuildUI();
     }
 
@@ -174,6 +196,29 @@ public class ScoreSync : MonoBehaviour
             return;
         }
 
+        // Escape during gameplay = pause; Escape while paused = resume
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (isPaused)
+            {
+                ResumeGame();
+                return;
+            }
+            else if (state == State.Playing)
+            {
+                PauseGame();
+                return;
+            }
+        }
+
+        // While paused, tap anywhere to resume (mobile/touch)
+        if (isPaused)
+        {
+            if (Input.GetMouseButtonDown(0) || (Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
+                ResumeGame();
+            return;
+        }
+
         // Splash is self-timed — don't poll sphere state
         if (state == State.Splash)
         {
@@ -182,21 +227,23 @@ public class ScoreSync : MonoBehaviour
             return;
         }
 
-        Sphere sphere = FindAnyObjectByType<Sphere>();
-        if (sphere == null) return;
+        if (mSphere == null) return;
 
         State newState;
-        if (sphere.IsWaiting())
+        if (mSphere.IsWaiting())
             newState = State.Title;
-        else if (sphere.IsRewinding())
+        else if (mSphere.IsRewinding())
             newState = State.Rewinding;
-        else if (sphere.IsGameOver())
+        else if (mSphere.IsGameOver())
             newState = State.GameOver;
         else
             newState = State.Playing;
 
         if (newState != state)
         {
+            // Clear pause when leaving Playing state
+            if (isPaused) ResumeGame();
+
             State fromState = state;
             state = newState;
             stateTimer = 0f;
@@ -215,6 +262,14 @@ public class ScoreSync : MonoBehaviour
                 currentStreak = 0;
                 streakFlashTimer = -1f;
                 titleFadeOutTimer = 0f;
+
+                // First-run tutorial: mark as played (hint text won't show again)
+                if (isFirstRun)
+                {
+                    isFirstRun = false;
+                    PlayerPrefs.SetInt(PREF_FIRST_RUN, 1);
+                    PlayerPrefs.Save();
+                }
             }
 
             // Skip title screen on restart — fade game over overlay straight to gameplay
@@ -281,6 +336,7 @@ public class ScoreSync : MonoBehaviour
     }
 
     public bool IsSplash() { return state == State.Splash; }
+    public bool IsPaused() { return isPaused; }
 
     public bool CanRestart()
     {
@@ -288,9 +344,8 @@ public class ScoreSync : MonoBehaviour
 
         if (!GameConfig.IsTimeWarp())
         {
-            Sphere sphere = FindAnyObjectByType<Sphere>();
-            if (sphere != null && sphere.mRewindSystem != null
-                && !sphere.mRewindSystem.IsFullyComplete())
+            if (mSphere != null && mSphere.mRewindSystem != null
+                && !mSphere.mRewindSystem.IsFullyComplete())
                 return false;
         }
 
@@ -341,15 +396,16 @@ public class ScoreSync : MonoBehaviour
         // CRT scanlines — retro horizontal bands
         scanlinesImage = CreateScanlines(canvasObj.transform);
 
-        // Procedural icon textures for buttons
-        trophyTex = GenerateTrophyIcon(128);
-        cogTex = GenerateCogIcon(128);
-        quitTex = GenerateQuitIcon(128);
+        // Procedural icon textures for buttons (256px for crisp rendering)
+        trophyTex = GenerateTrophyIcon(256);
+        cogTex = GenerateCogIcon(256);
+        quitTex = GenerateQuitIcon(256);
 
         BuildSplashGroup(canvasObj.transform);
         BuildTitleGroup(canvasObj.transform);
         BuildPlayingGroup(canvasObj.transform);
         BuildGameOverGroup(canvasObj.transform);
+        BuildPauseGroup(canvasObj.transform);
 
         ShowGroup(state);
     }
@@ -506,6 +562,8 @@ public class ScoreSync : MonoBehaviour
         // Tap to play
 #if UNITY_TVOS
         string tapPrompt = "SWIPE TO PLAY";
+#elif UNITY_STANDALONE
+        string tapPrompt = "PRESS ANY KEY TO PLAY";
 #else
         string tapPrompt = "TAP TO PLAY";
 #endif
@@ -513,6 +571,21 @@ public class ScoreSync : MonoBehaviour
             36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(titleTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         titleTapText.characterSpacing = 8f;
+
+        // First-run tutorial hint
+#if UNITY_TVOS
+        string hintText = "SWIPE LEFT OR RIGHT\nTO DODGE THE GATES";
+#elif UNITY_STANDALONE
+        string hintText = "USE A/D, ARROWS, OR CONTROLLER\nTO DODGE THE GATES";
+#else
+        string hintText = "TAP LEFT OR RIGHT\nTO DODGE THE GATES";
+#endif
+        titleHintText = CreateText(titleGroup, "TutorialHint", hintText,
+            28, FontStyles.Normal, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
+        SetAnchored(titleHintText.rectTransform, new Vector2(0.5f, 0.22f), new Vector2(600, 80));
+        titleHintText.characterSpacing = 4f;
+        titleHintText.enableWordWrapping = true;
+        titleHintText.alignment = TextAlignmentOptions.Center;
 
         // Icon buttons — top right, side by side (hidden on tvOS — no touch)
 #if !UNITY_TVOS
@@ -631,6 +704,8 @@ public class ScoreSync : MonoBehaviour
         // Tap to play again
 #if UNITY_TVOS
         string goTapPrompt = "SWIPE TO PLAY";
+#elif UNITY_STANDALONE
+        string goTapPrompt = "PRESS ANY KEY TO PLAY";
 #else
         string goTapPrompt = "TAP TO PLAY";
 #endif
@@ -980,11 +1055,22 @@ public class ScoreSync : MonoBehaviour
             SetAlpha(titleTapText, 0f);
         }
 
+        // Tutorial hint — steady gold, only on first run
+        if (isFirstRun && titleHintText != null)
+        {
+            float hintFade = Mathf.Clamp01((stateTimer - 1.5f) / 0.5f);
+            SetAlpha(titleHintText, hintFade * 0.85f);
+        }
+        else if (titleHintText != null)
+        {
+            SetAlpha(titleHintText, 0f);
+        }
+
         // Icon buttons — fade in with best score
         float lbFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
-        SetIconAlpha(titleLBIcon, lbFade * 0.5f);
-        SetIconAlpha(titleSettingsIcon, lbFade * 0.5f);
-        SetIconAlpha(titleQuitIcon, lbFade * 0.5f);
+        SetIconAlpha(titleLBIcon, lbFade * 0.75f);
+        SetIconAlpha(titleSettingsIcon, lbFade * 0.75f);
+        SetIconAlpha(titleQuitIcon, lbFade * 0.75f);
     }
 
     void AnimateTitleCharacters()
@@ -1312,8 +1398,7 @@ public class ScoreSync : MonoBehaviour
             if (displayScore != goLastDisplayScore)
             {
                 goLastDisplayScore = displayScore;
-                GameAudio audio = FindAnyObjectByType<GameAudio>();
-                if (audio != null) audio.PlayCount();
+                if (mAudio != null) mAudio.PlayCount();
             }
             string displayText = GameConfig.IsTimeWarp()
                 ? FormatTimeScore(displayScore)
@@ -1424,8 +1509,7 @@ public class ScoreSync : MonoBehaviour
             if (!goNewBestSfxPlayed && p > 0f)
             {
                 goNewBestSfxPlayed = true;
-                GameAudio audio = FindAnyObjectByType<GameAudio>();
-                if (audio != null) audio.PlayNewBest(isNewBest);
+                if (mAudio != null) mAudio.PlayNewBest(isNewBest);
             }
         }
         else
@@ -1441,9 +1525,9 @@ public class ScoreSync : MonoBehaviour
         if (t > 0.6f)
         {
             float p = Mathf.Clamp01((t - 0.6f) / 0.4f);
-            SetIconAlpha(goSettingsIcon, p * 0.4f);
-            SetIconAlpha(goLBIcon, p * 0.4f);
-            SetIconAlpha(goQuitIcon, p * 0.4f);
+            SetIconAlpha(goSettingsIcon, p * 0.65f);
+            SetIconAlpha(goLBIcon, p * 0.65f);
+            SetIconAlpha(goQuitIcon, p * 0.65f);
         }
         else
         {
@@ -1607,9 +1691,8 @@ public class ScoreSync : MonoBehaviour
     {
         GameConfig.ActiveMode = mode;
         LoadScores(); // Reload for the selected mode's leaderboard
-        Sphere sphere = FindAnyObjectByType<Sphere>();
-        if (sphere != null && sphere.IsWaiting())
-            sphere.StartGame();
+        if (mSphere != null && mSphere.IsWaiting())
+            mSphere.StartGame();
     }
 
     Button CreateIconButton(RectTransform parent, string name,
@@ -1625,15 +1708,27 @@ public class ScoreSync : MonoBehaviour
         rt.anchoredPosition = pos;
         rt.sizeDelta = size;
 
+        // Circular dark background — makes the button feel real
         Image bg = btnObj.AddComponent<Image>();
-        bg.color = new Color(0, 0, 0, 0.01f);
-        Button btn = btnObj.AddComponent<Button>();
+        if (circleSprite != null) bg.sprite = circleSprite;
+        bg.color = new Color(0.08f, 0.05f, 0.12f, 0f); // Alpha controlled by SetIconAlpha
 
+        // Press feedback via button color transitions
+        Button btn = btnObj.AddComponent<Button>();
+        ColorBlock cb = btn.colors;
+        cb.normalColor = Color.white;
+        cb.highlightedColor = new Color(1.2f, 1.2f, 1.3f, 1f);
+        cb.pressedColor = new Color(0.8f, 0.8f, 0.85f, 1f);
+        cb.fadeDuration = 0.08f;
+        btn.colors = cb;
+        btn.transition = Selectable.Transition.ColorTint;
+
+        // Icon image — inset slightly for padding inside the circle
         GameObject iconObj = new GameObject("Icon");
         RectTransform iconRT = iconObj.AddComponent<RectTransform>();
         iconRT.SetParent(rt, false);
-        iconRT.anchorMin = Vector2.zero;
-        iconRT.anchorMax = Vector2.one;
+        iconRT.anchorMin = new Vector2(0.2f, 0.2f);
+        iconRT.anchorMax = new Vector2(0.8f, 0.8f);
         iconRT.sizeDelta = Vector2.zero;
         iconRT.offsetMin = Vector2.zero;
         iconRT.offsetMax = Vector2.zero;
@@ -1641,7 +1736,7 @@ public class ScoreSync : MonoBehaviour
         iconImage = iconObj.AddComponent<RawImage>();
         iconImage.texture = icon;
         iconImage.color = new Color(1f, 1f, 1f, 0f);
-        iconImage.raycastTarget = true;
+        iconImage.raycastTarget = false; // Let the bg handle raycasting
 
         return btn;
     }
@@ -1650,6 +1745,51 @@ public class ScoreSync : MonoBehaviour
     {
         if (icon == null) return;
         icon.color = new Color(1f, 1f, 1f, alpha);
+
+        // Also set the circular background alpha
+        Transform parent = icon.transform.parent;
+        if (parent != null)
+        {
+            Image bg = parent.GetComponent<Image>();
+            if (bg != null)
+                bg.color = new Color(0.08f, 0.05f, 0.12f, alpha * 0.7f);
+        }
+    }
+
+    // ── PAUSE GROUP ────────────────────────────────────────
+
+    void BuildPauseGroup(Transform parent)
+    {
+        pauseGroup = CreateGroup(parent, "PauseGroup");
+        pauseGroup.gameObject.SetActive(false);
+
+        // Semi-transparent dim overlay
+        GameObject dimObj = new GameObject("PauseDim");
+        RectTransform dimRT = dimObj.AddComponent<RectTransform>();
+        dimRT.SetParent(pauseGroup, false);
+        StretchFull(dimRT);
+        pauseDimImage = dimObj.AddComponent<Image>();
+        pauseDimImage.color = new Color(0f, 0f, 0f, 0.6f);
+        pauseDimImage.raycastTarget = false;
+
+        // "PAUSED" text
+        pausedText = CreateText(pauseGroup, "PausedLabel", "PAUSED",
+            64, FontStyles.Bold, NEON_CYAN);
+        SetAnchored(pausedText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(600, 90));
+        pausedText.characterSpacing = 16f;
+
+        // Resume hint
+#if UNITY_TVOS
+        string resumeHint = "PRESS MENU TO RESUME";
+#elif UNITY_STANDALONE
+        string resumeHint = "PRESS ESC TO RESUME";
+#else
+        string resumeHint = "TAP TO RESUME";
+#endif
+        pauseHintText = CreateText(pauseGroup, "PauseHint", resumeHint,
+            28, FontStyles.Normal, DIM_TEXT);
+        SetAnchored(pauseHintText.rectTransform, new Vector2(0.5f, 0.42f), new Vector2(600, 50));
+        pauseHintText.characterSpacing = 6f;
     }
 
     // ── SETTINGS PANEL ──────────────────────────────────────
@@ -1673,7 +1813,14 @@ public class ScoreSync : MonoBehaviour
         cardRT.SetParent(settingsPanel, false);
         cardRT.anchorMin = new Vector2(0.5f, 0.5f);
         cardRT.anchorMax = new Vector2(0.5f, 0.5f);
-        cardRT.sizeDelta = new Vector2(500, 320);
+
+        // Taller card on standalone to fit display settings
+        bool showDisplay = false;
+#if UNITY_STANDALONE && !UNITY_EDITOR
+        showDisplay = true;
+#endif
+        cardRT.sizeDelta = showDisplay ? new Vector2(500, 560) : new Vector2(500, 320);
+
         Image cardBg = card.AddComponent<Image>();
         cardBg.color = new Color(0.08f, 0.05f, 0.12f, 0.95f);
         cardBg.raycastTarget = true;
@@ -1681,24 +1828,60 @@ public class ScoreSync : MonoBehaviour
         // Title
         TMP_Text title = CreateText(cardRT, "Title", "SETTINGS",
             36, FontStyles.Bold, NEON_CYAN);
-        SetAnchored(title.rectTransform, new Vector2(0.5f, 0.85f), new Vector2(400, 50));
+        SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.92f : 0.85f), new Vector2(400, 50));
         title.characterSpacing = 8f;
         title.raycastTarget = false;
 
-        // Music toggle button
-        Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
-            new Vector2(0.5f, 0.55f), out settingsMusicLabel);
-        musicBtn.onClick.AddListener(ToggleMusic);
+        if (showDisplay)
+        {
+            // ── AUDIO SECTION ──
+            TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", "AUDIO",
+                22, FontStyles.Bold, new Color(0.5f, 0.5f, 0.6f));
+            SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.82f), new Vector2(400, 30));
+            audioHeader.raycastTarget = false;
 
-        // Sound toggle button
-        Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
-            new Vector2(0.5f, 0.35f), out settingsSoundLabel);
-        soundBtn.onClick.AddListener(ToggleSound);
+            Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
+                new Vector2(0.5f, 0.73f), out settingsMusicLabel);
+            musicBtn.onClick.AddListener(ToggleMusic);
+
+            Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
+                new Vector2(0.5f, 0.63f), out settingsSoundLabel);
+            soundBtn.onClick.AddListener(ToggleSound);
+
+            // ── DISPLAY SECTION ──
+            TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", "DISPLAY",
+                22, FontStyles.Bold, new Color(0.5f, 0.5f, 0.6f));
+            SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.52f), new Vector2(400, 30));
+            displayHeader.raycastTarget = false;
+
+            Button resBtn = CreateSettingsToggle(cardRT, "ResBtn",
+                new Vector2(0.5f, 0.43f), out settingsResLabel);
+            resBtn.onClick.AddListener(OnCycleResolution);
+
+            Button fullBtn = CreateSettingsToggle(cardRT, "FullBtn",
+                new Vector2(0.5f, 0.33f), out settingsFullscreenLabel);
+            fullBtn.onClick.AddListener(OnToggleFullscreen);
+
+            Button vsyncBtn = CreateSettingsToggle(cardRT, "VSyncBtn",
+                new Vector2(0.5f, 0.23f), out settingsVSyncLabel);
+            vsyncBtn.onClick.AddListener(OnToggleVSync);
+        }
+        else
+        {
+            // Mobile layout — audio only
+            Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
+                new Vector2(0.5f, 0.55f), out settingsMusicLabel);
+            musicBtn.onClick.AddListener(ToggleMusic);
+
+            Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
+                new Vector2(0.5f, 0.35f), out settingsSoundLabel);
+            soundBtn.onClick.AddListener(ToggleSound);
+        }
 
         // Close label
-        TMP_Text closeLabel = CreateText(cardRT, "Close", "TAP OUTSIDE TO CLOSE",
+        TMP_Text closeLabel = CreateText(cardRT, "Close", showDisplay ? "CLICK OUTSIDE TO CLOSE" : "TAP OUTSIDE TO CLOSE",
             18, FontStyles.Normal, DIM_TEXT);
-        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, 0.1f), new Vector2(400, 30));
+        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.07f : 0.1f), new Vector2(400, 30));
         closeLabel.raycastTarget = false;
     }
 
@@ -1749,29 +1932,85 @@ public class ScoreSync : MonoBehaviour
             settingsPanel.gameObject.SetActive(false);
     }
 
+    void PauseGame()
+    {
+        if (isPaused || state != State.Playing) return;
+        isPaused = true;
+
+        // Freeze torus rotation
+        Torus torus = FindAnyObjectByType<Torus>();
+        if (torus != null) torus.SetPaused(true);
+
+        // Freeze ball physics
+        if (mSphere != null)
+        {
+            Rigidbody rb = mSphere.GetComponent<Rigidbody>();
+            if (rb != null) rb.isKinematic = true;
+        }
+
+        if (pauseGroup != null) pauseGroup.gameObject.SetActive(true);
+    }
+
+    void ResumeGame()
+    {
+        if (!isPaused) return;
+        isPaused = false;
+
+        // Unfreeze torus
+        Torus torus = FindAnyObjectByType<Torus>();
+        if (torus != null) torus.SetPaused(false);
+
+        // Unfreeze ball physics
+        if (mSphere != null)
+        {
+            Rigidbody rb = mSphere.GetComponent<Rigidbody>();
+            if (rb != null) rb.isKinematic = false;
+        }
+
+        if (pauseGroup != null) pauseGroup.gameObject.SetActive(false);
+    }
+
     void ToggleMusic()
     {
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio == null) return;
-        audio.SetMusicMuted(!audio.IsMusicMuted());
+        if (mAudio == null) return;
+        mAudio.SetMusicMuted(!mAudio.IsMusicMuted());
         RefreshSettingsLabels();
     }
 
     void ToggleSound()
     {
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio == null) return;
-        audio.SetSoundMuted(!audio.IsSoundMuted());
+        if (mAudio == null) return;
+        mAudio.SetSoundMuted(!mAudio.IsSoundMuted());
+        RefreshSettingsLabels();
+    }
+
+    void OnCycleResolution()
+    {
+        if (DisplaySettings.Instance == null) return;
+        DisplaySettings.Instance.CycleResolution();
+        RefreshSettingsLabels();
+    }
+
+    void OnToggleFullscreen()
+    {
+        if (DisplaySettings.Instance == null) return;
+        DisplaySettings.Instance.ToggleFullscreen();
+        RefreshSettingsLabels();
+    }
+
+    void OnToggleVSync()
+    {
+        if (DisplaySettings.Instance == null) return;
+        DisplaySettings.Instance.ToggleVSync();
         RefreshSettingsLabels();
     }
 
     void RefreshSettingsLabels()
     {
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio == null) return;
+        if (mAudio == null) return;
 
-        bool musicOff = audio.IsMusicMuted();
-        bool soundOff = audio.IsSoundMuted();
+        bool musicOff = mAudio.IsMusicMuted();
+        bool soundOff = mAudio.IsSoundMuted();
 
         if (settingsMusicLabel != null)
         {
@@ -1783,6 +2022,25 @@ public class ScoreSync : MonoBehaviour
             settingsSoundLabel.text = soundOff ? "SOUND: OFF" : "SOUND: ON";
             settingsSoundLabel.color = soundOff ? DIM_TEXT : Color.white;
         }
+
+        // Display settings (standalone only)
+        if (DisplaySettings.Instance != null)
+        {
+            if (settingsResLabel != null)
+                settingsResLabel.text = "RES: " + DisplaySettings.Instance.GetResolutionLabel();
+            if (settingsFullscreenLabel != null)
+            {
+                bool fs = DisplaySettings.Instance.IsFullscreen();
+                settingsFullscreenLabel.text = fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF";
+                settingsFullscreenLabel.color = fs ? Color.white : DIM_TEXT;
+            }
+            if (settingsVSyncLabel != null)
+            {
+                bool vs = DisplaySettings.Instance.IsVSync();
+                settingsVSyncLabel.text = vs ? "VSYNC: ON" : "VSYNC: OFF";
+                settingsVSyncLabel.color = vs ? Color.white : DIM_TEXT;
+            }
+        }
     }
 
     // ── PROCEDURAL ICONS ────────────────────────────────────
@@ -1791,74 +2049,55 @@ public class ScoreSync : MonoBehaviour
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         float half = size * 0.5f;
-        float r = half * 0.9f; // Circle radius
-        float strokeW = size * 0.03f;
         Color col = NEON_GOLD;
+        float edgeSmooth = size * 0.015f;
 
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
-                float dx = x - half;
-                float dy = y - half;
-                float dist = Mathf.Sqrt(dx * dx + dy * dy);
-
-                // Normalized coords within icon area (-1..1)
-                float nx = dx / (half * 0.6f);
-                float ny = dy / (half * 0.6f);
-
+                float nx = (x - half) / (half * 0.7f);
+                float ny = (y - half) / (half * 0.7f);
                 float alpha = 0f;
 
-                // Circle stroke
-                float ringDist = Mathf.Abs(dist - r);
-                if (ringDist < strokeW)
-                    alpha = Mathf.Max(alpha, 1f - ringDist / strokeW);
-
-                // Trophy shape (simplified)
-                // Cup body: wide at top, narrowing down
-                float cupTop = 0.25f;
-                float cupBot = -0.15f;
-                float cupWidthTop = 0.55f;
-                float cupWidthBot = 0.25f;
+                // Cup body — wide at top, tapered
+                float cupTop = 0.45f;
+                float cupBot = -0.05f;
                 if (ny > cupBot && ny < cupTop)
                 {
                     float t = (ny - cupBot) / (cupTop - cupBot);
-                    float w = Mathf.Lerp(cupWidthBot, cupWidthTop, t);
-                    if (Mathf.Abs(nx) < w)
-                    {
-                        // Cup interior — filled
-                        float edge = Mathf.Clamp01((w - Mathf.Abs(nx)) * size * 0.04f);
-                        alpha = Mathf.Max(alpha, edge);
-                    }
+                    float w = Mathf.Lerp(0.30f, 0.60f, t);
+                    float d = w - Mathf.Abs(nx);
+                    if (d > 0) alpha = Mathf.Clamp01(d * size * 0.03f);
                 }
 
-                // Cup handles — arcs on sides
-                float handleCy = 0.1f;
-                float handleR = 0.3f;
-                float handleW = 0.07f;
+                // Handles — thicker arcs
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    float hx = nx - side * 0.5f;
-                    float hy = ny - handleCy;
+                    float hx = nx - side * 0.55f;
+                    float hy = ny - 0.2f;
                     float hDist = Mathf.Sqrt(hx * hx + hy * hy);
-                    float hRing = Mathf.Abs(hDist - handleR);
-                    if (hRing < handleW && (side * nx > 0.3f))
-                        alpha = Mathf.Max(alpha, 1f - hRing / handleW);
+                    float hRing = Mathf.Abs(hDist - 0.28f);
+                    if (hRing < 0.09f && (side * nx > 0.35f))
+                        alpha = Mathf.Max(alpha, Mathf.Clamp01((0.09f - hRing) * size * 0.025f));
                 }
 
                 // Stem
-                if (ny > -0.35f && ny < cupBot + 0.05f && Mathf.Abs(nx) < 0.08f)
+                if (ny > -0.30f && ny < cupBot + 0.03f && Mathf.Abs(nx) < 0.10f)
                     alpha = Mathf.Max(alpha, 1f);
 
-                // Base
-                if (ny > -0.45f && ny < -0.3f && Mathf.Abs(nx) < 0.3f)
+                // Base — rounded rectangle
+                if (ny > -0.48f && ny < -0.25f)
                 {
-                    float edge = Mathf.Clamp01((0.3f - Mathf.Abs(nx)) * size * 0.04f);
-                    alpha = Mathf.Max(alpha, edge);
+                    float bw = Mathf.Lerp(0.35f, 0.28f, (ny + 0.48f) / 0.23f);
+                    float d = bw - Mathf.Abs(nx);
+                    if (d > 0) alpha = Mathf.Max(alpha, Mathf.Clamp01(d * size * 0.03f));
                 }
 
-                // Mask to inside circle
-                if (dist > r + strokeW) alpha = 0f;
+                // Soft circular mask
+                float dist = Mathf.Sqrt(nx * nx + ny * ny);
+                if (dist > 1.05f) alpha = 0f;
+                else if (dist > 0.95f) alpha *= 1f - (dist - 0.95f) / 0.1f;
 
                 tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
             }
@@ -1873,15 +2112,13 @@ public class ScoreSync : MonoBehaviour
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         float half = size * 0.5f;
-        float r = half * 0.9f;
-        float strokeW = size * 0.03f;
         Color col = DIM_TEXT;
 
         int teeth = 8;
-        float outerR = half * 0.55f;
-        float innerR = half * 0.35f;
-        float holeR = half * 0.18f;
-        float toothW = 0.6f; // Tooth angular width as fraction of tooth period
+        float outerR = half * 0.65f;
+        float innerR = half * 0.45f;
+        float holeR = half * 0.20f;
+        float toothW = 0.55f;
 
         for (int y = 0; y < size; y++)
         {
@@ -1891,20 +2128,13 @@ public class ScoreSync : MonoBehaviour
                 float dy = y - half;
                 float dist = Mathf.Sqrt(dx * dx + dy * dy);
                 float angle = Mathf.Atan2(dy, dx);
-
                 float alpha = 0f;
 
-                // Circle stroke
-                float ringDist = Mathf.Abs(dist - r);
-                if (ringDist < strokeW)
-                    alpha = Mathf.Max(alpha, 1f - ringDist / strokeW);
-
-                // Cog body — gear with teeth
+                // Gear body with teeth
                 float toothAngle = (angle / (Mathf.PI * 2f) * teeth) % 1f;
                 if (toothAngle < 0) toothAngle += 1f;
                 float cogR = (toothAngle < toothW) ? outerR : innerR;
-                // Smooth between inner and outer
-                float transW = 0.1f;
+                float transW = 0.08f;
                 if (toothAngle >= toothW - transW && toothAngle < toothW + transW)
                     cogR = Mathf.Lerp(outerR, innerR, (toothAngle - (toothW - transW)) / (transW * 2f));
                 if (toothAngle >= 1f - transW)
@@ -1912,13 +2142,10 @@ public class ScoreSync : MonoBehaviour
 
                 if (dist < cogR && dist > holeR)
                 {
-                    float edgeOuter = Mathf.Clamp01((cogR - dist) * 0.15f * size / 128f);
-                    float edgeInner = Mathf.Clamp01((dist - holeR) * 0.15f * size / 128f);
-                    alpha = Mathf.Max(alpha, Mathf.Min(edgeOuter, edgeInner));
+                    float edgeOuter = Mathf.Clamp01((cogR - dist) * size * 0.012f);
+                    float edgeInner = Mathf.Clamp01((dist - holeR) * size * 0.012f);
+                    alpha = Mathf.Min(edgeOuter, edgeInner);
                 }
-
-                // Mask to inside circle
-                if (dist > r + strokeW) alpha = 0f;
 
                 tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
             }
@@ -1933,17 +2160,15 @@ public class ScoreSync : MonoBehaviour
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         float half = size * 0.5f;
-        float r = half * 0.9f;
-        float strokeW = size * 0.03f;
         Color col = DIM_TEXT;
 
-        // Power symbol: open circle (gap at top) + vertical line
-        float arcR = half * 0.38f;
-        float arcW = size * 0.06f;
-        float lineW = size * 0.06f;
+        // Power symbol — bolder, no outer ring
+        float arcR = half * 0.48f;
+        float arcW = size * 0.08f;
+        float lineW = size * 0.08f;
         float lineTop = half + half * 0.55f;
-        float lineBot = half + half * 0.05f;
-        float gapAngle = 35f * Mathf.Deg2Rad; // Half-gap from top center
+        float lineBot = half + half * 0.0f;
+        float gapAngle = 30f * Mathf.Deg2Rad;
 
         for (int y = 0; y < size; y++)
         {
@@ -1952,34 +2177,18 @@ public class ScoreSync : MonoBehaviour
                 float dx = x - half;
                 float dy = y - half;
                 float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                float angle = Mathf.Atan2(dy, dx);
-
                 float alpha = 0f;
-
-                // Outer circle stroke
-                float ringDist = Mathf.Abs(dist - r);
-                if (ringDist < strokeW)
-                    alpha = Mathf.Max(alpha, 1f - ringDist / strokeW);
 
                 // Power arc (open circle, gap at top)
                 float arcDist = Mathf.Abs(dist - arcR);
-                float angleFromTop = Mathf.Abs(Mathf.Atan2(dx, dy)); // angle from 12 o'clock
+                float angleFromTop = Mathf.Abs(Mathf.Atan2(dx, dy));
                 if (arcDist < arcW && angleFromTop > gapAngle)
-                {
-                    float edge = 1f - arcDist / arcW;
-                    alpha = Mathf.Max(alpha, edge);
-                }
+                    alpha = Mathf.Max(alpha, Mathf.Clamp01((arcW - arcDist) * size * 0.012f));
 
-                // Vertical line (top part of power symbol)
+                // Vertical line
                 float lineDx = Mathf.Abs(dx);
                 if (lineDx < lineW && y >= lineBot && y <= lineTop)
-                {
-                    float edge = 1f - lineDx / lineW;
-                    alpha = Mathf.Max(alpha, edge);
-                }
-
-                // Mask to inside circle
-                if (dist > r + strokeW) alpha = 0f;
+                    alpha = Mathf.Max(alpha, Mathf.Clamp01((lineW - lineDx) * size * 0.012f));
 
                 tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
             }
@@ -2000,8 +2209,8 @@ public class ScoreSync : MonoBehaviour
 
     void OnLeaderboardTap()
     {
-        if (GameCenterManager.Instance != null)
-            GameCenterManager.Instance.ShowLeaderboard();
+        if (PlatformManager.Instance != null)
+            PlatformManager.Instance.ShowLeaderboard();
     }
 
     void SetGroupActive(RectTransform group, bool active)
@@ -2058,12 +2267,12 @@ public class ScoreSync : MonoBehaviour
 
         SaveScores();
 
-        // Report to GameCenter
-        if (GameCenterManager.Instance != null)
+        // Report to platform (GameCenter on Apple, Steam on PC)
+        if (PlatformManager.Instance != null)
         {
-            GameCenterManager.Instance.ReportScore(score);
-            GameCenterManager.Instance.ReportTaps(Sphere.GetTotalTaps());
-            GameCenterManager.Instance.ReportRuns(Sphere.GetTotalRuns());
+            PlatformManager.Instance.ReportScore(score);
+            PlatformManager.Instance.ReportTaps(Sphere.GetTotalTaps());
+            PlatformManager.Instance.ReportRuns(Sphere.GetTotalRuns());
         }
 
         return rank <= MAX_SCORES ? rank : 0;
@@ -2113,8 +2322,7 @@ public class ScoreSync : MonoBehaviour
             glitchBurstDuration = Random.Range(GLITCH_MIN_DURATION, GLITCH_MAX_DURATION);
             glitchIntensity = Random.Range(0.5f, 1.0f);
             glitchSeed = Random.Range(0f, 1000f);
-            GameAudio audio = FindAnyObjectByType<GameAudio>();
-            if (audio != null) audio.PlayGlitch();
+            if (mAudio != null) mAudio.PlayGlitch();
         }
         else if (state != State.Splash && stateTimer > 1.5f)
         {
@@ -2127,8 +2335,7 @@ public class ScoreSync : MonoBehaviour
                 glitchIntensity = Random.Range(0.3f, 1.0f);
                 glitchSeed = Random.Range(0f, 1000f);
                 glitchTimer = Random.Range(GLITCH_MIN_INTERVAL, GLITCH_MAX_INTERVAL);
-                GameAudio audio = FindAnyObjectByType<GameAudio>();
-                if (audio != null) audio.PlayGlitch();
+                if (mAudio != null) mAudio.PlayGlitch();
             }
         }
     }

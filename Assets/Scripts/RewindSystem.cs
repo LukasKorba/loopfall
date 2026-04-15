@@ -97,6 +97,7 @@ public class RewindSystem : MonoBehaviour
     private bool newPhaseStarted;
     private MaterialPropertyBlock gatePropBlock;
     private static readonly int SpawnProgressID = Shader.PropertyToID("_SpawnProgress");
+    private GameAudio mAudio;
 
     public void Initialize(Transform ball, Rigidbody ballRb,
                            Torus torus, Transform torusTrans,
@@ -111,6 +112,7 @@ public class RewindSystem : MonoBehaviour
         cameraTransform = camTransform;
         cameraStartPos = camStartPos;
         cameraStartRot = camStartRot;
+        mAudio = FindAnyObjectByType<GameAudio>();
     }
 
     public void StartRecording()
@@ -762,8 +764,7 @@ public class RewindSystem : MonoBehaviour
         // Hide everything else immediately.
         if (gatePropBlock == null) gatePropBlock = new MaterialPropertyBlock();
 
-        GameAudio audio = FindAnyObjectByType<GameAudio>();
-        if (audio != null) audio.PlayGateDissolve();
+        if (mAudio != null) mAudio.PlayGateDissolve();
 
         oldAnims = new List<ObstacleAnim>();
         List<Obstacle> obstacles = torusScript.GetObstacleList();
@@ -846,8 +847,7 @@ public class RewindSystem : MonoBehaviour
                 }
                 newPhaseStarted = true;
 
-                GameAudio audio = FindAnyObjectByType<GameAudio>();
-                if (audio != null) audio.PlayGateSpawn();
+                if (mAudio != null) mAudio.PlayGateSpawn();
             }
         }
 

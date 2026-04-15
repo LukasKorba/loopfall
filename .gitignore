@@ -26,3 +26,6 @@ Thumbs.db
 *.aab
 *.unitypackage
 *.app
+
+# Steam (dev only — must NOT ship in builds)
+steam_appid.txt

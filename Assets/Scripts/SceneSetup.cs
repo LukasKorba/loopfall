@@ -21,6 +21,7 @@ public class SceneSetup : MonoBehaviour
     public Shader gateShaderRef;
     public Shader blackHoleWarpRef;
     public Shader trackItemShaderRef;
+    public Shader obstacleShadowShaderRef;
 
     void Awake()
     {
@@ -40,7 +41,8 @@ public class SceneSetup : MonoBehaviour
         CreateRewindSystem();
         CreateAudio();
         CreateFrenzyTimer();
-        CreateGameCenter();
+        CreatePlatformServices();
+        CreateDisplaySettings();
 #if UNITY_EDITOR
         CreateDebugPanel();
 #endif
@@ -106,28 +108,23 @@ public class SceneSetup : MonoBehaviour
         obstacleTopMaterial.SetColor("_EmissionColor", new Color(1.0f, 0.55f, 0.1f));
         obstacleTopMaterial.SetFloat("_EmissionIntensity", 1.0f);
 
-        // Obstacle shadow: double-sided, dark strip on track surface
-        obstacleShadowMaterial = new Material(Shader.Find("Standard"));
-        obstacleShadowMaterial.SetFloat("_Mode", 3);
-        obstacleShadowMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        obstacleShadowMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        obstacleShadowMaterial.SetInt("_ZWrite", 0);
-        obstacleShadowMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-        obstacleShadowMaterial.DisableKeyword("_ALPHATEST_ON");
-        obstacleShadowMaterial.EnableKeyword("_ALPHABLEND_ON");
-        obstacleShadowMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        obstacleShadowMaterial.renderQueue = 3100;
-        obstacleShadowMaterial.SetFloat("_Glossiness", 0.0f);
-        obstacleShadowMaterial.SetFloat("_Metallic", 0.0f);
-        obstacleShadowMaterial.color = new Color(0, 0, 0, 0.85f);
+        // Obstacle shadow: double-sided transparent dark strip — custom shader (no Standard on iOS)
+        Shader shadowShader = obstacleShadowShaderRef != null
+            ? obstacleShadowShaderRef
+            : Shader.Find("Loopfall/ObstacleShadow");
+        obstacleShadowMaterial = new Material(shadowShader);
+        obstacleShadowMaterial.SetColor("_Color", new Color(0, 0, 0, 0.85f));
 
-        // Ball: bright with metallic sheen — visible against dark track
-        ballMaterial = new Material(Shader.Find("Standard"));
-        ballMaterial.color = new Color(0.95f, 0.95f, 1.0f);
-        ballMaterial.SetFloat("_Glossiness", 0.9f);
-        ballMaterial.SetFloat("_Metallic", 0.2f);
-        ballMaterial.EnableKeyword("_EMISSION");
-        ballMaterial.SetColor("_EmissionColor", new Color(0.4f, 0.4f, 0.5f));
+        // Ball: neon-rimmed sphere — fresnel glow matches the tunnel aesthetic
+        Shader ballShader = Shader.Find("Loopfall/Ball");
+        ballMaterial = new Material(ballShader);
+        ballMaterial.SetColor("_Color", new Color(0.9f, 0.92f, 1.0f));
+        ballMaterial.SetColor("_RimColor", new Color(0.0f, 0.75f, 1.0f));
+        ballMaterial.SetFloat("_RimPower", 2.5f);
+        ballMaterial.SetFloat("_RimStrength", 1.2f);
+        ballMaterial.SetFloat("_Glossiness", 0.85f);
+        ballMaterial.SetFloat("_Metallic", 0.3f);
+        ballMaterial.SetColor("_EmissionBase", new Color(0.15f, 0.15f, 0.2f));
 
         // Rail: glowing red edge, double-sided so visible from inside torus
         // Edge rails: distance-fading opaque tubes
@@ -525,10 +522,34 @@ public class SceneSetup : MonoBehaviour
         sphereScript.mFrenzyTimer = timer;
     }
 
-    void CreateGameCenter()
+    void CreatePlatformServices()
     {
+        // PlatformManager — routes to the active platform service
+        GameObject pmObj = new GameObject("PlatformManager");
+        PlatformManager pm = pmObj.AddComponent<PlatformManager>();
+
+#if STEAMWORKS
+        // Steam builds: SteamManager + SteamService
+        GameObject steamObj = new GameObject("SteamManager");
+        steamObj.AddComponent<SteamManager>();
+
+        GameObject steamSvcObj = new GameObject("SteamService");
+        SteamService steamSvc = steamSvcObj.AddComponent<SteamService>();
+        pm.SetService(steamSvc);
+#else
+        // Apple builds (iOS, tvOS, macOS App Store): GameCenter
         GameObject gcObj = new GameObject("GameCenterManager");
-        gcObj.AddComponent<GameCenterManager>();
+        GameCenterManager gc = gcObj.AddComponent<GameCenterManager>();
+        pm.SetService(gc);
+#endif
+    }
+
+    void CreateDisplaySettings()
+    {
+#if UNITY_STANDALONE
+        GameObject dsObj = new GameObject("DisplaySettings");
+        dsObj.AddComponent<DisplaySettings>();
+#endif
     }
 
 #if UNITY_EDITOR

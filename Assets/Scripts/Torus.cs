@@ -145,6 +145,10 @@ public class Torus : MonoBehaviour
                     {
                         mPendingSwingTier = 1;
                         mSwingCooldown = SWING_COOLDOWN;
+
+                        // Track swing for achievement
+                        if (SteamService.Instance != null)
+                            SteamService.Instance.OnSwingDetected();
                     }
                 }
                 else

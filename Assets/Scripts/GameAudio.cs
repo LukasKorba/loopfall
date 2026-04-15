@@ -26,19 +26,27 @@ public class GameAudio : MonoBehaviour
     private Sphere mSphere;
     private RewindSystem mRewind;
 
-    // ── MUSIC ────────────────────────────────────────────────
+    // ── MUSIC (double-buffered crossfade) ─────────────────
     private bool externalMusicPlaying = false;
-    private AudioSource musicSource;
+    private AudioSource musicSourceA;
+    private AudioSource musicSourceB;
+    private AudioSource activeMusicSource;   // Currently audible
+    private AudioSource standbyMusicSource;  // Pre-loaded, waiting
     private AudioClip[] musicClips;
     private int lastMusicIndex = -1;
     private const float MUSIC_VOLUME = 0.2f;
+    private const float CROSSFADE_DURATION = 2.5f;
+    private const float CROSSFADE_LEAD = 3.5f; // Start crossfade this many seconds before track ends
+    private bool crossfading = false;
+    private float crossfadeTimer = 0f;
+    private bool standbyReady = false;
 
     // ── SFX ──────────────────────────────────────────────────
     private AudioSource sfxSource;
     private AudioSource tapSource; // Dedicated so taps never get dropped
-    private AudioClip gameOverClip;
+    private AudioClip[] gameOverClips;
     private AudioClip glitchClip;
-    private AudioClip tapClip;
+    private AudioClip[] tapClips;
     private AudioClip countClip;
     private AudioClip gateClip;
     private AudioClip newBestClip;
@@ -48,7 +56,7 @@ public class GameAudio : MonoBehaviour
 
     // ── REWIND SOUND ─────────────────────────────────────────
     private AudioSource rewindSource;
-    private AudioClip rewindClip;
+    private AudioClip[] rewindClips;
     private bool rewindPlaying = false;
     private float rewindFadeVel = 0f;
     private const float REWIND_VOLUME = 0.5f;
@@ -56,7 +64,7 @@ public class GameAudio : MonoBehaviour
 
     // ── ROLLING SOUND ────────────────────────────────────────
     private AudioSource rollSource;
-    private AudioClip rollClip;
+    private AudioClip[] rollClips;
     private float rollSmoothVel = 0f;  // For SmoothDamp
     private const float ROLL_MIN_VOLUME = 0.02f;
     private const float ROLL_MAX_VOLUME = 0.45f;
@@ -77,12 +85,18 @@ public class GameAudio : MonoBehaviour
 
     void Awake()
     {
-        // Music source — plays one track at a time, picks next when done
-        musicSource = gameObject.AddComponent<AudioSource>();
-        musicSource.playOnAwake = false;
-        musicSource.spatialBlend = 0f;
-        musicSource.loop = false;
-        musicSource.volume = MUSIC_VOLUME;
+        // Music sources — double-buffered for lag-free crossfade
+        musicSourceA = gameObject.AddComponent<AudioSource>();
+        musicSourceA.playOnAwake = false;
+        musicSourceA.spatialBlend = 0f;
+        musicSourceA.loop = false;
+        musicSourceA.volume = MUSIC_VOLUME;
+
+        musicSourceB = gameObject.AddComponent<AudioSource>();
+        musicSourceB.playOnAwake = false;
+        musicSourceB.spatialBlend = 0f;
+        musicSourceB.loop = false;
+        musicSourceB.volume = 0f;
 
         // SFX source — one-shots
         sfxSource = gameObject.AddComponent<AudioSource>();
@@ -141,10 +155,11 @@ public class GameAudio : MonoBehaviour
         if (!externalMusicPlaying)
             PlayNextTrack();
 
-        // Start rolling loop (silent until ball moves)
-        if (rollClip != null)
+        // Start rolling loop (silent until ball moves) — pick a random variant
+        AudioClip roll = PickRandom(rollClips);
+        if (roll != null)
         {
-            rollSource.clip = rollClip;
+            rollSource.clip = roll;
             rollSource.Play();
         }
     }
@@ -157,24 +172,41 @@ public class GameAudio : MonoBehaviour
 
     void LoadSfx()
     {
-        gameOverClip = Resources.Load<AudioClip>("Audio/sfx_gameover");
-        rollClip = Resources.Load<AudioClip>("Audio/sfx_roll");
-        rewindClip = Resources.Load<AudioClip>("Audio/sfx_rewind");
+        gameOverClips = LoadVariants("Audio/sfx_gameover", "Audio/sfx_gameover2");
+        rollClips = LoadVariants("Audio/sfx_roll", "Audio/sfx_roll2", "Audio/sfx_roll3");
+        rewindClips = LoadVariants("Audio/sfx_rewind", "Audio/sfx_rewind2", "Audio/sfx_rewind3");
+        tapClips = LoadVariants("Audio/sfx_tap", "Audio/sfx_tap3");
         glitchClip = Resources.Load<AudioClip>("Audio/sfx_glitch");
-        tapClip = Resources.Load<AudioClip>("Audio/sfx_tap");
         countClip = Resources.Load<AudioClip>("Audio/sfx_count");
         gateClip = Resources.Load<AudioClip>("Audio/sfx_gate");
         newBestClip = Resources.Load<AudioClip>("Audio/sfx_newbest");
         top5Clip = Resources.Load<AudioClip>("Audio/sfx_top5");
         gateDissolveClip = Resources.Load<AudioClip>("Audio/sfx_gate_dissolve");
         gateSpawnClip = Resources.Load<AudioClip>("Audio/sfx_gate_spawn");
-        Debug.Log($"[GameAudio] Loaded: gameOver={gameOverClip != null} roll={rollClip != null} tier1={swingTier1Clips.Length} tier2={swingTier2Clips.Length}");
+        Debug.Log($"[GameAudio] Loaded: gameOver={gameOverClips.Length} roll={rollClips.Length} rewind={rewindClips.Length} tap={tapClips.Length} tier1={swingTier1Clips.Length} tier2={swingTier2Clips.Length}");
+    }
+
+    AudioClip[] LoadVariants(params string[] paths)
+    {
+        var clips = new System.Collections.Generic.List<AudioClip>();
+        for (int i = 0; i < paths.Length; i++)
+        {
+            AudioClip clip = Resources.Load<AudioClip>(paths[i]);
+            if (clip != null) clips.Add(clip);
+        }
+        return clips.ToArray();
+    }
+
+    AudioClip PickRandom(AudioClip[] clips)
+    {
+        if (clips == null || clips.Length == 0) return null;
+        return clips[Random.Range(0, clips.Length)];
     }
 
     void LoadSwingClips()
     {
         swingTier1Clips = LoadNumberedClips("Audio/swing_tier1_", 10);
-        swingTier2Clips = LoadNumberedClips("Audio/swing_tier2_", 10);
+        swingTier2Clips = LoadNumberedClips("Audio/swing_tier2_", 20);
     }
 
     AudioClip[] LoadNumberedClips(string prefix, int maxCount, int startAt = 0)
@@ -209,41 +241,116 @@ public class GameAudio : MonoBehaviour
 
         UpdateRollingSound();
         UpdateRewindSound();
-
-        // Music loops — no track switching mid-game
+        UpdateMusicCrossfade();
     }
 
     void PlayNextTrack()
     {
         if (musicClips == null || musicClips.Length == 0) return;
 
-        int index;
-        if (musicClips.Length == 1)
+        int index = PickNextMusicIndex();
+        lastMusicIndex = index;
+
+        if (activeMusicSource == null)
         {
-            index = 0;
-        }
-        else
-        {
-            do { index = Random.Range(0, musicClips.Length); }
-            while (index == lastMusicIndex);
+            // First play — bootstrap A as active, B as standby
+            activeMusicSource = musicSourceA;
+            standbyMusicSource = musicSourceB;
         }
 
-        lastMusicIndex = index;
-        musicSource.clip = musicClips[index];
-        musicSource.loop = true;
-        musicSource.Play();
+        activeMusicSource.clip = musicClips[index];
+        activeMusicSource.volume = MUSIC_VOLUME;
+        activeMusicSource.loop = (musicClips.Length == 1); // Loop only if single track
+        activeMusicSource.Play();
+
+        crossfading = false;
+        standbyReady = false;
+
+        // Pre-load the next track onto standby immediately
+        if (musicClips.Length > 1)
+            PrepareStandby();
+    }
+
+    int PickNextMusicIndex()
+    {
+        if (musicClips.Length == 1) return 0;
+        int index;
+        do { index = Random.Range(0, musicClips.Length); }
+        while (index == lastMusicIndex);
+        return index;
+    }
+
+    void PrepareStandby()
+    {
+        if (musicClips == null || musicClips.Length <= 1) { standbyReady = false; return; }
+
+        int nextIndex = PickNextMusicIndex();
+        // Assign clip now — Unity decompresses lazily over subsequent frames,
+        // so by the time we need it (minutes later) there's zero spike.
+        standbyMusicSource.clip = musicClips[nextIndex];
+        standbyMusicSource.volume = 0f;
+        standbyReady = true;
+    }
+
+    void UpdateMusicCrossfade()
+    {
+        if (externalMusicPlaying || activeMusicSource == null || !activeMusicSource.isPlaying) return;
+        if (musicClips == null || musicClips.Length <= 1) return;
+
+        AudioClip activeClip = activeMusicSource.clip;
+        if (activeClip == null) return;
+
+        float remaining = activeClip.length - activeMusicSource.time;
+
+        // Start crossfade when approaching end
+        if (!crossfading && standbyReady && remaining <= CROSSFADE_LEAD)
+        {
+            crossfading = true;
+            crossfadeTimer = 0f;
+
+            // Remember which index we're about to play
+            lastMusicIndex = System.Array.IndexOf(musicClips, standbyMusicSource.clip);
+
+            standbyMusicSource.volume = 0f;
+            standbyMusicSource.Play();
+        }
+
+        if (crossfading)
+        {
+            crossfadeTimer += Time.deltaTime;
+            float t = Mathf.Clamp01(crossfadeTimer / CROSSFADE_DURATION);
+            float eased = t * t * (3f - 2f * t); // smoothstep
+
+            activeMusicSource.volume = MUSIC_VOLUME * (1f - eased);
+            standbyMusicSource.volume = MUSIC_VOLUME * eased;
+
+            if (t >= 1f)
+            {
+                // Swap roles
+                activeMusicSource.Stop();
+                AudioSource temp = activeMusicSource;
+                activeMusicSource = standbyMusicSource;
+                standbyMusicSource = temp;
+
+                crossfading = false;
+                standbyReady = false;
+
+                // Pre-load the next track onto the now-idle standby
+                PrepareStandby();
+            }
+        }
     }
 
     void UpdateRewindSound()
     {
-        if (rewindSource == null || rewindClip == null || mRewind == null) return;
+        if (rewindSource == null || rewindClips == null || rewindClips.Length == 0 || mRewind == null) return;
 
         bool rewinding = mRewind.IsRewinding();
 
         if (rewinding && !rewindPlaying)
         {
-            // Play once from the start, full volume
-            rewindSource.clip = rewindClip;
+            // Play once from the start, full volume — pick a random variant
+            rewindSource.clip = PickRandom(rewindClips);
             rewindSource.volume = REWIND_VOLUME;
             rewindSource.pitch = 1f;
             rewindSource.Play();
@@ -269,7 +376,7 @@ public class GameAudio : MonoBehaviour
 
     void UpdateRollingSound()
     {
-        if (rollSource == null || rollClip == null || mBallRb == null) return;
+        if (rollSource == null || rollClips == null || rollClips.Length == 0 || mBallRb == null) return;
 
         // Silent when not playing (waiting, dead, rewinding)
         bool active = mSphere != null && !mSphere.IsWaiting() && !mSphere.IsGameOver() && !mSphere.IsRewinding();
@@ -292,8 +399,9 @@ public class GameAudio : MonoBehaviour
 
     public void PlayGameOver()
     {
-        if (gameOverClip != null)
-            sfxSource.PlayOneShot(gameOverClip);
+        AudioClip clip = PickRandom(gameOverClips);
+        if (clip != null)
+            sfxSource.PlayOneShot(clip);
     }
 
     public void PlayGlitch()
@@ -304,8 +412,9 @@ public class GameAudio : MonoBehaviour
 
     public void PlayTap()
     {
-        if (tapClip != null)
-            tapSource.PlayOneShot(tapClip);
+        AudioClip clip = PickRandom(tapClips);
+        if (clip != null)
+            tapSource.PlayOneShot(clip);
     }
 
     public void PlayCount()
@@ -404,12 +513,13 @@ public class GameAudio : MonoBehaviour
         SetSoundMuted(muteS);
     }
 
-    public bool IsMusicMuted() { return musicSource != null && musicSource.mute; }
+    public bool IsMusicMuted() { return musicSourceA != null && musicSourceA.mute; }
     public bool IsSoundMuted() { return sfxSource != null && sfxSource.mute; }
 
     public void SetMusicMuted(bool muted)
     {
-        if (musicSource != null) musicSource.mute = muted;
+        if (musicSourceA != null) musicSourceA.mute = muted;
+        if (musicSourceB != null) musicSourceB.mute = muted;
         PlayerPrefs.SetInt(PREF_MUSIC, muted ? 1 : 0);
         PlayerPrefs.Save();
     }
@@ -434,7 +544,8 @@ public class GameAudio : MonoBehaviour
         if (music != dbgMuteMusic)
         {
             dbgMuteMusic = music;
-            if (musicSource != null) musicSource.mute = music;
+            if (musicSourceA != null) musicSourceA.mute = music;
+            if (musicSourceB != null) musicSourceB.mute = music;
         }
         if (sfx != dbgMuteSfx)
         {

@@ -58,8 +58,8 @@ public class DebugPanel : MonoBehaviour
         if (mRewind != null)
             rewindState = mRewind.GetStateName();
 
-        if (GameCenterManager.Instance != null)
-            gameCenterAuth = GameCenterManager.Instance.IsAuthenticated();
+        if (PlatformManager.Instance != null)
+            gameCenterAuth = PlatformManager.Instance.IsAuthenticated();
 
         totalTaps = Sphere.GetTotalTaps();
         totalRuns = Sphere.GetTotalRuns();
