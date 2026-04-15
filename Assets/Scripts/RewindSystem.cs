@@ -113,6 +113,19 @@ public class RewindSystem : MonoBehaviour
         cameraStartPos = camStartPos;
         cameraStartRot = camStartRot;
         mAudio = FindAnyObjectByType<GameAudio>();
+
+        // Trail colors from active theme
+        ThemeData t = SceneSetup.activeTheme;
+        if (t != null)
+        {
+            TRAIL_COLOR_NEAR = t.trailColorNear;
+            TRAIL_COLOR_FAR  = t.trailColorFar;
+        }
+        else
+        {
+            TRAIL_COLOR_NEAR = new Color(0.2f, 0.85f, 1.0f, 0.9f);
+            TRAIL_COLOR_FAR  = new Color(0.1f, 0.25f, 0.6f, 0.15f);
+        }
     }
 
     public void StartRecording()
@@ -325,8 +338,8 @@ public class RewindSystem : MonoBehaviour
     // 240° behind + 120° ahead = 360° = exactly one lap, no physical overlap.
     // Trail color ramp: bright near ball → dim far away.
     // Each segment gets a uniform tint based on its distance from the view angle.
-    private static readonly Color TRAIL_COLOR_NEAR = new Color(0.2f, 0.85f, 1.0f, 0.9f);   // Bright cyan near ball
-    private static readonly Color TRAIL_COLOR_FAR  = new Color(0.1f, 0.25f, 0.6f, 0.15f); // Fades to deep blue
+    private Color TRAIL_COLOR_NEAR;
+    private Color TRAIL_COLOR_FAR;
 
     void UpdateSegmentVisibility(float viewAngle, float aheadMargin = 5f)
     {

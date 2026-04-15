@@ -53,6 +53,10 @@ public class ThemeData
     public Color starAccent4; // Matches right rail
     public Color starBase;    // Default white-ish
 
+    // Ball trail
+    public Color trailColorNear;  // Bright, close to ball
+    public Color trailColorFar;   // Dim, fading out behind
+
     // Camera background
     public Color cameraBg;
 
@@ -96,6 +100,8 @@ public class ThemeData
         starAccent3 = new Color(0.9f, 0.3f, 0.6f),
         starAccent4 = new Color(0.3f, 0.9f, 0.5f),
         starBase    = new Color(0.6f, 0.7f, 0.95f),
+        trailColorNear = new Color(0.2f, 0.85f, 1.0f, 0.9f),
+        trailColorFar  = new Color(0.1f, 0.25f, 0.6f, 0.15f),
         cameraBg = new Color(0.05f, 0.05f, 0.08f),
     };
 
@@ -137,6 +143,8 @@ public class ThemeData
         starAccent3 = new Color(1.0f, 0.3f, 0.1f),
         starAccent4 = new Color(1.0f, 0.85f, 0.4f),
         starBase    = new Color(0.95f, 0.8f, 0.6f),
+        trailColorNear = new Color(1.0f, 0.6f, 0.1f, 0.9f),
+        trailColorFar  = new Color(0.4f, 0.12f, 0.02f, 0.15f),
         cameraBg = new Color(0.06f, 0.03f, 0.02f),
     };
 
@@ -178,6 +186,8 @@ public class ThemeData
         starAccent3 = new Color(0.2f, 0.85f, 0.4f),
         starAccent4 = new Color(0.0f, 0.7f, 0.8f),
         starBase    = new Color(0.5f, 0.75f, 0.8f),
+        trailColorNear = new Color(0.1f, 0.85f, 0.7f, 0.9f),
+        trailColorFar  = new Color(0.02f, 0.2f, 0.35f, 0.15f),
         cameraBg = new Color(0.02f, 0.04f, 0.07f),
     };
 
@@ -219,6 +229,8 @@ public class ThemeData
         starAccent3 = new Color(1.0f, 0.55f, 0.2f),
         starAccent4 = new Color(1.0f, 0.2f, 0.45f),
         starBase    = new Color(0.8f, 0.6f, 0.95f),
+        trailColorNear = new Color(1.0f, 0.2f, 0.65f, 0.9f),
+        trailColorFar  = new Color(0.3f, 0.02f, 0.2f, 0.15f),
         cameraBg = new Color(0.05f, 0.02f, 0.08f),
     };
 
@@ -260,6 +272,8 @@ public class ThemeData
         starAccent3 = new Color(0.3f, 0.95f, 0.7f),
         starAccent4 = new Color(0.85f, 0.9f, 1.0f),
         starBase    = new Color(0.7f, 0.8f, 1.0f),
+        trailColorNear = new Color(0.45f, 0.8f, 1.0f, 0.9f),
+        trailColorFar  = new Color(0.08f, 0.2f, 0.4f, 0.15f),
         cameraBg = new Color(0.04f, 0.05f, 0.08f),
     };
 
@@ -301,6 +315,8 @@ public class ThemeData
         starAccent3 = new Color(0.1f, 0.7f, 0.15f),
         starAccent4 = new Color(0.2f, 0.9f, 0.35f),
         starBase    = new Color(0.3f, 0.7f, 0.35f),
+        trailColorNear = new Color(0.1f, 1.0f, 0.3f, 0.9f),
+        trailColorFar  = new Color(0.02f, 0.2f, 0.06f, 0.15f),
         cameraBg = new Color(0.02f, 0.02f, 0.02f),
     };
 
@@ -342,6 +358,8 @@ public class ThemeData
         starAccent3 = new Color(0.95f, 0.85f, 0.7f),
         starAccent4 = new Color(0.8f, 0.15f, 0.2f),
         starBase    = new Color(0.85f, 0.65f, 0.6f),
+        trailColorNear = new Color(0.95f, 0.15f, 0.2f, 0.9f),
+        trailColorFar  = new Color(0.3f, 0.04f, 0.05f, 0.15f),
         cameraBg = new Color(0.05f, 0.02f, 0.02f),
     };
 
@@ -383,6 +401,8 @@ public class ThemeData
         starAccent3 = new Color(0.8f, 0.55f, 0.15f),
         starAccent4 = new Color(0.75f, 0.8f, 0.55f),
         starBase    = new Color(0.85f, 0.78f, 0.6f),
+        trailColorNear = new Color(1.0f, 0.82f, 0.25f, 0.9f),
+        trailColorFar  = new Color(0.3f, 0.2f, 0.04f, 0.15f),
         cameraBg = new Color(0.05f, 0.04f, 0.02f),
     };
 
