@@ -38,6 +38,9 @@ public class Sphere : MonoBehaviour
     // Time Warp
     public FrenzyTimer mFrenzyTimer;
 
+    // Spline track (optional — null when using classic torus)
+    public SplineGameController mSplineController;
+
     // Cached references
     private ScoreSync mScoreSync;
     private GameAudio mAudio;
@@ -106,7 +109,7 @@ public class Sphere : MonoBehaviour
             if (remoteTap != 0)
             {
                 StartGame();
-                ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+                ApplyForceWithForwardVector(GetForwardVector(remoteTap < 0 ? 1f : -1f));
             }
             else
 #endif
@@ -115,41 +118,41 @@ public class Sphere : MonoBehaviour
                 if (padTap != 0)
                 {
                     StartGame();
-                    ApplyForceWithForwardVector(new Vector3(padTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(padTap < 0 ? 1f : -1f));
                 }
 #if !UNITY_TVOS
                 else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
                 {
                     StartGame();
-                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(1f));
                 }
                 else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
                 {
                     StartGame();
-                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(-1f));
                 }
                 else if (Input.anyKeyDown && !Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1))
                 {
                     // Truly any key — random direction
                     StartGame();
-                    float dir = Random.value < 0.5f ? 1.0f : -1.0f;
-                    ApplyForceWithForwardVector(new Vector3(dir, 0.0f, 0.0f));
+                    float dir = Random.value < 0.5f ? 1f : -1f;
+                    ApplyForceWithForwardVector(GetForwardVector(dir));
                 }
                 else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
                 {
                     StartGame();
                     if (Input.mousePosition.x < Screen.width * 0.5f)
-                        ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                        ApplyForceWithForwardVector(GetForwardVector(1f));
                     else
-                        ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                        ApplyForceWithForwardVector(GetForwardVector(-1f));
                 }
                 else if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
                 {
                     StartGame();
                     if (Input.touches[0].position.x < Screen.width * 0.5f)
-                        ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                        ApplyForceWithForwardVector(GetForwardVector(1f));
                     else
-                        ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                        ApplyForceWithForwardVector(GetForwardVector(-1f));
                 }
 #endif
             }
@@ -187,37 +190,37 @@ public class Sphere : MonoBehaviour
 #if UNITY_TVOS
             int remoteTap = GetRemoteTap();
             if (remoteTap != 0)
-                ApplyForceWithForwardVector(new Vector3(remoteTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+                ApplyForceWithForwardVector(GetForwardVector(remoteTap < 0 ? 1f : -1f));
 #else
             // Keyboard: A/Left = left, D/Right = right
             if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
-                ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                ApplyForceWithForwardVector(GetForwardVector(1f));
             if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
-                ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                ApplyForceWithForwardVector(GetForwardVector(-1f));
 
             // Mouse: left half = left, right half = right (desktop only)
             if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
             {
                 if (Input.mousePosition.x < Screen.width * 0.5f)
-                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(1f));
                 else
-                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(-1f));
             }
 
             // Touch: left half = left, right half = right
             if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
             {
                 if (Input.touches[0].position.x < Screen.width * 0.5f)
-                    ApplyForceWithForwardVector(new Vector3(1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(1f));
                 else
-                    ApplyForceWithForwardVector(new Vector3(-1.0f, 0.0f, 0.0f));
+                    ApplyForceWithForwardVector(GetForwardVector(-1f));
             }
 #endif
 
             // MFi gamepad (all platforms)
             int padTap = GetGamepadTap();
             if (padTap != 0)
-                ApplyForceWithForwardVector(new Vector3(padTap < 0 ? 1.0f : -1.0f, 0.0f, 0.0f));
+                ApplyForceWithForwardVector(GetForwardVector(padTap < 0 ? 1f : -1f));
         }
 
         // Camera diff (swing effect) — only while alive
@@ -295,6 +298,18 @@ public class Sphere : MonoBehaviour
         if (h < 0.1f) mPadRightFired = false;
 
         return 0;
+    }
+
+    /// <summary>
+    /// Get the forward vector for force calculation.
+    /// Torus mode: hardcoded ±X. Spline mode: spline tangent direction.
+    /// Sign: +1 = left tap, -1 = right tap.
+    /// </summary>
+    Vector3 GetForwardVector(float sign)
+    {
+        if (mSplineController != null)
+            return mSplineController.GetBallForwardDirection() * sign;
+        return new Vector3(sign, 0f, 0f);
     }
 
     void ApplyForceWithForwardVector(Vector3 forward)
