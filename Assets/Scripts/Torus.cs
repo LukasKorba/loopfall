@@ -189,6 +189,7 @@ public class Torus : MonoBehaviour
                     Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
                     Shader.SetGlobalVector("_ScorePulsePos", mBallTransform.position);
                 }
+
             }
 
             // Haptic feedback — heavier on milestones

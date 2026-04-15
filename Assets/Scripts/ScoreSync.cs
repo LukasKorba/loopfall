@@ -72,9 +72,9 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text bestScoreText;
     private Image bestScoreLine;
     private Button titleLBBtn;
-    private RawImage titleLBIcon;
+    private CanvasGroup titleLBIcon;
     private Button titleSettingsBtn;
-    private RawImage titleSettingsIcon;
+    private CanvasGroup titleSettingsIcon;
     private TMP_Text titleTapText;
     private TMP_Text titleHintText;
     private Button titlePureHellBtn;
@@ -115,9 +115,9 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text[] goLeaderboardTexts;
     private const int LEADERBOARD_SHOW = 5;
     private Button goSettingsBtn;
-    private RawImage goSettingsIcon;
+    private CanvasGroup goSettingsIcon;
     private Button goLBBtn;
-    private RawImage goLBIcon;
+    private CanvasGroup goLBIcon;
     private RectTransform[] goCornerBrackets;
     private Image goScoreDivider;
 
@@ -128,15 +128,23 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text settingsFullscreenLabel;
     private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
-    private Texture2D trophyTex;
-    private Texture2D cogTex;
-    private Texture2D quitTex;
-
     // ── QUIT BUTTON (macOS only) ────────────────────────────
     private Button titleQuitBtn;
-    private RawImage titleQuitIcon;
+    private CanvasGroup titleQuitIcon;
     private Button goQuitBtn;
-    private RawImage goQuitIcon;
+    private CanvasGroup goQuitIcon;
+
+    // ── STATS PANEL ─────────────────────────────────────────
+    private RectTransform statsPanel;
+    private Button titleStatsBtn;
+    private CanvasGroup titleStatsIcon;
+    private Button goStatsBtn;
+    private CanvasGroup goStatsIcon;
+    private TMP_Text statsRunsLabel;
+    private TMP_Text statsTapsLabel;
+    private TMP_Text statsBestLabel;
+    private TMP_Text statsAvgLabel;
+    private TMP_Text statsGatesLabel;
 
     // ── TITLE FADE ───────────────────────────────────────────
     private CanvasGroup titleCanvasGroup;
@@ -183,8 +191,9 @@ public class ScoreSync : MonoBehaviour
 
     void Start()
     {
-        // REMOVE! Can't go to the production!!!
+#if UNITY_EDITOR
         PlayerPrefs.DeleteKey("HasPlayed");
+#endif
         LoadScores();
         defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
         circleSprite = CreateCircleSprite(32);
@@ -422,11 +431,6 @@ public class ScoreSync : MonoBehaviour
         // CRT scanlines — retro horizontal bands
         scanlinesImage = CreateScanlines(canvasObj.transform);
 
-        // Procedural icon textures for buttons (256px for crisp rendering)
-        trophyTex = GenerateTrophyIcon(256);
-        cogTex = GenerateCogIcon(256);
-        quitTex = GenerateQuitIcon(256);
-
         BuildSplashGroup(canvasObj.transform);
         BuildTitleGroup(canvasObj.transform);
         BuildPlayingGroup(canvasObj.transform);
@@ -651,16 +655,21 @@ public class ScoreSync : MonoBehaviour
         // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
         CreateDockStrip(titleGroup, "TitleDockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-265, -140), new Vector2(330, 100));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
 
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
-            trophyTex, out titleLBIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
+            "star", NEON_GOLD, out titleLBIcon);
         titleLBBtn.onClick.AddListener(OnLeaderboardTap);
 
+        titleStatsBtn = CreateIconButton(titleGroup, "TitleStatsBtn",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
+            "bars", NEON_CYAN, out titleStatsIcon);
+        titleStatsBtn.onClick.AddListener(OnStatsTap);
+
         titleSettingsBtn = CreateIconButton(titleGroup, "TitleSettingsBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-170, -140), new Vector2(140, 140),
-            cogTex, out titleSettingsIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
+            "gear", DIM_TEXT, out titleSettingsIcon);
         titleSettingsBtn.onClick.AddListener(OnSettingsTap);
 #endif
 
@@ -669,8 +678,8 @@ public class ScoreSync : MonoBehaviour
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
 
         titleQuitBtn = CreateIconButton(titleGroup, "TitleQuitBtn",
-            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
-            quitTex, out titleQuitIcon);
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(120, 120),
+            "power", DIM_TEXT, out titleQuitIcon);
         titleQuitBtn.onClick.AddListener(OnQuitTap);
 #endif
 
@@ -785,16 +794,21 @@ public class ScoreSync : MonoBehaviour
         // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
         CreateDockStrip(gameOverGroup, "GODockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-265, -140), new Vector2(330, 100));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
 
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(140, 140),
-            trophyTex, out goLBIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
+            "star", NEON_GOLD, out goLBIcon);
         goLBBtn.onClick.AddListener(OnLeaderboardTap);
 
+        goStatsBtn = CreateIconButton(gameOverGroup, "GOStatsBtn",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
+            "bars", NEON_CYAN, out goStatsIcon);
+        goStatsBtn.onClick.AddListener(OnStatsTap);
+
         goSettingsBtn = CreateIconButton(gameOverGroup, "GOSettingsBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-170, -140), new Vector2(140, 140),
-            cogTex, out goSettingsIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
+            "gear", DIM_TEXT, out goSettingsIcon);
         goSettingsBtn.onClick.AddListener(OnSettingsTap);
 #endif
 
@@ -803,8 +817,8 @@ public class ScoreSync : MonoBehaviour
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
 
         goQuitBtn = CreateIconButton(gameOverGroup, "GOQuitBtn",
-            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(140, 140),
-            quitTex, out goQuitIcon);
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(120, 120),
+            "power", DIM_TEXT, out goQuitIcon);
         goQuitBtn.onClick.AddListener(OnQuitTap);
 #endif
 
@@ -1241,9 +1255,10 @@ public class ScoreSync : MonoBehaviour
 
         // Icon buttons — fade in with best score
         float lbFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
-        SetIconAlpha(titleLBIcon, lbFade * 0.75f);
-        SetIconAlpha(titleSettingsIcon, lbFade * 0.75f);
-        SetIconAlpha(titleQuitIcon, lbFade * 0.75f);
+        SetGlyphAlpha(titleLBIcon, lbFade * 0.75f);
+        SetGlyphAlpha(titleStatsIcon, lbFade * 0.75f);
+        SetGlyphAlpha(titleSettingsIcon, lbFade * 0.75f);
+        SetGlyphAlpha(titleQuitIcon, lbFade * 0.75f);
     }
 
     void AnimateTitleCharacters()
@@ -1751,15 +1766,17 @@ public class ScoreSync : MonoBehaviour
         if (t > 0.6f)
         {
             float p = Mathf.Clamp01((t - 0.6f) / 0.4f);
-            SetIconAlpha(goSettingsIcon, p * 0.65f);
-            SetIconAlpha(goLBIcon, p * 0.65f);
-            SetIconAlpha(goQuitIcon, p * 0.65f);
+            SetGlyphAlpha(goSettingsIcon, p * 0.65f);
+            SetGlyphAlpha(goStatsIcon, p * 0.65f);
+            SetGlyphAlpha(goLBIcon, p * 0.65f);
+            SetGlyphAlpha(goQuitIcon, p * 0.65f);
         }
         else
         {
-            SetIconAlpha(goSettingsIcon, 0f);
-            SetIconAlpha(goLBIcon, 0f);
-            SetIconAlpha(goQuitIcon, 0f);
+            SetGlyphAlpha(goSettingsIcon, 0f);
+            SetGlyphAlpha(goStatsIcon, 0f);
+            SetGlyphAlpha(goLBIcon, 0f);
+            SetGlyphAlpha(goQuitIcon, 0f);
         }
 
         // Tap to play — heartbeat flash
@@ -1952,7 +1969,7 @@ public class ScoreSync : MonoBehaviour
 
     Button CreateIconButton(RectTransform parent, string name,
         Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size,
-        Texture2D icon, out RawImage iconImage)
+        string iconType, Color iconColor, out CanvasGroup iconGroup)
     {
         GameObject btnObj = new GameObject(name);
         RectTransform rt = btnObj.AddComponent<RectTransform>();
@@ -1963,12 +1980,12 @@ public class ScoreSync : MonoBehaviour
         rt.anchoredPosition = pos;
         rt.sizeDelta = size;
 
-        // Circular dark background — makes the button feel real
+        // Circular dark background
         Image bg = btnObj.AddComponent<Image>();
         if (circleSprite != null) bg.sprite = circleSprite;
-        bg.color = new Color(0.08f, 0.05f, 0.12f, 0f); // Alpha controlled by SetIconAlpha
+        bg.color = new Color(0.08f, 0.05f, 0.12f, 0f);
 
-        // Press feedback via button color transitions
+        // Press feedback
         Button btn = btnObj.AddComponent<Button>();
         ColorBlock cb = btn.colors;
         cb.normalColor = Color.white;
@@ -1978,34 +1995,118 @@ public class ScoreSync : MonoBehaviour
         btn.colors = cb;
         btn.transition = Selectable.Transition.ColorTint;
 
-        // Icon image — inset slightly for padding inside the circle
+        // Icon container — CanvasGroup for unified alpha fade
         GameObject iconObj = new GameObject("Icon");
         RectTransform iconRT = iconObj.AddComponent<RectTransform>();
         iconRT.SetParent(rt, false);
         iconRT.anchorMin = new Vector2(0.2f, 0.2f);
         iconRT.anchorMax = new Vector2(0.8f, 0.8f);
-        iconRT.sizeDelta = Vector2.zero;
         iconRT.offsetMin = Vector2.zero;
         iconRT.offsetMax = Vector2.zero;
+        iconGroup = iconObj.AddComponent<CanvasGroup>();
+        iconGroup.alpha = 0f;
+        iconGroup.interactable = false;
+        iconGroup.blocksRaycasts = false;
 
-        iconImage = iconObj.AddComponent<RawImage>();
-        iconImage.texture = icon;
-        iconImage.color = new Color(1f, 1f, 1f, 0f);
-        iconImage.raycastTarget = false; // Let the bg handle raycasting
+        switch (iconType)
+        {
+            case "star": BuildStarIcon(iconRT, iconColor); break;
+            case "bars": BuildBarsIcon(iconRT, iconColor); break;
+            case "gear": BuildGearIcon(iconRT, iconColor); break;
+            case "power": BuildPowerIcon(iconRT, iconColor); break;
+        }
 
         return btn;
     }
 
-    void SetIconAlpha(RawImage icon, float alpha)
+    void BuildStarIcon(RectTransform parent, Color color)
+    {
+        // 6-pointed star from 3 overlapping narrow rectangles at 0°/60°/-60°
+        float w = 0.22f, h = 0.9f;
+        for (int i = 0; i < 3; i++)
+        {
+            Image bar = CreateIconBar(parent, "Ray" + i, color, w, h);
+            bar.rectTransform.localRotation = Quaternion.Euler(0f, 0f, i * 60f);
+        }
+    }
+
+    void BuildBarsIcon(RectTransform parent, Color color)
+    {
+        // Three horizontal bars — classic list/stats icon
+        float[] yPos = { 0.22f, 0.5f, 0.78f };
+        float[] widths = { 0.7f, 0.55f, 0.7f };
+        float barH = 0.12f;
+        for (int i = 0; i < 3; i++)
+        {
+            float halfW = widths[i] * 0.5f;
+            float halfH = barH * 0.5f;
+            Image bar = CreateIconBar(parent, "Bar" + i, color,
+                widths[i], barH);
+            bar.rectTransform.anchorMin = new Vector2(0.5f - halfW, yPos[i] - halfH);
+            bar.rectTransform.anchorMax = new Vector2(0.5f + halfW, yPos[i] + halfH);
+            bar.rectTransform.offsetMin = Vector2.zero;
+            bar.rectTransform.offsetMax = Vector2.zero;
+        }
+    }
+
+    void BuildGearIcon(RectTransform parent, Color color)
+    {
+        // Cross shape + center dot — simple gear/settings silhouette
+        CreateIconBar(parent, "H", color, 0.85f, 0.22f); // horizontal
+        CreateIconBar(parent, "V", color, 0.22f, 0.85f); // vertical
+        // Diagonal cross for 8 spokes
+        Image d1 = CreateIconBar(parent, "D1", color, 0.65f, 0.18f);
+        d1.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        Image d2 = CreateIconBar(parent, "D2", color, 0.65f, 0.18f);
+        d2.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
+        // Center dot
+        Image dot = CreateIconBar(parent, "Dot", new Color(0.06f, 0.03f, 0.10f), 0.28f, 0.28f);
+        if (circleSprite != null) dot.sprite = circleSprite;
+    }
+
+    void BuildPowerIcon(RectTransform parent, Color color)
+    {
+        // X shape — two crossed bars
+        Image d1 = CreateIconBar(parent, "X1", color, 0.8f, 0.18f);
+        d1.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        Image d2 = CreateIconBar(parent, "X2", color, 0.8f, 0.18f);
+        d2.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
+    }
+
+    Image CreateIconBar(RectTransform parent, string name, Color color, float wFrac, float hFrac)
+    {
+        GameObject obj = new GameObject(name);
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        // Size relative to parent — use parent's rect
+        rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 0f);
+        rt.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 0f);
+        // Anchor-stretch approach: fraction of parent
+        rt.anchorMin = new Vector2(0.5f - wFrac * 0.5f, 0.5f - hFrac * 0.5f);
+        rt.anchorMax = new Vector2(0.5f + wFrac * 0.5f, 0.5f + hFrac * 0.5f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+
+        Image img = obj.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+        return img;
+    }
+
+    void SetGlyphAlpha(CanvasGroup icon, float alpha)
     {
         if (icon == null) return;
-        icon.color = new Color(1f, 1f, 1f, alpha);
+        icon.alpha = alpha;
 
         // Also set the circular background alpha
-        Transform parent = icon.transform.parent;
-        if (parent != null)
+        Transform p = icon.transform.parent;
+        if (p != null)
         {
-            Image bg = parent.GetComponent<Image>();
+            Image bg = p.GetComponent<Image>();
             if (bg != null)
                 bg.color = new Color(0.08f, 0.05f, 0.12f, alpha * 0.7f);
         }
@@ -2249,6 +2350,134 @@ public class ScoreSync : MonoBehaviour
             settingsPanel.gameObject.SetActive(false);
     }
 
+    // ── STATS PANEL ─────────────────────────────────────────
+
+    void OnStatsTap()
+    {
+        if (statsPanel == null)
+            BuildStatsPanel(canvas.transform);
+        RefreshStatsLabels();
+        statsPanel.gameObject.SetActive(true);
+    }
+
+    void CloseStats()
+    {
+        if (statsPanel != null)
+            statsPanel.gameObject.SetActive(false);
+    }
+
+    void BuildStatsPanel(Transform parent)
+    {
+        GameObject panelObj = new GameObject("StatsPanel");
+        statsPanel = panelObj.AddComponent<RectTransform>();
+        statsPanel.SetParent(parent, false);
+        StretchFull(statsPanel);
+
+        // Dim background tap-to-close
+        Image dimBg = panelObj.AddComponent<Image>();
+        dimBg.color = new Color(0f, 0f, 0f, 0.75f);
+        Button closeBg = panelObj.AddComponent<Button>();
+        closeBg.onClick.AddListener(CloseStats);
+
+        // Card
+        GameObject card = new GameObject("Card");
+        RectTransform cardRT = card.AddComponent<RectTransform>();
+        cardRT.SetParent(statsPanel, false);
+        cardRT.anchorMin = new Vector2(0.5f, 0.5f);
+        cardRT.anchorMax = new Vector2(0.5f, 0.5f);
+        cardRT.sizeDelta = new Vector2(500, 480);
+
+        Image cardBg = card.AddComponent<Image>();
+        cardBg.color = new Color(0.06f, 0.03f, 0.10f, 0.96f);
+        cardBg.raycastTarget = true;
+
+        // Cyan border frame
+        CreateSettingsBorderEdge(cardRT, "BorderTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(0f, 2f));
+        CreateSettingsBorderEdge(cardRT, "BorderBot", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(0f, 2f));
+        CreateSettingsBorderEdge(cardRT, "BorderL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(2f, 0f));
+        CreateSettingsBorderEdge(cardRT, "BorderR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f));
+
+        // Title
+        TMP_Text title = CreateText(cardRT, "Title", "STATISTICS",
+            36, FontStyles.Bold, NEON_CYAN);
+        SetAnchored(title.rectTransform, new Vector2(0.5f, 0.90f), new Vector2(400, 50));
+        title.characterSpacing = 8f;
+        title.raycastTarget = false;
+
+        CreateSettingsDivider(cardRT, 0.84f, NEON_CYAN, 0.25f);
+
+        // Stat rows — label left, value right
+        statsRunsLabel = CreateStatsRow(cardRT, "Runs", "TOTAL RUNS", 0.72f);
+        statsTapsLabel = CreateStatsRow(cardRT, "Taps", "TOTAL TAPS", 0.60f);
+        statsBestLabel = CreateStatsRow(cardRT, "Best", "BEST SCORE", 0.48f);
+        statsAvgLabel = CreateStatsRow(cardRT, "Avg", "AVG SCORE", 0.36f);
+        statsGatesLabel = CreateStatsRow(cardRT, "Gates", "TOTAL GATES", 0.24f);
+
+        // Close hint
+        string closeHint = "TAP OUTSIDE TO CLOSE";
+#if UNITY_STANDALONE && !UNITY_EDITOR
+        closeHint = "CLICK OUTSIDE TO CLOSE";
+#elif UNITY_TVOS
+        closeHint = "PRESS MENU TO CLOSE";
+#endif
+        TMP_Text closeLabel = CreateText(cardRT, "Close", closeHint,
+            16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
+        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, 0.08f), new Vector2(400, 30));
+        closeLabel.characterSpacing = 3f;
+        closeLabel.raycastTarget = false;
+    }
+
+    TMP_Text CreateStatsRow(RectTransform parent, string name, string label, float yAnchor)
+    {
+        // Label on the left
+        TMP_Text lbl = CreateText(parent, name + "Label", label,
+            22, FontStyles.Normal, DIM_TEXT);
+        RectTransform lblRT = lbl.rectTransform;
+        lblRT.anchorMin = new Vector2(0.1f, yAnchor);
+        lblRT.anchorMax = new Vector2(0.5f, yAnchor);
+        lblRT.pivot = new Vector2(0f, 0.5f);
+        lblRT.sizeDelta = new Vector2(0f, 35);
+        lbl.alignment = TextAlignmentOptions.Left;
+        lbl.characterSpacing = 4f;
+        lbl.raycastTarget = false;
+
+        // Value on the right — neon colored
+        TMP_Text val = CreateText(parent, name + "Value", "0",
+            26, FontStyles.Bold, new Color(1f, 1f, 1f, 0.9f));
+        RectTransform valRT = val.rectTransform;
+        valRT.anchorMin = new Vector2(0.5f, yAnchor);
+        valRT.anchorMax = new Vector2(0.9f, yAnchor);
+        valRT.pivot = new Vector2(1f, 0.5f);
+        valRT.sizeDelta = new Vector2(0f, 35);
+        val.alignment = TextAlignmentOptions.Right;
+        val.raycastTarget = false;
+
+        // Subtle divider below
+        CreateSettingsDivider(parent, yAnchor - 0.055f, DIM_TEXT, 0.06f);
+
+        return val;
+    }
+
+    void RefreshStatsLabels()
+    {
+        int runs = Sphere.GetTotalRuns();
+        int taps = Sphere.GetTotalTaps();
+        int best = topScores.Count > 0 ? topScores[0] : 0;
+        int totalScore = 0;
+        for (int i = 0; i < topScores.Count; i++)
+            totalScore += topScores[i];
+        int avg = topScores.Count > 0 ? totalScore / topScores.Count : 0;
+
+        // Total gates = sum of all scores (each gate = 1 point in Pure Hell)
+        int gates = totalScore;
+
+        if (statsRunsLabel != null) statsRunsLabel.text = runs.ToString("N0");
+        if (statsTapsLabel != null) statsTapsLabel.text = taps.ToString("N0");
+        if (statsBestLabel != null) statsBestLabel.text = best.ToString("N0");
+        if (statsAvgLabel != null) statsAvgLabel.text = avg.ToString("N0");
+        if (statsGatesLabel != null) statsGatesLabel.text = gates.ToString("N0");
+    }
+
     void PauseGame()
     {
         if (isPaused || state != State.Playing) return;
@@ -2418,162 +2647,6 @@ public class ScoreSync : MonoBehaviour
         if (btnBg != null)
             btnBg.color = isOn ? new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.06f)
                                : new Color(1f, 1f, 1f, 0.02f);
-    }
-
-    // ── PROCEDURAL ICONS ────────────────────────────────────
-
-    Texture2D GenerateTrophyIcon(int size)
-    {
-        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        float half = size * 0.5f;
-        Color col = NEON_GOLD;
-        float edgeSmooth = size * 0.015f;
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float nx = (x - half) / (half * 0.7f);
-                float ny = (y - half) / (half * 0.7f);
-                float alpha = 0f;
-
-                // Cup body — wide at top, tapered
-                float cupTop = 0.45f;
-                float cupBot = -0.05f;
-                if (ny > cupBot && ny < cupTop)
-                {
-                    float t = (ny - cupBot) / (cupTop - cupBot);
-                    float w = Mathf.Lerp(0.30f, 0.60f, t);
-                    float d = w - Mathf.Abs(nx);
-                    if (d > 0) alpha = Mathf.Clamp01(d * size * 0.03f);
-                }
-
-                // Handles — thicker arcs
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    float hx = nx - side * 0.55f;
-                    float hy = ny - 0.2f;
-                    float hDist = Mathf.Sqrt(hx * hx + hy * hy);
-                    float hRing = Mathf.Abs(hDist - 0.28f);
-                    if (hRing < 0.09f && (side * nx > 0.35f))
-                        alpha = Mathf.Max(alpha, Mathf.Clamp01((0.09f - hRing) * size * 0.025f));
-                }
-
-                // Stem
-                if (ny > -0.30f && ny < cupBot + 0.03f && Mathf.Abs(nx) < 0.10f)
-                    alpha = Mathf.Max(alpha, 1f);
-
-                // Base — rounded rectangle
-                if (ny > -0.48f && ny < -0.25f)
-                {
-                    float bw = Mathf.Lerp(0.35f, 0.28f, (ny + 0.48f) / 0.23f);
-                    float d = bw - Mathf.Abs(nx);
-                    if (d > 0) alpha = Mathf.Max(alpha, Mathf.Clamp01(d * size * 0.03f));
-                }
-
-                // Soft circular mask
-                float dist = Mathf.Sqrt(nx * nx + ny * ny);
-                if (dist > 1.05f) alpha = 0f;
-                else if (dist > 0.95f) alpha *= 1f - (dist - 0.95f) / 0.1f;
-
-                tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
-            }
-        }
-        tex.Apply();
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.filterMode = FilterMode.Bilinear;
-        return tex;
-    }
-
-    Texture2D GenerateCogIcon(int size)
-    {
-        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        float half = size * 0.5f;
-        Color col = DIM_TEXT;
-
-        int teeth = 8;
-        float outerR = half * 0.65f;
-        float innerR = half * 0.45f;
-        float holeR = half * 0.20f;
-        float toothW = 0.55f;
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float dx = x - half;
-                float dy = y - half;
-                float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                float angle = Mathf.Atan2(dy, dx);
-                float alpha = 0f;
-
-                // Gear body with teeth
-                float toothAngle = (angle / (Mathf.PI * 2f) * teeth) % 1f;
-                if (toothAngle < 0) toothAngle += 1f;
-                float cogR = (toothAngle < toothW) ? outerR : innerR;
-                float transW = 0.08f;
-                if (toothAngle >= toothW - transW && toothAngle < toothW + transW)
-                    cogR = Mathf.Lerp(outerR, innerR, (toothAngle - (toothW - transW)) / (transW * 2f));
-                if (toothAngle >= 1f - transW)
-                    cogR = Mathf.Lerp(innerR, outerR, (toothAngle - (1f - transW)) / transW);
-
-                if (dist < cogR && dist > holeR)
-                {
-                    float edgeOuter = Mathf.Clamp01((cogR - dist) * size * 0.012f);
-                    float edgeInner = Mathf.Clamp01((dist - holeR) * size * 0.012f);
-                    alpha = Mathf.Min(edgeOuter, edgeInner);
-                }
-
-                tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
-            }
-        }
-        tex.Apply();
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.filterMode = FilterMode.Bilinear;
-        return tex;
-    }
-
-    Texture2D GenerateQuitIcon(int size)
-    {
-        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        float half = size * 0.5f;
-        Color col = DIM_TEXT;
-
-        // Power symbol — bolder, no outer ring
-        float arcR = half * 0.48f;
-        float arcW = size * 0.08f;
-        float lineW = size * 0.08f;
-        float lineTop = half + half * 0.55f;
-        float lineBot = half + half * 0.0f;
-        float gapAngle = 30f * Mathf.Deg2Rad;
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float dx = x - half;
-                float dy = y - half;
-                float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                float alpha = 0f;
-
-                // Power arc (open circle, gap at top)
-                float arcDist = Mathf.Abs(dist - arcR);
-                float angleFromTop = Mathf.Abs(Mathf.Atan2(dx, dy));
-                if (arcDist < arcW && angleFromTop > gapAngle)
-                    alpha = Mathf.Max(alpha, Mathf.Clamp01((arcW - arcDist) * size * 0.012f));
-
-                // Vertical line
-                float lineDx = Mathf.Abs(dx);
-                if (lineDx < lineW && y >= lineBot && y <= lineTop)
-                    alpha = Mathf.Max(alpha, Mathf.Clamp01((lineW - lineDx) * size * 0.012f));
-
-                tex.SetPixel(x, y, new Color(col.r, col.g, col.b, alpha));
-            }
-        }
-        tex.Apply();
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.filterMode = FilterMode.Bilinear;
-        return tex;
     }
 
     void OnQuitTap()

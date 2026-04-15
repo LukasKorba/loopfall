@@ -20,6 +20,7 @@ public class DeathEffect : MonoBehaviour
         // Dual shockwave rings on the grid
         Shader.SetGlobalFloat("_DeathPulseTime", Time.time);
         Shader.SetGlobalVector("_DeathPulsePos", ballWorldPos);
+
     }
 
     public void ResetShake()
