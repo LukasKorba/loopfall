@@ -84,6 +84,11 @@ Shader "Loopfall/DepthHueShift"
 
                 float t = saturate((eyeDepth - _DepthStartWorld) / (_DepthEndWorld - _DepthStartWorld));
 
+                // Bright emissive pixels (orbs, beams, gates) keep their true color
+                float lum = dot(col.rgb, float3(0.299, 0.587, 0.114));
+                float brightReduce = saturate((lum - 0.6) * 3.0);
+                t *= (1.0 - brightReduce);
+
                 float3 hsv = rgb2hsv(col.rgb);
                 hsv.x = frac(hsv.x + t * _HueShiftAmount);
                 hsv.y = saturate(hsv.y + t * _Saturation);
@@ -92,6 +97,7 @@ Shader "Loopfall/DepthHueShift"
 
                 float fogT = saturate((eyeDepth - _FogStart) / (_FogEnd - _FogStart));
                 fogT = fogT * fogT;
+                fogT *= (1.0 - brightReduce); // bright emissive pixels resist fog too
                 result = lerp(result, _FogColor.rgb, fogT * _FogAmount);
 
                 return half4(result, col.a);

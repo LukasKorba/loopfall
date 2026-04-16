@@ -281,18 +281,22 @@ public class SceneSetup : MonoBehaviour
         blitzConnectionMaterial.SetFloat("_Intensity", 2.0f);
         blitzConnectionMaterial.renderQueue = 3000;
 
-        // Blitz orb materials — collectible upgrade pickups (same shader as time items)
-        blitzOrbGunMaterial = new Material(trackItemShader);
+        // Blitz orb materials — additive glow (TrailGlow) for semi-transparent look
+        Shader orbShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        blitzOrbGunMaterial = new Material(orbShader);
         blitzOrbGunMaterial.SetColor("_Color", new Color(1.0f, 0.85f, 0.1f));
         blitzOrbGunMaterial.SetFloat("_Intensity", 2.5f);
+        blitzOrbGunMaterial.renderQueue = 3000;
 
-        blitzOrbCadencyMaterial = new Material(trackItemShader);
+        blitzOrbCadencyMaterial = new Material(orbShader);
         blitzOrbCadencyMaterial.SetColor("_Color", new Color(0.2f, 0.7f, 1.0f));
         blitzOrbCadencyMaterial.SetFloat("_Intensity", 2.5f);
+        blitzOrbCadencyMaterial.renderQueue = 3000;
 
-        blitzOrbShieldMaterial = new Material(trackItemShader);
+        blitzOrbShieldMaterial = new Material(orbShader);
         blitzOrbShieldMaterial.SetColor("_Color", new Color(0.1f, 1.0f, 0.4f));
         blitzOrbShieldMaterial.SetFloat("_Intensity", 2.5f);
+        blitzOrbShieldMaterial.renderQueue = 3000;
 
         // Blitz shield visual — green glow around ball when shield is active
         Shader shieldShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");

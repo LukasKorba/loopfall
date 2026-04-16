@@ -159,6 +159,7 @@ public class Torus : MonoBehaviour
             UpdateBlitzSpeed();
             UpdateBlitzObstacles();
             CheckBlitzOrbPickups();
+            AnimateBlitzOrbs();
             AnimateBlitzGates();
             UpdateBlitzFireRate();
             return;
@@ -734,6 +735,16 @@ public class Torus : MonoBehaviour
         }
     }
 
+    void AnimateBlitzOrbs()
+    {
+        float time = Time.time;
+        foreach (BlitzOrb orb in mBlitzOrbs)
+        {
+            if (orb.mGameObject != null && orb.mGameObject.activeSelf)
+                orb.Animate(time);
+        }
+    }
+
     void UpdateBlitzFireRate()
     {
         if (mBlitzBeam == null) return;
@@ -839,7 +850,7 @@ public class Torus : MonoBehaviour
             if (mAngle - 0.8f > orb.mAngle)
             {
                 orb.mCollected = true;
-                orb.mGameObject.SetActive(false);
+                orb.StartFade();
                 OnOrbCollected(orb.mType);
                 LightHaptic();
             }

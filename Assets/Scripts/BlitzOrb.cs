@@ -5,6 +5,7 @@ using System.Collections.Generic;
 /// Collectible orb for Blitz mode upgrade tracks.
 /// Short arc strip on torus inner surface — player steers to collect.
 /// Three types power three upgrade tracks (Gun, Cadency, Shield).
+/// Uses TrailGlow (additive) for semi-transparent glow.
 /// </summary>
 public class BlitzOrb
 {
@@ -14,22 +15,66 @@ public class BlitzOrb
     public float mAngle;
     public OrbType mType;
     public bool mCollected = false;
+    public bool mFading = false;
 
-    private const float STRIP_WIDTH = 0.25f;
-    private const float SURFACE_OFFSET = 0.03f;
-    private const float ARC_HALF_SPAN = 20f; // degrees — 40° total arc
+    Material mMat;
+    float mBaseIntensity;
+    float mPulsePhase;
+    float mFadeTimer;
+
+    const float FADE_DURATION = 0.35f;
+    const float STRIP_WIDTH = 0.25f;
+    const float SURFACE_OFFSET = 0.03f;
+    const float ARC_HALF_SPAN = 20f; // degrees — 40° total arc
 
     public BlitzOrb(OrbType type, float crossAngleDeg, float obstacleStepInv, Material material)
     {
         mType = type;
+        mPulsePhase = Random.value * Mathf.PI * 2f;
         mGameObject = new GameObject("blitzOrb");
 
         MeshFilter mf = mGameObject.AddComponent<MeshFilter>();
         mf.mesh = GenerateArcMesh(crossAngleDeg, obstacleStepInv);
 
         MeshRenderer mr = mGameObject.AddComponent<MeshRenderer>();
-        mr.material = material;
+        mMat = new Material(material);
+        mBaseIntensity = material.GetFloat("_Intensity");
+        mr.material = mMat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+    }
+
+    /// <summary>Call each frame for breathing glow + fade-out animation.</summary>
+    public void Animate(float time)
+    {
+        if (mGameObject == null || !mGameObject.activeSelf) return;
+
+        if (mFading)
+        {
+            mFadeTimer += Time.deltaTime;
+            float p = mFadeTimer / FADE_DURATION;
+            if (p >= 1f)
+            {
+                mGameObject.SetActive(false);
+                return;
+            }
+            float fade = 1f - p;
+            mMat.SetFloat("_Intensity", mBaseIntensity * fade);
+            mGameObject.transform.localScale = Vector3.one * (1f + p * 0.5f); // expand as it fades
+            return;
+        }
+
+        // Breathing pulse — layered sine for organic feel
+        float pulse = mBaseIntensity
+            + Mathf.Sin(time * 4f + mPulsePhase) * 0.6f
+            + Mathf.Sin(time * 7f + mPulsePhase * 1.3f) * 0.3f;
+        mMat.SetFloat("_Intensity", pulse);
+    }
+
+    /// <summary>Start fade-out (called on collection).</summary>
+    public void StartFade()
+    {
+        mFading = true;
+        mFadeTimer = 0f;
     }
 
     Mesh GenerateArcMesh(float centerDeg, float obstacleStepInv)
