@@ -600,7 +600,7 @@ public class SceneSetup : MonoBehaviour
             torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;
 
             BlitzBeam beam = ball.AddComponent<BlitzBeam>();
-            beam.Initialize(beamMaterial, new Color(1f, 0.5f, 0.1f), torusObj.transform, torusScript);
+            beam.Initialize(beamMaterial, new Color(0.4f, 0.95f, 1f), torusObj.transform, torusScript);
             sphereScript.mBlitzBeam = beam;
             sphereScript.mBlitzShieldMat = blitzShieldVisualMaterial;
             torusScript.mBlitzBeam = beam;

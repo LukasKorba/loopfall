@@ -3,9 +3,12 @@ using UnityEngine;
 /// <summary>
 /// Auto-firing beam projectiles for Blitz mode.
 /// Fires a short glowing bolt every FIRE_INTERVAL seconds in the track-forward
-/// direction (+X). Each bolt travels at BEAM_SPEED, hits the torus surface,
-/// and leaves a brief glowing impact spot. Impacts are parented to the torus
-/// so they rotate with the track.
+/// direction (+X). Each bolt travels at BEAM_SPEED, hits either a BlitzBox (sphere
+/// bloom impact) or the torus surface (expanding ring ripple). Impacts are
+/// parented to the torus so they rotate with the track.
+///
+/// Palette: cool plasma (cyan-white) at L0/L1, hot magenta-pink at L2 — chosen so
+/// the beam never visually collides with the yellow gun pickup orb.
 /// </summary>
 public class BlitzBeam : MonoBehaviour
 {
@@ -18,6 +21,9 @@ public class BlitzBeam : MonoBehaviour
     const float HALO_WIDTH = 0.09f;
     const float IMPACT_DURATION = 0.5f;
     const float IMPACT_MAX_SCALE = 0.18f;
+    const float RING_DURATION = 0.35f;
+    const float RING_OUTER_SCALE = 0.22f;
+    const float RING_INNER_RATIO = 0.55f;
     const float MAX_RANGE = 8f;
     const float BALL_OFFSET = 0.12f;
     const float FIRE_ANGLE = 8f; // degrees upward from horizontal — clears torus curvature
@@ -27,37 +33,49 @@ public class BlitzBeam : MonoBehaviour
     float mFireTimer;
     float mFireInterval = DEFAULT_FIRE_INTERVAL;
     int mBeamCount = 1;
-    Color mColor;
+    int mGunLevel = 0;
+    Color mCoreColor = Color.white;
+    Color mFringeColor = new Color(0.4f, 0.95f, 1f);
+    Material mBeamMat;
     Transform mTorusTrans;
     Torus mTorus;
 
     // Pool — parallel arrays
     LineRenderer[] mLines;
     LineRenderer[] mHalos;
-    GameObject[] mHits;
+    GameObject[] mHits;       // sphere bloom (box hits)
+    GameObject[] mRings;      // annulus ripple (ground hits)
     Collider[] mHitCols;
-    Vector3[] mOrigins, mTargets;
+    Vector3[] mOrigins, mTargets, mHitNormals;
     float[] mDist, mTrav, mImpAge;
-    bool[] mFlying, mGlowing;
+    bool[] mFlying, mGlowing, mIsSurfaceHit;
     int mSlot;
+
+    static Mesh sAnnulusMesh;
 
     public void Initialize(Material beamMat, Color color, Transform torusTransform, Torus torusScript)
     {
-        mColor = color;
+        mBeamMat = beamMat;
+        mFringeColor = color;
         mTorusTrans = torusTransform;
         mTorus = torusScript;
+
+        if (sAnnulusMesh == null) sAnnulusMesh = BuildAnnulusMesh();
 
         mLines = new LineRenderer[POOL_SIZE];
         mHalos = new LineRenderer[POOL_SIZE];
         mHitCols = new Collider[POOL_SIZE];
         mHits = new GameObject[POOL_SIZE];
+        mRings = new GameObject[POOL_SIZE];
         mOrigins = new Vector3[POOL_SIZE];
         mTargets = new Vector3[POOL_SIZE];
+        mHitNormals = new Vector3[POOL_SIZE];
         mDist = new float[POOL_SIZE];
         mTrav = new float[POOL_SIZE];
         mImpAge = new float[POOL_SIZE];
         mFlying = new bool[POOL_SIZE];
         mGlowing = new bool[POOL_SIZE];
+        mIsSurfaceHit = new bool[POOL_SIZE];
 
         for (int i = 0; i < POOL_SIZE; i++)
         {
@@ -65,27 +83,10 @@ public class BlitzBeam : MonoBehaviour
             GameObject ho = new GameObject("BlitzHalo_" + i);
             LineRenderer hlr = ho.AddComponent<LineRenderer>();
             hlr.material = beamMat;
-            hlr.startWidth = HALO_WIDTH;
-            hlr.endWidth = HALO_WIDTH * 0.4f;
             hlr.positionCount = 2;
             hlr.useWorldSpace = true;
             hlr.receiveShadows = false;
             hlr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            Gradient hg = new Gradient();
-            hg.SetKeys(
-                new GradientColorKey[]
-                {
-                    new GradientColorKey(color * 0.15f, 0f),
-                    new GradientColorKey(color * 0.5f, 1f)
-                },
-                new GradientAlphaKey[]
-                {
-                    new GradientAlphaKey(0.05f, 0f),
-                    new GradientAlphaKey(0.35f, 1f)
-                }
-            );
-            hlr.colorGradient = hg;
             hlr.enabled = false;
             mHalos[i] = hlr;
 
@@ -93,20 +94,98 @@ public class BlitzBeam : MonoBehaviour
             GameObject lo = new GameObject("BlitzBeam_" + i);
             LineRenderer lr = lo.AddComponent<LineRenderer>();
             lr.material = beamMat;
-            lr.startWidth = BEAM_WIDTH;
-            lr.endWidth = BEAM_WIDTH * 0.5f;
             lr.positionCount = 2;
             lr.useWorldSpace = true;
             lr.receiveShadows = false;
             lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.enabled = false;
+            mLines[i] = lr;
 
+            // ── Impact bloom (sphere, for BlitzBox kills) ──
+            GameObject imp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            imp.name = "BlitzImpact_" + i;
+            Object.Destroy(imp.GetComponent<Collider>());
+            imp.transform.localScale = Vector3.zero;
+
+            MeshRenderer mr = imp.GetComponent<MeshRenderer>();
+            Material impMat = new Material(beamMat);
+            impMat.SetColor("_Color", mFringeColor);
+            mr.material = impMat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
+            imp.transform.SetParent(torusTransform, true);
+            imp.SetActive(false);
+            mHits[i] = imp;
+
+            // ── Ground ripple (annulus, for torus surface hits) ──
+            GameObject ring = new GameObject("BlitzRing_" + i);
+            MeshFilter rmf = ring.AddComponent<MeshFilter>();
+            rmf.sharedMesh = sAnnulusMesh;
+            MeshRenderer rmr = ring.AddComponent<MeshRenderer>();
+            Material ringMat = new Material(beamMat);
+            ringMat.SetColor("_Color", mFringeColor);
+            rmr.material = ringMat;
+            rmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            rmr.receiveShadows = false;
+            ring.transform.SetParent(torusTransform, true);
+            ring.SetActive(false);
+            mRings[i] = ring;
+        }
+
+        ApplyPalette();
+        mActive = false;
+    }
+
+    public void SetFireInterval(float interval) { mFireInterval = interval; }
+
+    /// <summary>
+    /// Drives beam count, color palette, and thickness from gun upgrade level.
+    /// L0: baseline cyan plasma, 1 beam. L1: slightly hotter cyan, 2 beams.
+    /// L2: magenta-pink, 3 beams, noticeably thicker.
+    /// </summary>
+    public void SetGunLevel(int level)
+    {
+        mGunLevel = Mathf.Clamp(level, 0, 2);
+        mBeamCount = mGunLevel + 1;
+        ApplyPalette();
+    }
+
+    void ApplyPalette()
+    {
+        float widthMul;
+        switch (mGunLevel)
+        {
+            case 0:
+                mFringeColor = new Color(0.3f, 0.9f, 1f);   // cyan
+                widthMul = 1.0f;
+                break;
+            case 1:
+                mFringeColor = new Color(0.5f, 0.95f, 1f);  // brighter cyan
+                widthMul = 1.1f;
+                break;
+            default: // L2
+                mFringeColor = new Color(1f, 0.3f, 0.8f);   // hot magenta-pink
+                widthMul = 1.35f;
+                break;
+        }
+        mCoreColor = Color.white;
+
+        if (mLines == null) return;
+
+        float beamW = BEAM_WIDTH * widthMul;
+        float haloW = HALO_WIDTH * widthMul;
+
+        for (int i = 0; i < POOL_SIZE; i++)
+        {
+            // Core gradient: fringe at tail → white at front → fringe at head
             Gradient g = new Gradient();
             g.SetKeys(
                 new GradientColorKey[]
                 {
-                    new GradientColorKey(color * 0.6f, 0f),
-                    new GradientColorKey(Color.white, 0.3f),
-                    new GradientColorKey(color, 1f)
+                    new GradientColorKey(mFringeColor * 0.6f, 0f),
+                    new GradientColorKey(mCoreColor, 0.3f),
+                    new GradientColorKey(mFringeColor, 1f)
                 },
                 new GradientAlphaKey[]
                 {
@@ -115,34 +194,29 @@ public class BlitzBeam : MonoBehaviour
                     new GradientAlphaKey(1f, 1f)
                 }
             );
-            lr.colorGradient = g;
-            lr.enabled = false;
-            mLines[i] = lr;
+            mLines[i].colorGradient = g;
+            mLines[i].startWidth = beamW;
+            mLines[i].endWidth = beamW * 0.5f;
 
-            // ── Impact glow (small additive sphere, parented to torus) ──
-            GameObject imp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            imp.name = "BlitzImpact_" + i;
-            Object.Destroy(imp.GetComponent<Collider>());
-            imp.transform.localScale = Vector3.zero;
-
-            MeshRenderer mr = imp.GetComponent<MeshRenderer>();
-            Material impMat = new Material(beamMat);
-            impMat.SetColor("_Color", color);
-            mr.material = impMat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-
-            // Parent to torus so impact rotates with the track surface
-            imp.transform.SetParent(torusTransform, true);
-            imp.SetActive(false);
-            mHits[i] = imp;
+            // Halo gradient: dim fringe, wider for bloom
+            Gradient hg = new Gradient();
+            hg.SetKeys(
+                new GradientColorKey[]
+                {
+                    new GradientColorKey(mFringeColor * 0.15f, 0f),
+                    new GradientColorKey(mFringeColor * 0.5f, 1f)
+                },
+                new GradientAlphaKey[]
+                {
+                    new GradientAlphaKey(0.05f, 0f),
+                    new GradientAlphaKey(0.35f, 1f)
+                }
+            );
+            mHalos[i].colorGradient = hg;
+            mHalos[i].startWidth = haloW;
+            mHalos[i].endWidth = haloW * 0.4f;
         }
-
-        mActive = false;
     }
-
-    public void SetFireInterval(float interval) { mFireInterval = interval; }
-    public void SetBeamCount(int count) { mBeamCount = Mathf.Clamp(count, 1, 3); }
 
     public void SetActive(bool on)
     {
@@ -154,6 +228,7 @@ public class BlitzBeam : MonoBehaviour
                 mLines[i].enabled = false;
                 mHalos[i].enabled = false;
                 mHits[i].SetActive(false);
+                mRings[i].SetActive(false);
                 mFlying[i] = false;
                 mGlowing[i] = false;
             }
@@ -165,7 +240,6 @@ public class BlitzBeam : MonoBehaviour
     {
         if (!mActive) return;
 
-        // Fire timer
         mFireTimer -= Time.deltaTime;
         if (mFireTimer <= 0f)
         {
@@ -189,7 +263,6 @@ public class BlitzBeam : MonoBehaviour
                     mHalos[i].enabled = false;
                     mFlying[i] = false;
 
-                    // Check if we hit a BlitzBox
                     if (mHitCols[i] != null
                         && mHitCols[i].gameObject != null
                         && mHitCols[i].gameObject.activeInHierarchy
@@ -198,8 +271,21 @@ public class BlitzBeam : MonoBehaviour
                         mTorus.OnBlitzBoxHit(mHitCols[i].gameObject);
                     }
 
-                    mHits[i].transform.position = mTargets[i];
-                    mHits[i].SetActive(true);
+                    if (mIsSurfaceHit[i])
+                    {
+                        // Flat ring tangent to curved surface needs ~r²/(2R) lift off the hit
+                        // point so its far edges don't sink into the tube (minor radius 1.0,
+                        // ring outer 0.22 → dip ≈ 0.024, so offset of 0.05 gives clean margin).
+                        mRings[i].transform.position = mTargets[i] + mHitNormals[i] * 0.05f;
+                        mRings[i].transform.rotation = Quaternion.FromToRotation(Vector3.up, mHitNormals[i]);
+                        mRings[i].transform.localScale = Vector3.zero;
+                        mRings[i].SetActive(true);
+                    }
+                    else
+                    {
+                        mHits[i].transform.position = mTargets[i];
+                        mHits[i].SetActive(true);
+                    }
                     mGlowing[i] = true;
                     mImpAge[i] = 0f;
                 }
@@ -218,26 +304,36 @@ public class BlitzBeam : MonoBehaviour
                 }
             }
 
-            // ── Animate impact glow (grow → shrink + fade) ──
+            // ── Animate impact (sphere or ring, depending on hit type) ──
             if (mGlowing[i])
             {
                 mImpAge[i] += dt;
-                float t = mImpAge[i] / IMPACT_DURATION;
+                float duration = mIsSurfaceHit[i] ? RING_DURATION : IMPACT_DURATION;
+                float t = mImpAge[i] / duration;
 
                 if (t >= 1f)
                 {
-                    mHits[i].SetActive(false);
+                    if (mIsSurfaceHit[i]) mRings[i].SetActive(false);
+                    else mHits[i].SetActive(false);
                     mGlowing[i] = false;
+                }
+                else if (mIsSurfaceHit[i])
+                {
+                    // Ring: fast expand with sqrt curve, linear fade
+                    float s = RING_OUTER_SCALE * Mathf.Sqrt(t);
+                    mRings[i].transform.localScale = new Vector3(s, 1f, s);
+                    MeshRenderer mr = mRings[i].GetComponent<MeshRenderer>();
+                    Color c = mFringeColor;
+                    c.a = (1f - t) * 0.65f;
+                    mr.material.SetColor("_Color", c);
                 }
                 else
                 {
-                    // Quick bloom then smooth decay
+                    // Sphere: quick bloom then smooth decay
                     float s = IMPACT_MAX_SCALE * (1f - t * t);
                     mHits[i].transform.localScale = Vector3.one * s;
-
-                    // Fade intensity
                     MeshRenderer mr = mHits[i].GetComponent<MeshRenderer>();
-                    Color c = mColor;
+                    Color c = mFringeColor;
                     c.a = 1f - t;
                     mr.material.SetColor("_Color", c);
                 }
@@ -292,6 +388,8 @@ public class BlitzBeam : MonoBehaviour
         Vector3 target;
         float dist;
         Collider hitCol = null;
+        bool isSurface = false;
+        Vector3 normal = Vector3.up;
 
         if (hitBox && (!hitSurf || boxHit.distance <= surfHit.distance))
         {
@@ -303,6 +401,8 @@ public class BlitzBeam : MonoBehaviour
         {
             target = surfHit.point;
             dist = Vector3.Distance(origin, target);
+            isSurface = true;
+            normal = surfHit.normal;
         }
         else
         {
@@ -318,8 +418,11 @@ public class BlitzBeam : MonoBehaviour
         mLines[s].enabled = true;
         mHalos[s].enabled = true;
         mHits[s].SetActive(false);
+        mRings[s].SetActive(false);
         mGlowing[s] = false;
         mHitCols[s] = hitCol;
+        mIsSurfaceHit[s] = isSurface;
+        mHitNormals[s] = normal;
 
         mOrigins[s] = origin;
         mTargets[s] = target;
@@ -332,5 +435,41 @@ public class BlitzBeam : MonoBehaviour
         mLines[s].SetPosition(1, origin);
         mHalos[s].SetPosition(0, origin);
         mHalos[s].SetPosition(1, origin);
+    }
+
+    // ── Procedural annulus (flat ring in XZ plane, Y = up normal) ──
+    static Mesh BuildAnnulusMesh()
+    {
+        const int N = 32;
+        Mesh m = new Mesh();
+        Vector3[] verts = new Vector3[N * 2];
+        int[] tris = new int[N * 6];
+
+        for (int i = 0; i < N; i++)
+        {
+            float a = (float)i / N * Mathf.PI * 2f;
+            float ca = Mathf.Cos(a);
+            float sa = Mathf.Sin(a);
+            verts[i * 2]     = new Vector3(ca * RING_INNER_RATIO, 0f, sa * RING_INNER_RATIO);
+            verts[i * 2 + 1] = new Vector3(ca, 0f, sa);
+        }
+
+        for (int i = 0; i < N; i++)
+        {
+            int ni = (i + 1) % N;
+            int o = i * 6;
+            int a = i * 2;
+            int b = i * 2 + 1;
+            int c = ni * 2;
+            int d = ni * 2 + 1;
+            tris[o]     = a; tris[o + 1] = b; tris[o + 2] = d;
+            tris[o + 3] = a; tris[o + 4] = d; tris[o + 5] = c;
+        }
+
+        m.vertices = verts;
+        m.triangles = tris;
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+        return m;
     }
 }

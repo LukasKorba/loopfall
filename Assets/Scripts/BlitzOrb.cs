@@ -55,7 +55,7 @@ public class BlitzOrb
     // Physics trigger attached to mMeshObj — ball's SphereCollider fires OnTriggerEnter
     public BlitzOrbTrigger mTrigger;
 
-    const float COLLECTED_FADE_DURATION = 0.5f;
+    const float COLLECTED_FADE_DURATION = 0.55f;
     const float MISSED_FADE_DURATION = 1.0f;
     const float OBJ_SCALE = 0.1f;
     const float SURFACE_OFFSET = 0.22f;  // body overlaps ball silhouette (ball top ~0.2) while halo stays above surface
@@ -150,13 +150,41 @@ public class BlitzOrb
                 mGameObject.SetActive(false);
                 return;
             }
-            float flash = p < 0.15f ? Mathf.Lerp(4f, 1f, p / 0.15f) : 1f;
-            float fade = 1f - p * p;
-            mMat.SetFloat("_Intensity", mBaseIntensity * fade * flash);
-            float scale = mBaseScale * fade;
-            mMeshObj.transform.localScale = Vector3.one * scale;
-            mHaloMat.SetFloat("_Intensity", HALO_BASE_INTENSITY * fade * flash);
-            mHaloObj.transform.localScale = Vector3.one * scale;
+
+            // Body: punch up to 1.7× in first 0.1s, bouncy settle to 1× by 0.3s, collapse to 0 after.
+            // The over-and-back pop is what reads as "got it" — pure shrink never does.
+            float bodyMul;
+            if (p < 0.1f)
+            {
+                float t = p / 0.1f;
+                bodyMul = Mathf.Lerp(1f, 1.7f, 1f - (1f - t) * (1f - t));
+            }
+            else if (p < 0.3f)
+            {
+                float t = (p - 0.1f) / 0.2f;
+                bodyMul = Mathf.Lerp(1.7f, 1f, t * t);
+            }
+            else
+            {
+                float t = (p - 0.3f) / 0.7f;
+                bodyMul = 1f - t * t;
+            }
+            mMeshObj.transform.localScale = Vector3.one * mBaseScale * bodyMul;
+
+            // Sustained body flash: 8× → 0 across full duration (old flash decayed in 0.15s — too brief to register).
+            float bodyFlash = Mathf.Lerp(8f, 0f, Mathf.Sqrt(p));
+            mMat.SetFloat("_Intensity", mBaseIntensity * bodyFlash);
+
+            // Halo: shockwave expansion 1× → 3× in first half, drift to 3.5× while fading.
+            float haloMul = p < 0.5f
+                ? Mathf.Lerp(1f, 3f, 1f - (1f - p / 0.5f) * (1f - p / 0.5f))
+                : Mathf.Lerp(3f, 3.5f, (p - 0.5f) / 0.5f);
+            mHaloObj.transform.localScale = Vector3.one * mBaseScale * haloMul;
+
+            // Halo flash: completes fade by p≈0.55, so by the time the ring hits its top scale
+            // it's already almost invisible — the shockwave reads as expanding AND dissolving.
+            float haloFlash = Mathf.Lerp(5f, 0f, Mathf.Min(1f, p / 0.55f));
+            mHaloMat.SetFloat("_Intensity", HALO_BASE_INTENSITY * haloFlash);
             return;
         }
 

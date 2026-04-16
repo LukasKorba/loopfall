@@ -351,7 +351,7 @@ public class Torus : MonoBehaviour
             mCadencyLevel = 0;
             mShieldLevel = 0;
             mShieldActive = false;
-            if (mBlitzBeam != null) mBlitzBeam.SetBeamCount(1);
+            if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(0);
             mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
             UpdateBlitzObstacles();
         }
@@ -838,7 +838,7 @@ public class Torus : MonoBehaviour
     void ApplyGunUpgrade(int level)
     {
         mGunLevel = level;
-        if (mBlitzBeam != null) mBlitzBeam.SetBeamCount(level + 1);
+        if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(level);
     }
     void ApplyCadencyUpgrade(int level) { mCadencyLevel = level; }
     void ApplyShieldUpgrade() { mShieldLevel = 1; mShieldActive = true; }

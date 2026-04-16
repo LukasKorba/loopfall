@@ -117,7 +117,7 @@ public class ScoreSync : MonoBehaviour
     // ── BLITZ ORB SPARKS ────────────────────────────────────
     private const int MAX_SPARKS = 6;
     private const float SPARK_DURATION = 0.45f;
-    private const float SPARK_SIZE = 16f;
+    private const float SPARK_SIZE = 28f;
     private Image[] sparkImages;
     private Vector2[] sparkFrom;
     private Vector2[] sparkTo;
@@ -1745,14 +1745,14 @@ public class ScoreSync : MonoBehaviour
             // Ease-in-out arc path
             float eased = p < 0.5f ? 2f * p * p : 1f - Mathf.Pow(-2f * p + 2f, 2f) * 0.5f;
             Vector2 pos = Vector2.Lerp(sparkFrom[i], sparkTo[i], eased);
-            // Slight upward arc
-            float arc = Mathf.Sin(p * Mathf.PI) * 60f;
+            // Upward arc — higher arc gives the spark a readable "launch & land" trajectory
+            float arc = Mathf.Sin(p * Mathf.PI) * 100f;
             pos.y += arc;
 
             sparkImages[i].rectTransform.anchoredPosition = pos;
 
-            // Size: starts big, shrinks to slot size
-            float size = Mathf.Lerp(SPARK_SIZE * 1.5f, SPARK_SIZE * 0.5f, eased);
+            // Size: launches 2.5× (fat bolt leaving the orb), lands at slot size
+            float size = Mathf.Lerp(SPARK_SIZE * 2.5f, SPARK_SIZE * 0.6f, eased);
             sparkImages[i].rectTransform.sizeDelta = new Vector2(size, size);
 
             // Fade alpha: full brightness, slight fade at end
