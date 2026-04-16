@@ -1587,7 +1587,7 @@ public class ScoreSync : MonoBehaviour
 
     void BuildBlitzUpgradeHUD(RectTransform parent)
     {
-        const float SLOT_SIZE = 28f;
+        const float SLOT_SIZE = 14f;
         const float SLOT_GAP = 4f;
         const float ROW_GAP = 6f;
         const float LEVEL_GAP = 10f; // extra gap between L1 and L2 slots
