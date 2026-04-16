@@ -5,7 +5,6 @@
 public enum GameModeType
 {
     PureHell,
-    TimeWarp,
     Blitz
 }
 
@@ -17,9 +16,8 @@ public static class GameConfig
     {
         switch (ActiveMode)
         {
-            case GameModeType.TimeWarp: return "TopScores_TimeWarp";
-            case GameModeType.Blitz:    return "TopScores_Blitz";
-            default:                    return "TopScores";
+            case GameModeType.Blitz: return "TopScores_Blitz";
+            default:                 return "TopScores";
         }
     }
 
@@ -27,9 +25,8 @@ public static class GameConfig
     {
         switch (ActiveMode)
         {
-            case GameModeType.TimeWarp: return "com.lukaskorba.loopfall.timewarp";
-            case GameModeType.Blitz:    return "com.lukaskorba.loopfall.blitz";
-            default:                    return "com.lukaskorba.loopfall.purehell";
+            case GameModeType.Blitz: return "com.lukaskorba.loopfall.blitz";
+            default:                 return "com.lukaskorba.loopfall.purehell";
         }
     }
 
@@ -37,15 +34,9 @@ public static class GameConfig
     {
         switch (ActiveMode)
         {
-            case GameModeType.TimeWarp: return "TIME WARP";
-            case GameModeType.Blitz:    return "BLITZ";
-            default:                    return "PURE HELL";
+            case GameModeType.Blitz: return "BLITZ";
+            default:                 return "PURE HELL";
         }
-    }
-
-    public static bool IsTimeWarp()
-    {
-        return ActiveMode == GameModeType.TimeWarp;
     }
 
     public static bool IsBlitz()

@@ -81,8 +81,6 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text titleHintText;
     private Button titlePureHellBtn;
     private TMP_Text titlePureHellLabel;
-    private Button titleTimeWarpBtn;
-    private TMP_Text titleTimeWarpLabel;
 
     // ── PLAYING ──────────────────────────────────────────────
     private RectTransform playingGroup;
@@ -122,12 +120,6 @@ public class ScoreSync : MonoBehaviour
     private int[] sparkSlotIndex;
     private BlitzOrb.OrbType[] sparkOrbType;
     private RectTransform canvasRT;
-
-    // ── TIME WARP POPUP ──────────────────────────────────────
-    private TMP_Text playingPopupText;
-    private float popupAnimTimer = -1f;
-    private float popupAnimSign = 0f;
-    private const float POPUP_DURATION = 0.9f;
 
     // ── GAME OVER ────────────────────────────────────────────
     private RectTransform gameOverGroup;
@@ -389,23 +381,11 @@ public class ScoreSync : MonoBehaviour
             return;
         }
 
-        if (GameConfig.IsTimeWarp())
-        {
-            FrenzyTimer timer = FindAnyObjectByType<FrenzyTimer>();
-            if (timer != null)
-                goFinalScore = Mathf.RoundToInt(timer.GetElapsedTime() * 10f);
-            else
-                goFinalScore = 0;
-            lastScoreText = FormatTimeScore(goFinalScore);
-        }
-        else
-        {
-            if (source == null) return;
-            string text = source.text;
-            string scoreText = text.Contains("\n") ? text.Split('\n')[0] : text;
-            lastScoreText = scoreText;
-            int.TryParse(scoreText, out goFinalScore);
-        }
+        if (source == null) return;
+        string text = source.text;
+        string scoreText = text.Contains("\n") ? text.Split('\n')[0] : text;
+        lastScoreText = scoreText;
+        int.TryParse(scoreText, out goFinalScore);
 
         goRank = InsertScore(goFinalScore);
         isNewBest = (goRank == 1);
@@ -414,14 +394,8 @@ public class ScoreSync : MonoBehaviour
         goNewBestSfxPlayed = false;
     }
 
-    string FormatTimeScore(int deciseconds)
-    {
-        return (deciseconds / 10f).ToString("F1") + "s";
-    }
-
     string FormatModeScore(int score)
     {
-        if (GameConfig.IsTimeWarp()) return FormatTimeScore(score);
         return score.ToString();
     }
 
@@ -444,7 +418,7 @@ public class ScoreSync : MonoBehaviour
     {
         if (state != State.GameOver || stateTimer < 1.0f) return false;
 
-        if (!GameConfig.IsTimeWarp() && !GameConfig.IsBlitz())
+        if (!GameConfig.IsBlitz())
         {
             if (mSphere != null && mSphere.mRewindSystem != null
                 && !mSphere.mRewindSystem.IsFullyComplete())
@@ -719,12 +693,6 @@ public class ScoreSync : MonoBehaviour
         titlePureHellBtn.onClick.AddListener(() => StartWithMode(GameModeType.PureHell));
         titlePureHellBtn.gameObject.SetActive(false);
 
-        titleTimeWarpBtn = CreateModeButton(titleGroup, "TimeWarpBtn",
-            new Vector2(0.7f, 0.28f), out titleTimeWarpLabel, "TIME WARP",
-            NEON_CYAN);
-        titleTimeWarpBtn.onClick.AddListener(() => StartWithMode(GameModeType.TimeWarp));
-        titleTimeWarpBtn.gameObject.SetActive(false);
-
         // Tap to play
 #if UNITY_TVOS
         string tapPrompt = "SWIPE TO PLAY";
@@ -789,7 +757,6 @@ public class ScoreSync : MonoBehaviour
         ApplyDropShadow(subtitleText);
         ApplyDropShadow(bestScoreText);
         ApplyDropShadow(titlePureHellLabel);
-        ApplyDropShadow(titleTimeWarpLabel);
     }
 
     void BuildPlayingGroup(Transform parent)
@@ -826,12 +793,6 @@ public class ScoreSync : MonoBehaviour
             drt.anchoredPosition = new Vector2(startX + i * dotSpacing, 0);
             streakDots[i] = dot;
         }
-
-        // Time Warp: floating popup text for bonuses/penalties
-        playingPopupText = CreateText(playingGroup, "Popup", "",
-            52, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
-        SetAnchored(playingPopupText.rectTransform, new Vector2(0.5f, 0.85f), new Vector2(300, 80));
-        ApplyDropShadow(playingPopupText);
 
         if (GameConfig.IsBlitz())
             BuildBlitzUpgradeHUD(playingGroup);
@@ -1159,7 +1120,6 @@ public class ScoreSync : MonoBehaviour
                 ApplyGlitchToText(subtitleText);
                 ApplyGlitchToText(bestScoreText);
                 ApplyGlitchToText(titlePureHellLabel);
-                ApplyGlitchToText(titleTimeWarpLabel);
             }
             else if (state == State.GameOver)
             {
@@ -1480,13 +1440,6 @@ public class ScoreSync : MonoBehaviour
             }
         }
 
-        // Time Warp: show countdown timer instead of score
-        if (GameConfig.IsTimeWarp())
-        {
-            AnimatePlayingTimeWarp();
-            return;
-        }
-
         // Blitz: update upgrade HUD and spark effects
         if (GameConfig.IsBlitz())
         {
@@ -1787,83 +1740,6 @@ public class ScoreSync : MonoBehaviour
         }
     }
 
-    void AnimatePlayingTimeWarp()
-    {
-        FrenzyTimer timer = FindAnyObjectByType<FrenzyTimer>();
-        if (timer == null) return;
-
-        // Consume popup events from item pickups
-        float sign;
-        string popupText = timer.ConsumePopup(out sign);
-        if (popupText != null)
-        {
-            playingPopupText.text = popupText;
-            popupAnimSign = sign;
-            popupAnimTimer = 0f;
-        }
-
-        // Animate popup (scale up, drift up, fade out)
-        if (popupAnimTimer >= 0f)
-        {
-            popupAnimTimer += Time.deltaTime;
-            float p = popupAnimTimer / POPUP_DURATION;
-            if (p >= 1f)
-            {
-                popupAnimTimer = -1f;
-                SetAlpha(playingPopupText, 0f);
-            }
-            else
-            {
-                float alpha = 1f - p * p;
-                float yDrift = p * 50f;
-                float scale = Mathf.Lerp(1.4f, 1f, Mathf.Min(p * 4f, 1f));
-
-                Color c = popupAnimSign > 0
-                    ? new Color(0.2f, 1f, 0.4f)
-                    : new Color(1f, 0.2f, 0.2f);
-                playingPopupText.color = new Color(c.r, c.g, c.b, alpha);
-                playingPopupText.rectTransform.anchoredPosition = new Vector2(0, yDrift);
-                playingPopupText.rectTransform.localScale = new Vector3(scale, scale, 1f);
-            }
-        }
-
-        // Timer countdown display
-        float remaining = timer.GetTimeRemaining();
-        playingScoreText.text = remaining.ToString("F1");
-
-        // Timer color: white -> yellow (<5s) -> red pulsing (<3s)
-        Color timerColor;
-        if (timer.IsWarning())
-        {
-            float pulse = 0.5f + Mathf.Sin(Time.time * 8f) * 0.5f;
-            timerColor = Color.Lerp(new Color(1f, 0.15f, 0.1f), new Color(1f, 0.4f, 0.3f), pulse);
-        }
-        else if (remaining < 5f)
-            timerColor = new Color(1f, 0.92f, 0.2f);
-        else
-            timerColor = Color.white;
-
-        playingScoreText.color = new Color(timerColor.r, timerColor.g, timerColor.b, 0.9f);
-        playingScoreText.rectTransform.anchoredPosition = Vector2.zero;
-
-        // Warning scale pulse
-        if (timer.IsWarning())
-        {
-            float pulse = 1f + Mathf.Sin(Time.time * 6f) * 0.06f;
-            playingScoreText.rectTransform.localScale = new Vector3(pulse, pulse, 1f);
-        }
-        else
-        {
-            playingScoreText.rectTransform.localScale = Vector3.one;
-        }
-
-        // Hide streak dots and outgoing text in Time Warp
-        if (streakDots != null)
-            for (int i = 0; i < STREAK_COUNT; i++)
-                streakDots[i].color = new Color(0, 0, 0, 0);
-        SetAlpha(playingScoreTextOut, 0f);
-    }
-
     void UpdateStreakDots()
     {
         if (streakDots == null) return;
@@ -1932,8 +1808,7 @@ public class ScoreSync : MonoBehaviour
         if (t > 0.3f)
         {
             // Duration scales with score (0.3s min, 1.2s max)
-            float countScale = GameConfig.IsTimeWarp() ? 0.005f
-                             : GameConfig.IsBlitz() ? 0.002f : 0.04f;
+            float countScale = GameConfig.IsBlitz() ? 0.002f : 0.04f;
             float countDuration = Mathf.Clamp(goFinalScore * countScale, 0.3f, 1.2f);
             float countP = Mathf.Clamp01((t - 0.3f) / countDuration);
             float countEased = EaseOutCubic(countP);

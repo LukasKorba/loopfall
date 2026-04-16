@@ -35,9 +35,6 @@ public class Sphere : MonoBehaviour
     // Rewind
     public RewindSystem mRewindSystem;
 
-    // Time Warp
-    public FrenzyTimer mFrenzyTimer;
-
     // Spline track (optional — null when using classic torus)
     public SplineGameController mSplineController;
 
@@ -115,12 +112,6 @@ public class Sphere : MonoBehaviour
             && Steamworks.SteamUtils.BOverlayNeedsPresent()) return;
 #endif
 
-        // Time Warp: check timer expiry
-        if (!mGameOver && !mWaitingToStart && GameConfig.IsTimeWarp()
-            && mFrenzyTimer != null && mFrenzyTimer.IsExpired())
-        {
-            TriggerGameOver();
-        }
 
         // Blitz shield visual toggle
         if (mShieldVisual != null)
@@ -384,13 +375,7 @@ public class Sphere : MonoBehaviour
     {
         IncrementRuns();
 
-        if (GameConfig.IsTimeWarp())
-        {
-            mTorusScript.ResetTimeWarp();
-            if (mFrenzyTimer != null)
-                mFrenzyTimer.StartTimer();
-        }
-        else if (GameConfig.IsBlitz())
+        if (GameConfig.IsBlitz())
         {
             mTorusScript.Reset();
             if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
@@ -464,12 +449,8 @@ public class Sphere : MonoBehaviour
         if (death != null) death.TriggerDeath(transform.position);
 
         // Rewind only in Pure Hell
-        if (!GameConfig.IsTimeWarp() && !GameConfig.IsBlitz() && mRewindSystem != null)
+        if (!GameConfig.IsBlitz() && mRewindSystem != null)
             mRewindSystem.OnDeath();
-
-        // Stop timer in Time Warp
-        if (GameConfig.IsTimeWarp() && mFrenzyTimer != null)
-            mFrenzyTimer.StopTimer();
 
         // Deactivate beam in Blitz
         if (GameConfig.IsBlitz() && mBlitzBeam != null)
@@ -489,13 +470,7 @@ public class Sphere : MonoBehaviour
         if (mSplineController == null)
             mTorusScript.SetPaused(false);
 
-        if (GameConfig.IsTimeWarp())
-        {
-            mTorusScript.InitTimeWarp();
-            if (mFrenzyTimer != null)
-                mFrenzyTimer.StartTimer();
-        }
-        else if (GameConfig.IsBlitz())
+        if (GameConfig.IsBlitz())
         {
             if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
         }

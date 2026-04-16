@@ -24,7 +24,6 @@ public class SceneSetup : MonoBehaviour
     public Shader depthHueShiftRef;
     public Shader gateShaderRef;
     public Shader blackHoleWarpRef;
-    public Shader trackItemShaderRef;
     public Shader obstacleShadowShaderRef;
     public Shader ballShaderRef;
     public Shader trackGridShaderRef;
@@ -52,7 +51,6 @@ public class SceneSetup : MonoBehaviour
         CreateBackground();
         CreateRewindSystem();
         CreateAudio();
-        CreateFrenzyTimer();
         CreatePlatformServices();
         CreateDisplaySettings();
         if (useSplineTrack) CreateSplineTrack();
@@ -80,8 +78,6 @@ public class SceneSetup : MonoBehaviour
     Material railMaterialLeft;
     Material railMaterialRight;
     Material trailMaterial;
-    Material itemTimePlusMaterial;
-    Material itemTimeMinusMaterial;
     Material beamMaterial;
     Material blitzBoxMaterial;
     Material blitzGateMaterial;
@@ -239,16 +235,6 @@ public class SceneSetup : MonoBehaviour
         trailMaterial.SetColor("_Color", Color.white);
         trailMaterial.SetFloat("_Intensity", 2.0f);
         trailMaterial.renderQueue = 3000;
-
-        // Track item materials (Time Warp) — simple unlit glow, Cull Off
-        Shader trackItemShader = trackItemShaderRef != null ? trackItemShaderRef : Shader.Find("Loopfall/TrackItem");
-        itemTimePlusMaterial = new Material(trackItemShader);
-        itemTimePlusMaterial.SetColor("_Color", new Color(0.1f, 0.9f, 0.3f));
-        itemTimePlusMaterial.SetFloat("_Intensity", 2.0f);
-
-        itemTimeMinusMaterial = new Material(trackItemShader);
-        itemTimeMinusMaterial.SetColor("_Color", new Color(0.9f, 0.1f, 0.1f));
-        itemTimeMinusMaterial.SetFloat("_Intensity", 2.0f);
 
         // Blitz beam material — additive glow, same shader as trail
         Shader beamShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
@@ -523,8 +509,6 @@ public class SceneSetup : MonoBehaviour
         torusScript.mObstacleTop = obstacleTopMaterial;
         torusScript.mObstacleShadow = obstacleShadowMaterial;
         torusScript.mBallTransform = ball.transform;
-        torusScript.mItemTimePlus = itemTimePlusMaterial;
-        torusScript.mItemTimeMinus = itemTimeMinusMaterial;
 
         // Blitz mode — wire materials and beam system
         if (GameConfig.IsBlitz())
@@ -676,19 +660,6 @@ public class SceneSetup : MonoBehaviour
     {
         GameObject audioObj = new GameObject("GameAudio");
         audioObj.AddComponent<GameAudio>();
-    }
-
-    void CreateFrenzyTimer()
-    {
-        GameObject timerObj = new GameObject("FrenzyTimer");
-        FrenzyTimer timer = timerObj.AddComponent<FrenzyTimer>();
-
-        Torus torusScript = GameObject.Find("TorusTrack").GetComponent<Torus>();
-        timer.Initialize(torusScript);
-        torusScript.SetFrenzyTimer(timer);
-
-        Sphere sphereScript = GameObject.Find("Ball").GetComponent<Sphere>();
-        sphereScript.mFrenzyTimer = timer;
     }
 
     void CreatePlatformServices()
