@@ -851,18 +851,19 @@ public class Torus : MonoBehaviour
             if (orb.mDismissed) continue;
             if (orb.mGameObject == null || !orb.mGameObject.activeSelf) continue;
 
-            if (mAngle > orb.mAngle)
+            float ringDist = mAngle - orb.mAngle;
+
+            // Collection window: check cross-section while orb is near the ball
+            if (ringDist >= -1f && ringDist <= 4f)
             {
-                // Check if ball is within the orb's cross-section arc
                 float diff = Mathf.Abs(ballCross - orb.mCrossCenterDeg);
-                if (diff <= BlitzOrb.ARC_HALF_SPAN + 10f) // +10° grace margin
+                if (diff <= BlitzOrb.ARC_HALF_SPAN + 15f) // generous grace margin
                 {
                     // Collected — flash + spark to HUD
                     orb.StartCollectedFade();
                     OnOrbCollected(orb.mType);
                     LightHaptic();
 
-                    // Trigger spark effect toward HUD
                     if (mScoreSync != null)
                     {
                         Vector3 worldPos = orb.GetWorldCenter();
@@ -870,11 +871,12 @@ public class Torus : MonoBehaviour
                         mScoreSync.TriggerOrbSpark(worldPos, orb.mType, slotIndex);
                     }
                 }
-                else
-                {
-                    // Missed — gentle fade
-                    orb.StartMissedFade();
-                }
+            }
+
+            // Past collection window — missed
+            if (ringDist > 4f)
+            {
+                orb.StartMissedFade();
             }
         }
     }
