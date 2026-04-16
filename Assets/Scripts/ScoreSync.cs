@@ -105,9 +105,14 @@ public class ScoreSync : MonoBehaviour
     private Image[] blitzGunSlots;
     private Image[] blitzCadencySlots;
     private Image[] blitzShieldSlots;
+    private TMP_Text blitzGunLabel;
+    private TMP_Text blitzCadencyLabel;
+    private TMP_Text blitzShieldLabel;
     private int blitzLastGunCount = -1;
     private int blitzLastCadencyCount = -1;
     private int blitzLastShieldCount = -1;
+    private int blitzLastGunLevel = -1;
+    private int blitzLastCadencyLevel = -1;
 
     // ── BLITZ ORB SPARKS ────────────────────────────────────
     private const int MAX_SPARKS = 6;
@@ -324,6 +329,8 @@ public class ScoreSync : MonoBehaviour
                 blitzLastGunCount = -1;
                 blitzLastCadencyCount = -1;
                 blitzLastShieldCount = -1;
+                blitzLastGunLevel = -1;
+                blitzLastCadencyLevel = -1;
                 titleFadeOutTimer = 0f;
 
                 // First-run tutorial: mark as played (hint text won't show again)
@@ -1543,7 +1550,7 @@ public class ScoreSync : MonoBehaviour
         const float SLOT_SIZE = 14f;
         const float SLOT_GAP = 4f;
         const float ROW_GAP = 6f;
-        const float LEVEL_GAP = 10f; // extra gap between L1 and L2 slots
+        const float LABEL_WIDTH = 86f;
         const float MARGIN_X = 30f;
         const float MARGIN_Y = 30f;
 
@@ -1554,27 +1561,46 @@ public class ScoreSync : MonoBehaviour
         blitzUpgradeGroup.anchorMax = new Vector2(0f, 1f);
         blitzUpgradeGroup.pivot = new Vector2(0f, 1f);
         blitzUpgradeGroup.anchoredPosition = new Vector2(MARGIN_X, -MARGIN_Y);
-        blitzUpgradeGroup.sizeDelta = new Vector2(400f, 120f);
+        blitzUpgradeGroup.sizeDelta = new Vector2(240f, 80f);
 
         Color gunColor = new Color(1f, 0.85f, 0.1f);
         Color cadencyColor = new Color(0.2f, 0.7f, 1.0f);
         Color shieldColor = new Color(0.1f, 1.0f, 0.4f);
 
-        blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 10, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LEVEL_GAP);
-        blitzCadencySlots = CreateSlotRow(blitzUpgradeGroup, 1, 10, cadencyColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LEVEL_GAP);
-        blitzShieldSlots = CreateSlotRow(blitzUpgradeGroup, 2, 5, shieldColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, 0f);
+        blitzGunLabel = CreateRowLabel(blitzUpgradeGroup, "GunLabel", "Beams 1/3", 0, gunColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+        blitzCadencyLabel = CreateRowLabel(blitzUpgradeGroup, "CadencyLabel", "Cadency 1x", 1, cadencyColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+        blitzShieldLabel = CreateRowLabel(blitzUpgradeGroup, "ShieldLabel", "Shield", 2, shieldColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+
+        blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 5, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
+        blitzCadencySlots = CreateSlotRow(blitzUpgradeGroup, 1, 5, cadencyColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
+        blitzShieldSlots = CreateSlotRow(blitzUpgradeGroup, 2, 5, shieldColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
+    }
+
+    TMP_Text CreateRowLabel(RectTransform parent, string name, string content, int rowIndex,
+        Color color, float slotSize, float rowGap, float width)
+    {
+        TMP_Text t = CreateText(parent, name, content, 13f, FontStyles.Bold,
+            new Color(color.r, color.g, color.b, 0.9f));
+        t.alignment = TextAlignmentOptions.MidlineLeft;
+        RectTransform rt = t.rectTransform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        float y = -(rowIndex * (slotSize + rowGap));
+        rt.anchoredPosition = new Vector2(0f, y);
+        rt.sizeDelta = new Vector2(width, slotSize);
+        return t;
     }
 
     Image[] CreateSlotRow(RectTransform parent, int rowIndex, int count, Color color,
-        float slotSize, float slotGap, float rowGap, float levelGap)
+        float slotSize, float slotGap, float rowGap, float xOffset)
     {
         Image[] slots = new Image[count];
         float y = -(rowIndex * (slotSize + rowGap));
 
         for (int i = 0; i < count; i++)
         {
-            float extraGap = (levelGap > 0f && i >= 5) ? levelGap : 0f;
-            float x = i * (slotSize + slotGap) + extraGap;
+            float x = xOffset + i * (slotSize + slotGap);
 
             Image img = CreateImage(parent, "Slot_" + rowIndex + "_" + i,
                 new Color(color.r, color.g, color.b, 0.15f));
@@ -1599,16 +1625,24 @@ public class ScoreSync : MonoBehaviour
         int gun = torus.GetGunOrbCount();
         int cadency = torus.GetCadencyOrbCount();
         int shield = torus.GetShieldOrbCount();
+        int gunLevel = torus.GetGunLevel();
+        int cadencyLevel = torus.GetCadencyLevel();
 
-        if (gun != blitzLastGunCount)
+        if (gun != blitzLastGunCount || gunLevel != blitzLastGunLevel)
         {
             blitzLastGunCount = gun;
-            UpdateSlotRow(blitzGunSlots, gun, new Color(1f, 0.85f, 0.1f));
+            blitzLastGunLevel = gunLevel;
+            int filled = gunLevel >= 2 ? 5 : gun - gunLevel * 5;
+            UpdateSlotRow(blitzGunSlots, filled, new Color(1f, 0.85f, 0.1f));
+            if (blitzGunLabel != null) blitzGunLabel.text = "Beams " + (gunLevel + 1) + "/3";
         }
-        if (cadency != blitzLastCadencyCount)
+        if (cadency != blitzLastCadencyCount || cadencyLevel != blitzLastCadencyLevel)
         {
             blitzLastCadencyCount = cadency;
-            UpdateSlotRow(blitzCadencySlots, cadency, new Color(0.2f, 0.7f, 1.0f));
+            blitzLastCadencyLevel = cadencyLevel;
+            int filled = cadencyLevel >= 2 ? 5 : cadency - cadencyLevel * 5;
+            UpdateSlotRow(blitzCadencySlots, filled, new Color(0.2f, 0.7f, 1.0f));
+            if (blitzCadencyLabel != null) blitzCadencyLabel.text = "Cadency " + (cadencyLevel + 1) + "x";
         }
         if (shield != blitzLastShieldCount)
         {
@@ -1652,11 +1686,14 @@ public class ScoreSync : MonoBehaviour
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             canvasRT, screenPos, null, out canvasPos);
 
-        // Find target slot position
+        // Find target slot position — wrap Gun/Cadency indices into current 5-slot tier
         Image[] slots = type == BlitzOrb.OrbType.Gun ? blitzGunSlots
                       : type == BlitzOrb.OrbType.Cadency ? blitzCadencySlots
                       : blitzShieldSlots;
-        if (slots == null || slotIndex < 0 || slotIndex >= slots.Length) return;
+        if (slots == null) return;
+        if (type != BlitzOrb.OrbType.Shield && slotIndex >= 0)
+            slotIndex = slotIndex % slots.Length;
+        if (slotIndex < 0 || slotIndex >= slots.Length) return;
 
         Vector2 slotScreenPos = RectTransformUtility.WorldToScreenPoint(
             null, slots[slotIndex].rectTransform.position);

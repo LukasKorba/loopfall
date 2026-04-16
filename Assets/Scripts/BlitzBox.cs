@@ -72,11 +72,9 @@ public class BlitzBox
         }
         else if (hitPoints == 1)
         {
-            // 1HP Crystal — octahedron
-            mCube = new GameObject("BlitzBox");
-            mCube.AddComponent<MeshFilter>().mesh = GetOctahedronMesh();
-            mCube.AddComponent<MeshRenderer>();
-            mCube.AddComponent<BoxCollider>();
+            // 1HP — small static cube. Silhouette distinct from Gun orb's octahedron.
+            mCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            mCube.name = "BlitzBox";
         }
         else
         {
@@ -228,12 +226,7 @@ public class BlitzBox
                 }
             }
         }
-        else
-        {
-            // Crystal: spin + bob
-            mCube.transform.localRotation = mBaseRotation * Quaternion.AngleAxis(time * 45f, Vector3.up);
-            mCube.transform.localPosition = mBasePosition + mNormal * Mathf.Sin(time * 2f + mPulsePhase) * 0.02f;
-        }
+        // 1HP static cube — no animation, identity is clarity
     }
 
     void CreateShieldRing(Material ringMat, float cubeSize)

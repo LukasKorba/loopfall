@@ -84,9 +84,11 @@ Shader "Loopfall/DepthHueShift"
 
                 float t = saturate((eyeDepth - _DepthStartWorld) / (_DepthEndWorld - _DepthStartWorld));
 
-                // Bright emissive pixels (orbs, beams, gates) keep their true color
+                // Bright emissive pixels (orbs, beams, gates) keep their true color.
+                // Threshold lowered to let high-intensity pickups (orbs) stay color-stable
+                // at all depths — identity > atmospheric effect.
                 float lum = dot(col.rgb, float3(0.299, 0.587, 0.114));
-                float brightReduce = saturate((lum - 0.6) * 3.0);
+                float brightReduce = saturate((lum - 0.5) * 4.0);
                 t *= (1.0 - brightReduce);
 
                 float3 hsv = rgb2hsv(col.rgb);

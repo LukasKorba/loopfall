@@ -30,12 +30,19 @@ public class BlitzOrb
     Vector3 mBasePosition;
     float mBaseScale;
 
+    // Halo ring — universal pickup signifier (dangers never have one)
+    GameObject mHaloObj;
+    Material mHaloMat;
+
     const float COLLECTED_FADE_DURATION = 0.5f;
     const float MISSED_FADE_DURATION = 1.0f;
     const float OBJ_SCALE = 0.1f;
-    const float SURFACE_OFFSET = 0.15f;
+    const float SURFACE_OFFSET = 0.28f;  // keeps halo ring clear of torus surface, body stays centered in ring
+    const float HALO_BASE_INTENSITY = 3.0f;
 
     static Mesh sRingMesh;
+    static Mesh sHaloMesh;
+    static Camera sCamera;
 
     public BlitzOrb(OrbType type, float crossAngleDeg, Material material)
     {
@@ -84,6 +91,19 @@ public class BlitzOrb
         mr.material = mMat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
+
+        // Halo ring — billboard flat torus, universal pickup signifier
+        mHaloObj = new GameObject("OrbHalo");
+        mHaloObj.AddComponent<MeshFilter>().mesh = GetHaloMesh();
+        MeshRenderer hmr = mHaloObj.AddComponent<MeshRenderer>();
+        mHaloMat = new Material(material);
+        mHaloMat.SetFloat("_Intensity", HALO_BASE_INTENSITY);
+        hmr.material = mHaloMat;
+        hmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        hmr.receiveShadows = false;
+        mHaloObj.transform.SetParent(mGameObject.transform, false);
+        mHaloObj.transform.localPosition = mBasePosition;
+        mHaloObj.transform.localScale = Vector3.one * mBaseScale;
     }
 
     /// <summary>Call each frame for spin + bob + pulse + fade animation.</summary>
@@ -105,6 +125,8 @@ public class BlitzOrb
             mMat.SetFloat("_Intensity", mBaseIntensity * fade * flash);
             float scale = mBaseScale * fade;
             mMeshObj.transform.localScale = Vector3.one * scale;
+            mHaloMat.SetFloat("_Intensity", HALO_BASE_INTENSITY * fade * flash);
+            mHaloObj.transform.localScale = Vector3.one * scale;
             return;
         }
 
@@ -121,21 +143,40 @@ public class BlitzOrb
             mMat.SetFloat("_Intensity", mBaseIntensity * fade * 0.5f);
             float scale = mBaseScale * fade;
             mMeshObj.transform.localScale = Vector3.one * scale;
+            mHaloMat.SetFloat("_Intensity", HALO_BASE_INTENSITY * fade * 0.5f);
+            mHaloObj.transform.localScale = Vector3.one * scale;
             return;
         }
 
         // Spin
         mMeshObj.transform.localRotation = Quaternion.AngleAxis(time * 50f + mPulsePhase * 30f, Vector3.up);
 
-        // Bob along surface normal
-        mMeshObj.transform.localPosition = mBasePosition
-            + mNormal * Mathf.Sin(time * 2.5f + mPulsePhase) * 0.015f;
+        // Bob along surface normal (body + halo move together)
+        Vector3 bobbed = mBasePosition + mNormal * Mathf.Sin(time * 2.5f + mPulsePhase) * 0.015f;
+        mMeshObj.transform.localPosition = bobbed;
+        mHaloObj.transform.localPosition = bobbed;
 
         // Breathing intensity pulse
         float pulse = mBaseIntensity
             + Mathf.Sin(time * 4f + mPulsePhase) * 0.6f
             + Mathf.Sin(time * 7f + mPulsePhase * 1.3f) * 0.3f;
         mMat.SetFloat("_Intensity", pulse);
+
+        // Halo: billboard toward camera, spin in its plane, counter-phase pulse
+        if (sCamera == null) sCamera = Camera.main;
+        if (sCamera != null)
+        {
+            Vector3 toCam = sCamera.transform.position - mHaloObj.transform.position;
+            if (toCam.sqrMagnitude > 0.0001f)
+            {
+                mHaloObj.transform.rotation = Quaternion.LookRotation(toCam)
+                    * Quaternion.AngleAxis(time * 35f + mPulsePhase * 20f, Vector3.forward);
+            }
+        }
+        float haloPulse = HALO_BASE_INTENSITY
+            + Mathf.Sin(time * 4f + mPulsePhase + Mathf.PI) * 0.9f
+            + Mathf.Sin(time * 7f + mPulsePhase * 1.3f + Mathf.PI) * 0.4f;
+        mHaloMat.SetFloat("_Intensity", haloPulse);
     }
 
     public void StartCollectedFade()
@@ -219,5 +260,48 @@ public class BlitzOrb
         sRingMesh.RecalculateBounds();
 
         return sRingMesh;
+    }
+
+    // ── Halo mesh: flat annulus (2D ring) in XY plane, cached ──
+
+    static Mesh GetHaloMesh()
+    {
+        if (sHaloMesh != null) return sHaloMesh;
+
+        sHaloMesh = new Mesh();
+        sHaloMesh.name = "BlitzOrbHalo";
+
+        const int segs = 48;
+        const float innerR = 1.28f;
+        const float outerR = 1.4f;
+
+        var verts = new Vector3[(segs + 1) * 2];
+        var tris = new int[segs * 6];
+
+        for (int i = 0; i <= segs; i++)
+        {
+            float a = (float)i / segs * Mathf.PI * 2f;
+            float cos = Mathf.Cos(a);
+            float sin = Mathf.Sin(a);
+            verts[i * 2]     = new Vector3(cos * innerR, sin * innerR, 0f);
+            verts[i * 2 + 1] = new Vector3(cos * outerR, sin * outerR, 0f);
+        }
+
+        int ti = 0;
+        for (int i = 0; i < segs; i++)
+        {
+            int a = i * 2;
+            int b = a + 1;
+            int c = a + 2;
+            int d = a + 3;
+            tris[ti++] = a; tris[ti++] = b; tris[ti++] = c;
+            tris[ti++] = c; tris[ti++] = b; tris[ti++] = d;
+        }
+
+        sHaloMesh.vertices = verts;
+        sHaloMesh.triangles = tris;
+        sHaloMesh.RecalculateBounds();
+
+        return sHaloMesh;
     }
 }
