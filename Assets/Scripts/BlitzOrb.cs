@@ -22,7 +22,7 @@ public class BlitzOrb
     float mPulsePhase;
     float mFadeTimer;
 
-    const float FADE_DURATION = 0.35f;
+    const float FADE_DURATION = 1.2f;
     const float STRIP_WIDTH = 0.25f;
     const float SURFACE_OFFSET = 0.03f;
     const float ARC_HALF_SPAN = 20f; // degrees — 40° total arc
@@ -57,9 +57,11 @@ public class BlitzOrb
                 mGameObject.SetActive(false);
                 return;
             }
-            float fade = 1f - p;
-            mMat.SetFloat("_Intensity", mBaseIntensity * fade);
-            mGameObject.transform.localScale = Vector3.one * (1f + p * 0.5f); // expand as it fades
+            // Bright flash at start, then smooth decay
+            float flash = p < 0.15f ? Mathf.Lerp(3f, 1f, p / 0.15f) : 1f;
+            float fade = 1f - p * p; // quadratic — stays visible longer, drops off at end
+            mMat.SetFloat("_Intensity", mBaseIntensity * fade * flash);
+            mGameObject.transform.localScale = Vector3.one * (1f + p * 2f); // expand 3x over duration
             return;
         }
 

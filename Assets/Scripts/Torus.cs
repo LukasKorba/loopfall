@@ -847,7 +847,7 @@ public class Torus : MonoBehaviour
             if (orb.mCollected) continue;
             if (orb.mGameObject == null || !orb.mGameObject.activeSelf) continue;
 
-            if (mAngle - 0.8f > orb.mAngle)
+            if (mAngle > orb.mAngle)
             {
                 orb.mCollected = true;
                 orb.StartFade();
