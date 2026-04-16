@@ -26,6 +26,9 @@ public class SplineGameController : MonoBehaviour
     // Materials — assigned from SceneSetup
     Material trackFrontMaterial;
     Material trackInnerMaterial;
+    Material gateFrontMaterial;
+    Material gateTopMaterial;
+    Material gateShadowMaterial;
 
     // ── TRACK STREAMING ──────────────────────────────────────
 
@@ -69,16 +72,25 @@ public class SplineGameController : MonoBehaviour
 
     bool initialized = false;
     int score = 0;
+    int lastGateMeshIndex = -1;  // track which gates have meshes created
+    int lastSplitMeshIndex = -1; // track which splits have meshes created
+
+    // Score display — writes to the same TextMesh that ScoreSync reads
+    [System.NonSerialized] public TextMesh scoreLbl;
 
     // ── INITIALIZATION ───────────────────────────────────────
 
     /// <summary>
     /// Set up the spline track system. Call after materials are created.
     /// </summary>
-    public void Initialize(Material frontMat, Material innerMat, Transform ball, Camera cam)
+    public void Initialize(Material frontMat, Material innerMat, Transform ball, Camera cam,
+                           Material gateFront, Material gateTop, Material gateShadow)
     {
         trackFrontMaterial = frontMat;
         trackInnerMaterial = innerMat;
+        gateFrontMaterial = gateFront;
+        gateTopMaterial = gateTop;
+        gateShadowMaterial = gateShadow;
         ballTransform = ball;
         ballRb = ball.GetComponent<Rigidbody>();
 
@@ -89,8 +101,11 @@ public class SplineGameController : MonoBehaviour
         splineTrack.GenerateTestPath(GENERATE_AHEAD + 50f);
         generatedUpTo = splineTrack.TotalLength;
 
-        // Generate gates
-        splineTrack.GenerateGates(0f, generatedUpTo);
+        // DEBUG: gates and splits disabled for positioning debug
+        // splineTrack.GenerateGates(0f, generatedUpTo);
+        // CreateGateMeshes();
+        // splineTrack.GenerateSplits(0f, generatedUpTo);
+        // CreateSplitMeshes();
 
         // Create initial mesh segments
         RebuildMeshSegments();
@@ -108,6 +123,7 @@ public class SplineGameController : MonoBehaviour
         if (ballRb != null)
         {
             ballRb.linearDamping = BALL_DRAG;
+            ballRb.useGravity = true;
         }
 
         initialized = true;
@@ -118,7 +134,7 @@ public class SplineGameController : MonoBehaviour
     /// </summary>
     void PositionBallAtStart()
     {
-        float startDist = 5f; // small offset from the very start
+        float startDist = 2f; // small offset from the very start
 
         Vector3 pos, tangent, normal, binormal;
         splineTrack.EvaluateFrame(startDist, out pos, out tangent, out normal, out binormal);
@@ -146,41 +162,46 @@ public class SplineGameController : MonoBehaviour
 
         // Find ball's position on the spline
         float ballDist = splineTrack.FindClosestDistance(ballTransform.position);
+        splineTrack.BallDistance = ballDist;
 
-        // Apply gentle forward force along the spline tangent
-        // This supplements gravity on the slope and ensures minimum forward speed
-        Vector3 tangent = splineTrack.EvaluateTangent(ballDist);
-        float forwardSpeed = Vector3.Dot(ballRb.linearVelocity, tangent);
+        // ── MOVEMENT DISABLED FOR DEBUGGING ──
+        // All forward force, gate checks, and path extension disabled.
+        // Uncomment when positioning/camera are verified.
 
-        if (forwardSpeed < MAX_FORWARD_SPEED)
-        {
-            float forceMagnitude = FORWARD_FORCE;
-            // Reduce force as we approach max speed
-            if (forwardSpeed > MAX_FORWARD_SPEED * 0.7f)
-                forceMagnitude *= 1f - (forwardSpeed - MAX_FORWARD_SPEED * 0.7f)
-                                       / (MAX_FORWARD_SPEED * 0.3f);
+        // // Apply gentle forward force along the spline tangent
+        // Vector3 tangent = splineTrack.EvaluateTangent(ballDist);
+        // float forwardSpeed = Vector3.Dot(ballRb.linearVelocity, tangent);
+        // if (forwardSpeed < MAX_FORWARD_SPEED)
+        // {
+        //     float forceMagnitude = FORWARD_FORCE;
+        //     if (forwardSpeed > MAX_FORWARD_SPEED * 0.7f)
+        //         forceMagnitude *= 1f - (forwardSpeed - MAX_FORWARD_SPEED * 0.7f)
+        //                                / (MAX_FORWARD_SPEED * 0.3f);
+        //     ballRb.AddForce(tangent * forceMagnitude, ForceMode.Force);
+        // }
 
-            ballRb.AddForce(tangent * forceMagnitude, ForceMode.Force);
-        }
+        // // Check gate passage
+        // int passed = splineTrack.CheckGatePassage(ballDist);
+        // if (passed > 0)
+        // {
+        //     score = splineTrack.Score;
+        //     if (scoreLbl != null)
+        //         scoreLbl.text = score.ToString();
+        // }
 
-        // Check gate passage
-        int passed = splineTrack.CheckGatePassage(ballDist);
-        if (passed > 0)
-        {
-            score = splineTrack.Score;
-            // TODO: hook into ScoreSync for UI update
-        }
-
-        // Extend path if ball is getting close to the end
-        float distToEnd = generatedUpTo - ballDist;
-        if (distToEnd < GENERATE_AHEAD)
-        {
-            float extend = GENERATE_AHEAD - distToEnd + 50f;
-            splineTrack.ExtendPath(extend);
-            splineTrack.GenerateGates(generatedUpTo, splineTrack.TotalLength);
-            generatedUpTo = splineTrack.TotalLength;
-            RebuildMeshSegments();
-        }
+        // // Extend path if ball is getting close to the end
+        // float distToEnd = generatedUpTo - ballDist;
+        // if (distToEnd < GENERATE_AHEAD)
+        // {
+        //     float extend = GENERATE_AHEAD - distToEnd + 50f;
+        //     splineTrack.ExtendPath(extend);
+        //     splineTrack.GenerateGates(generatedUpTo, splineTrack.TotalLength);
+        //     splineTrack.GenerateSplits(generatedUpTo, splineTrack.TotalLength);
+        //     generatedUpTo = splineTrack.TotalLength;
+        //     RebuildMeshSegments();
+        //     CreateGateMeshes();
+        //     CreateSplitMeshes();
+        // }
     }
 
     // ── MESH MANAGEMENT ──────────────────────────────────────
@@ -243,6 +264,84 @@ public class SplineGameController : MonoBehaviour
     }
 
     /// <summary>
+    /// Create 3D meshes for gates that don't have one yet.
+    /// </summary>
+    void CreateGateMeshes()
+    {
+        var gateList = splineTrack.Gates;
+        for (int i = lastGateMeshIndex + 1; i < gateList.Count; i++)
+        {
+            GameObject gateObj = splineTrack.GenerateGateMesh(
+                i, gateFrontMaterial, gateTopMaterial, gateShadowMaterial);
+            if (gateObj != null)
+                gateObj.transform.SetParent(transform);
+        }
+        lastGateMeshIndex = gateList.Count - 1;
+    }
+
+    /// <summary>
+    /// Create branch track meshes for split zones that don't have them yet.
+    /// Each split gets a left and right branch mesh with colliders.
+    /// </summary>
+    void CreateSplitMeshes()
+    {
+        var splitList = splineTrack.Splits;
+        for (int i = lastSplitMeshIndex + 1; i < splitList.Count; i++)
+        {
+            SplineTrack.SplitZone zone = splitList[i];
+
+            // Left branch (+1)
+            Mesh leftMesh = splineTrack.GenerateBranchMesh(zone, 1f);
+            GameObject leftObj = new GameObject("BranchLeft_" + i);
+            leftObj.name = "Psychokinesis3"; // contact normal detection
+            leftObj.transform.SetParent(transform);
+
+            MeshFilter lmf = leftObj.AddComponent<MeshFilter>();
+            lmf.mesh = leftMesh;
+
+            MeshRenderer lmr = leftObj.AddComponent<MeshRenderer>();
+            lmr.materials = new Material[] { trackFrontMaterial, trackInnerMaterial };
+            lmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lmr.receiveShadows = true;
+
+            MeshCollider lmc = leftObj.AddComponent<MeshCollider>();
+            lmc.sharedMesh = leftMesh;
+
+            PhysicsMaterial branchPhys = new PhysicsMaterial("BranchPhys");
+            branchPhys.dynamicFriction = 0f;
+            branchPhys.staticFriction = 0f;
+            branchPhys.bounciness = 0f;
+            branchPhys.frictionCombine = PhysicsMaterialCombine.Minimum;
+            branchPhys.bounceCombine = PhysicsMaterialCombine.Minimum;
+            lmc.material = branchPhys;
+
+            // Right branch (-1)
+            Mesh rightMesh = splineTrack.GenerateBranchMesh(zone, -1f);
+            GameObject rightObj = new GameObject("BranchRight_" + i);
+            rightObj.name = "Psychokinesis3";
+            rightObj.transform.SetParent(transform);
+
+            MeshFilter rmf = rightObj.AddComponent<MeshFilter>();
+            rmf.mesh = rightMesh;
+
+            MeshRenderer rmr = rightObj.AddComponent<MeshRenderer>();
+            rmr.materials = new Material[] { trackFrontMaterial, trackInnerMaterial };
+            rmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            rmr.receiveShadows = true;
+
+            MeshCollider rmc = rightObj.AddComponent<MeshCollider>();
+            rmc.sharedMesh = rightMesh;
+            rmc.material = branchPhys;
+
+            // Store references back in zone data
+            zone.leftMeshObj = leftObj;
+            zone.rightMeshObj = rightObj;
+            splitList[i] = zone;
+        }
+        lastSplitMeshIndex = splitList.Count - 1;
+    }
+
+    /// <summary>
     /// Remove mesh segments that are far behind the ball.
     /// </summary>
     void CleanupBehind(float ballDist)
@@ -258,6 +357,16 @@ public class SplineGameController : MonoBehaviour
     }
 
     // ── PUBLIC API ───────────────────────────────────────────
+
+    /// <summary>Reset ball to spline start, clear score, reset gate tracking.</summary>
+    public void ResetBall()
+    {
+        PositionBallAtStart();
+        splineTrack.ResetRun();
+        score = 0;
+        if (scoreLbl != null)
+            scoreLbl.text = "0";
+    }
 
     /// <summary>Get the spline tangent at the ball's current position (for Sphere.cs input).</summary>
     public Vector3 GetBallForwardDirection()

@@ -15,6 +15,8 @@ public class SceneSetup : MonoBehaviour
     public int minorSegments = 16;
     // MANUAL PARAM: Only render bottom hemisphere of tube (the U-shape)
     public bool halfTubeOnly = true;
+    // MANUAL PARAM: Use spline-extruded track instead of fixed torus
+    public bool useSplineTrack = false;
 
     // Direct references — ensures shaders are included in builds
     public Shader depthHueShiftRef;
@@ -47,6 +49,7 @@ public class SceneSetup : MonoBehaviour
         CreateFrenzyTimer();
         CreatePlatformServices();
         CreateDisplaySettings();
+        if (useSplineTrack) CreateSplineTrack();
 #if UNITY_EDITOR
         CreateDebugPanel();
 #endif
@@ -76,6 +79,60 @@ public class SceneSetup : MonoBehaviour
     Shader depthHueShiftShader;
 
     public static ThemeData activeTheme;
+
+    /// <summary>
+    /// Apply a theme to all existing materials without reloading the scene.
+    /// Call from settings UI when browsing themes.
+    /// </summary>
+    public void ApplyThemeLive(ThemeData t)
+    {
+        activeTheme = t;
+
+        if (trackMaterial != null)
+        {
+            trackMaterial.SetColor("_BaseColor", t.trackBase);
+            trackMaterial.SetColor("_GridColor1", t.gridColor1);
+            trackMaterial.SetColor("_GridColor2", t.gridColor2);
+            trackMaterial.SetColor("_GridColor3", t.gridColor3);
+            trackMaterial.SetColor("_FarColor", t.gridFarColor);
+            trackMaterial.SetColor("_SparkColor1", t.sparkColor1);
+            trackMaterial.SetColor("_SparkColor2", t.sparkColor2);
+            trackMaterial.SetColor("_SparkColor3", t.sparkColor3);
+        }
+        if (obstacleFrontMaterial != null)
+        {
+            obstacleFrontMaterial.SetColor("_Color", t.gateFrontColor);
+            obstacleFrontMaterial.SetColor("_EmissionColor", t.gateFrontEmission);
+        }
+        if (obstacleTopMaterial != null)
+        {
+            obstacleTopMaterial.SetColor("_Color", t.gateTopColor);
+            obstacleTopMaterial.SetColor("_EmissionColor", t.gateTopEmission);
+        }
+        if (ballMaterial != null)
+        {
+            ballMaterial.SetColor("_Color", t.ballColor);
+            ballMaterial.SetColor("_RimColor", t.ballRimColor);
+            ballMaterial.SetColor("_EmissionBase", t.ballEmissionBase);
+        }
+        if (railMaterialLeft != null)
+        {
+            railMaterialLeft.SetColor("_NearColor", t.railLeftNear);
+            railMaterialLeft.SetColor("_FarColor", t.railLeftFar);
+            railMaterialLeft.SetColor("_NearEmission", t.railLeftEmissionNear);
+            railMaterialLeft.SetColor("_FarEmission", t.railLeftEmissionFar);
+        }
+        if (railMaterialRight != null)
+        {
+            railMaterialRight.SetColor("_NearColor", t.railRightNear);
+            railMaterialRight.SetColor("_FarColor", t.railRightFar);
+            railMaterialRight.SetColor("_NearEmission", t.railRightEmissionNear);
+            railMaterialRight.SetColor("_FarEmission", t.railRightEmissionFar);
+        }
+
+        Camera cam = Camera.main;
+        if (cam != null) cam.backgroundColor = t.cameraBg;
+    }
 
     void CreateMaterials()
     {
@@ -575,6 +632,67 @@ public class SceneSetup : MonoBehaviour
         dbgObj.AddComponent<DebugPanel>();
     }
 #endif
+
+    void CreateSplineTrack()
+    {
+        GameObject ball = GameObject.Find("Ball");
+        Camera cam = Camera.main;
+
+        // Create spline controller
+        GameObject splineObj = new GameObject("SplineTrackController");
+        SplineGameController splineCtrl = splineObj.AddComponent<SplineGameController>();
+
+        // Wire score output to the same TextMesh that ScoreSync reads
+        TextMesh scoreLbl = GameObject.Find("ScoreTextMesh").GetComponent<TextMesh>();
+        splineCtrl.scoreLbl = scoreLbl;
+
+        splineCtrl.Initialize(
+            trackMaterial, trackMaterial,
+            ball.transform, cam,
+            obstacleFrontMaterial, obstacleTopMaterial, obstacleShadowMaterial);
+
+        // Wire to Sphere so input uses spline tangent for force direction
+        Sphere sphereScript = ball.GetComponent<Sphere>();
+        sphereScript.mSplineController = splineCtrl;
+
+        // Hide torus mesh and stop its rotation (keep script alive for Sphere.cs calls)
+        GameObject torusObj = GameObject.Find("TorusTrack");
+        if (torusObj != null)
+        {
+            // Hide torus track mesh
+            Transform trackChild = torusObj.transform.Find("Psychokinesis3");
+            if (trackChild != null) trackChild.gameObject.SetActive(false);
+
+            // Hide edge rails
+            foreach (Transform child in torusObj.transform)
+            {
+                if (child.name == "torusObstacle")
+                    child.gameObject.SetActive(false);
+            }
+
+            // Pause torus rotation — prevents obstacle generation
+            Torus torusScript = torusObj.GetComponent<Torus>();
+            torusScript.SetPaused(true);
+        }
+
+        // Disable CameraSwing — SplineCameraFollow handles camera in spline mode
+        CameraSwing swing = cam.GetComponent<CameraSwing>();
+        if (swing != null) swing.enabled = false;
+
+        // Re-initialize RewindSystem for spline mode
+        RewindSystem rewind = FindAnyObjectByType<RewindSystem>();
+        if (rewind != null)
+        {
+            rewind.InitializeSpline(
+                ball.transform,
+                ball.GetComponent<Rigidbody>(),
+                splineCtrl,
+                trailMaterial,
+                cam.transform,
+                cam.transform.position,
+                cam.transform.rotation);
+        }
+    }
 
     void CreateRewindSystem()
     {

@@ -20,10 +20,12 @@ public class SplineCameraFollow : MonoBehaviour
     // In the spline's local frame: tangent (forward), normal (up), binormal (side)
 
     // How far behind the ball the camera sits (along -tangent)
-    float followDistance = 1.8f;
+    float followDistance = 1.727f;
 
-    // Height above the track centerline (along normal)
-    float heightOffset = 0.8f;
+    // Height offset from track centerline (along normal)
+    // Negative = below centerline but still above the ball (which sits at -0.9)
+    // Matches torus camera: 0.695 above ball = centerline - 0.205
+    float heightOffset = -0.205f;
 
     // ── SMOOTHING ────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ public class SplineCameraFollow : MonoBehaviour
 
     // Track the ball's spline distance for smooth following
     float lastBallDist = 0f;
+    bool firstFrame = true;
 
     void LateUpdate()
     {
@@ -87,6 +90,15 @@ public class SplineCameraFollow : MonoBehaviour
         splineTrack.EvaluateFrame(lookDist, out lookPos, out lookTangent, out lookNormal, out lookBinormal);
         lookTarget += lookNormal * 0.1f; // look slightly above center
 
+        // First frame: snap immediately (no lerp from stale camera position)
+        if (firstFrame)
+        {
+            transform.position = targetPos;
+            transform.rotation = Quaternion.LookRotation(lookTarget - transform.position, normal);
+            firstFrame = false;
+            return;
+        }
+
         // Smooth position
         transform.position = Vector3.Lerp(transform.position, targetPos, positionSmooth * Time.deltaTime);
 
@@ -102,5 +114,6 @@ public class SplineCameraFollow : MonoBehaviour
     {
         lateralOffset = 0f;
         lateralVelocity = 0f;
+        firstFrame = true;
     }
 }

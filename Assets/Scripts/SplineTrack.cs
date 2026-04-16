@@ -82,6 +82,185 @@ public class SplineTrack : MonoBehaviour
         public float endDist;   // arc-length distance where this segment ends
     }
 
+    // ── PATH SPLITS ──────────────────────────────────────────
+
+    public struct SplitZone
+    {
+        public float startDist;       // where the split begins
+        public float endDist;         // where branches merge back
+        public float maxSeparation;   // peak lateral offset
+        public GameObject leftMeshObj;
+        public GameObject rightMeshObj;
+    }
+
+    private List<SplitZone> splits = new List<SplitZone>();
+
+    const float SPLIT_MIN_INTERVAL = 80f;   // minimum distance between splits
+    const float SPLIT_MAX_INTERVAL = 120f;
+    const float SPLIT_LENGTH = 40f;         // how long each split zone is
+    const float SPLIT_SEPARATION = 2.5f;    // max lateral offset per branch
+    const float SPLIT_FIRST_AT = 60f;       // earliest split distance
+    float nextSplitAt = -1f;                // distance where next split starts
+
+    /// <summary>
+    /// Compute the lateral offset at a given distance within a split zone.
+    /// Returns 0 outside the zone, smooth sine ramp inside.
+    /// </summary>
+    public float GetSplitOffset(SplitZone zone, float dist)
+    {
+        if (dist < zone.startDist || dist > zone.endDist) return 0f;
+        float t = (dist - zone.startDist) / (zone.endDist - zone.startDist);
+        return zone.maxSeparation * Mathf.Sin(Mathf.PI * t);
+    }
+
+    /// <summary>Check if a distance falls within any split zone.</summary>
+    public bool IsInSplit(float dist, out SplitZone zone)
+    {
+        for (int i = 0; i < splits.Count; i++)
+        {
+            if (dist >= splits[i].startDist && dist <= splits[i].endDist)
+            {
+                zone = splits[i];
+                return true;
+            }
+        }
+        zone = default;
+        return false;
+    }
+
+    /// <summary>Get all split zones.</summary>
+    public List<SplitZone> Splits { get { return splits; } }
+
+    /// <summary>
+    /// Generate split zones along the track at semi-random intervals.
+    /// Called during path extension.
+    /// </summary>
+    public void GenerateSplits(float fromDist, float toDist)
+    {
+        if (nextSplitAt < 0f)
+            nextSplitAt = SPLIT_FIRST_AT + Random.Range(0f, 20f);
+
+        while (nextSplitAt + SPLIT_LENGTH < toDist)
+        {
+            if (nextSplitAt >= fromDist)
+            {
+                SplitZone zone;
+                zone.startDist = nextSplitAt;
+                zone.endDist = nextSplitAt + SPLIT_LENGTH;
+                zone.maxSeparation = SPLIT_SEPARATION;
+                zone.leftMeshObj = null;
+                zone.rightMeshObj = null;
+                splits.Add(zone);
+            }
+            nextSplitAt += SPLIT_LENGTH + Random.Range(SPLIT_MIN_INTERVAL, SPLIT_MAX_INTERVAL);
+        }
+    }
+
+    /// <summary>
+    /// Generate a branch track mesh for one side of a split zone.
+    /// The branch follows the main spline but offset laterally.
+    /// sign: +1 = left branch, -1 = right branch.
+    /// </summary>
+    public Mesh GenerateBranchMesh(SplitZone zone, float sign)
+    {
+        Vector3[] profile = GenerateProfile();
+
+        float length = zone.endDist - zone.startDist;
+        int ringCount = Mathf.Max(2, Mathf.CeilToInt(length * RINGS_PER_UNIT));
+
+        Vector3[] ringPositions = new Vector3[ringCount];
+        Vector3[] ringNormals = new Vector3[ringCount];
+        Vector3[] ringBinormals = new Vector3[ringCount];
+
+        for (int r = 0; r < ringCount; r++)
+        {
+            float d = zone.startDist + length * ((float)r / (ringCount - 1));
+            Vector3 pos, tangent, normal, binormal;
+            EvaluateFrame(d, out pos, out tangent, out normal, out binormal);
+
+            // Apply lateral offset
+            float offset = GetSplitOffset(zone, d) * sign;
+            ringPositions[r] = pos + binormal * offset;
+            ringNormals[r] = normal;
+            ringBinormals[r] = binormal;
+        }
+
+        // Build mesh — same structure as GenerateTrackMesh
+        int quadsPerRing = PROFILE_SEGMENTS;
+        int totalQuads = quadsPerRing * (ringCount - 1);
+        int vertsPerSide = totalQuads * 6;
+        int totalVerts = vertsPerSide * 2;
+
+        Vector3[] vertices = new Vector3[totalVerts];
+        Vector3[] normals = new Vector3[totalVerts];
+        Vector2[] uvs = new Vector2[totalVerts];
+        int[] trisOuter = new int[vertsPerSide];
+        int[] trisInner = new int[vertsPerSide];
+
+        int vi = 0;
+        int outerTri = 0;
+        int innerTri = 0;
+
+        for (int r = 0; r < ringCount - 1; r++)
+        {
+            float uStart = (float)r / (ringCount - 1);
+            float uEnd = (float)(r + 1) / (ringCount - 1);
+
+            for (int p = 0; p < quadsPerRing; p++)
+            {
+                float vStart = (float)p / quadsPerRing;
+                float vEnd = (float)(p + 1) / quadsPerRing;
+
+                Vector3 p00 = TransformProfilePoint(profile[p], ringPositions[r],
+                    ringNormals[r], ringBinormals[r]);
+                Vector3 p10 = TransformProfilePoint(profile[p + 1], ringPositions[r],
+                    ringNormals[r], ringBinormals[r]);
+                Vector3 p01 = TransformProfilePoint(profile[p], ringPositions[r + 1],
+                    ringNormals[r + 1], ringBinormals[r + 1]);
+                Vector3 p11 = TransformProfilePoint(profile[p + 1], ringPositions[r + 1],
+                    ringNormals[r + 1], ringBinormals[r + 1]);
+
+                Vector3 faceNormal = Vector3.Cross(p10 - p00, p01 - p00).normalized;
+
+                Vector2 uv00 = new Vector2(uStart, vStart);
+                Vector2 uv10 = new Vector2(uStart, vEnd);
+                Vector2 uv01 = new Vector2(uEnd, vStart);
+                Vector2 uv11 = new Vector2(uEnd, vEnd);
+
+                // Outer face
+                vertices[vi] = p00; normals[vi] = faceNormal; uvs[vi] = uv00; trisOuter[outerTri++] = vi++;
+                vertices[vi] = p01; normals[vi] = faceNormal; uvs[vi] = uv01; trisOuter[outerTri++] = vi++;
+                vertices[vi] = p10; normals[vi] = faceNormal; uvs[vi] = uv10; trisOuter[outerTri++] = vi++;
+                vertices[vi] = p10; normals[vi] = faceNormal; uvs[vi] = uv10; trisOuter[outerTri++] = vi++;
+                vertices[vi] = p01; normals[vi] = faceNormal; uvs[vi] = uv01; trisOuter[outerTri++] = vi++;
+                vertices[vi] = p11; normals[vi] = faceNormal; uvs[vi] = uv11; trisOuter[outerTri++] = vi++;
+
+                // Inner face
+                Vector3 innerNormal = -faceNormal;
+                vertices[vi] = p00; normals[vi] = innerNormal; uvs[vi] = uv00; trisInner[innerTri++] = vi++;
+                vertices[vi] = p10; normals[vi] = innerNormal; uvs[vi] = uv10; trisInner[innerTri++] = vi++;
+                vertices[vi] = p01; normals[vi] = innerNormal; uvs[vi] = uv01; trisInner[innerTri++] = vi++;
+                vertices[vi] = p10; normals[vi] = innerNormal; uvs[vi] = uv10; trisInner[innerTri++] = vi++;
+                vertices[vi] = p11; normals[vi] = innerNormal; uvs[vi] = uv11; trisInner[innerTri++] = vi++;
+                vertices[vi] = p01; normals[vi] = innerNormal; uvs[vi] = uv01; trisInner[innerTri++] = vi++;
+            }
+        }
+
+        Mesh mesh = new Mesh();
+        mesh.name = "SplineBranch";
+        if (totalVerts > 65535)
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.vertices = vertices;
+        mesh.normals = normals;
+        mesh.uv = uvs;
+        mesh.subMeshCount = 2;
+        mesh.SetTriangles(trisOuter, 0);
+        mesh.SetTriangles(trisInner, 1);
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+
     // ── OBSTACLES ────────────────────────────────────────────
 
     const float GATE_SPACING = 5.0f; // world units between gates (≈ 10° on old torus)
@@ -92,7 +271,6 @@ public class SplineTrack : MonoBehaviour
         public float distance;    // position along spline (arc length)
         public float gapCenter;   // 0-180° on cross-section (0=left, 90=center, 180=right)
         public int gapHalfWidth;  // degrees
-        public Gate next;         // linked list for fast traversal (nullable via index)
     }
 
     private List<Gate> gates = new List<Gate>();
@@ -147,10 +325,11 @@ public class SplineTrack : MonoBehaviour
         int segIdx;
         DistanceToParam(distance, out segIdx, out t);
 
-        int i0 = Mathf.Max(segIdx - 1, 0);
-        int i1 = segIdx;
-        int i2 = Mathf.Min(segIdx + 1, controlPoints.Count - 1);
-        int i3 = Mathf.Min(segIdx + 2, controlPoints.Count - 1);
+        // Must match the arc-length table indexing: segment seg uses [seg, seg+1, seg+2, seg+3]
+        int i0 = segIdx;
+        int i1 = segIdx + 1;
+        int i2 = segIdx + 2;
+        int i3 = Mathf.Min(segIdx + 3, controlPoints.Count - 1);
 
         return CatmullRom(
             controlPoints[i0].position,
@@ -172,10 +351,11 @@ public class SplineTrack : MonoBehaviour
         int segIdx;
         DistanceToParam(distance, out segIdx, out t);
 
-        int i0 = Mathf.Max(segIdx - 1, 0);
-        int i1 = segIdx;
-        int i2 = Mathf.Min(segIdx + 1, controlPoints.Count - 1);
-        int i3 = Mathf.Min(segIdx + 2, controlPoints.Count - 1);
+        // Must match the arc-length table indexing: segment seg uses [seg, seg+1, seg+2, seg+3]
+        int i0 = segIdx;
+        int i1 = segIdx + 1;
+        int i2 = segIdx + 2;
+        int i3 = Mathf.Min(segIdx + 3, controlPoints.Count - 1);
 
         return CatmullRomDerivative(
             controlPoints[i0].position,
@@ -323,9 +503,9 @@ public class SplineTrack : MonoBehaviour
 
         for (int j = 0; j <= PROFILE_SEGMENTS; j++)
         {
-            // Angle from -90° (left) through -180° (bottom) to -270° (right)
-            // This puts the opening at the top and the groove at the bottom
-            float angle = Mathf.PI * 0.5f + Mathf.PI * ((float)j / PROFILE_SEGMENTS);
+            // Angle from 180° (left edge) through 270° (bottom) to 360° (right edge)
+            // This sweeps the bottom semicircle — U-shape opening upward
+            float angle = Mathf.PI + Mathf.PI * ((float)j / PROFILE_SEGMENTS);
             float x = Mathf.Cos(angle) * MINOR_RADIUS;
             float y = Mathf.Sin(angle) * MINOR_RADIUS;
             profile[j] = new Vector3(x, y, 0f);
@@ -480,7 +660,7 @@ public class SplineTrack : MonoBehaviour
 
             // Gentle sine-wave curves
             float x = Mathf.Sin(z * 0.05f) * 4f;
-            float y = -z * 0.15f; // gentle downhill slope for forward motion
+            float y = 0f; // flat for debugging — restore -z * 0.15f for downhill slope
 
             controlPoints.Add(new ControlPoint(new Vector3(x, y, z)));
         }
@@ -684,5 +864,265 @@ public class SplineTrack : MonoBehaviour
         score = 0;
         currentGateIndex = -1;
         ballDistance = 0f;
+    }
+
+    // ── GATE MESH GENERATION ─────────────────────────────────
+
+    // Gate geometry constants — matching Obstacle.cs proportions
+    const float GATE_WALL_RECESS = 0.936f;  // front face inner edge (fraction of MINOR_RADIUS)
+    const float GATE_CEIL_INNER = 0.916f;   // ceiling inner edge
+    const float GATE_DEPTH = 0.1f;          // depth along tangent (ceiling extent)
+    const float GATE_STEP_DEG = 4f;         // angular resolution (degrees per step)
+    const float GATE_SHADOW_WIDTH = 0.25f;
+    const float GATE_SHADOW_OFFSET = 0.008f;
+    const float GATE_BASE_HEIGHT = 0.04f;
+
+    /// <summary>
+    /// Generate 3D gate mesh at the given gate's position along the spline.
+    /// Creates front face + ceiling (2 submeshes), shadow child, base edge child,
+    /// and MeshCollider. Matches Obstacle.cs output but oriented to the spline frame.
+    /// </summary>
+    public GameObject GenerateGateMesh(int gateIndex, Material frontMat, Material topMat, Material shadowMat)
+    {
+        if (gateIndex < 0 || gateIndex >= gates.Count) return null;
+
+        Gate gate = gates[gateIndex];
+
+        Vector3 pos, tangent, normal, binormal;
+        EvaluateFrame(gate.distance, out pos, out tangent, out normal, out binormal);
+
+        float gapFrom = gate.gapCenter - gate.gapHalfWidth;
+        float gapTo = gate.gapCenter + gate.gapHalfWidth;
+
+        // Mesh data for main gate (front face submesh 0, ceiling submesh 1)
+        var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tris0 = new List<int>(); // front + side caps
+        var tris1 = new List<int>(); // ceiling
+
+        // Shadow mesh data (separate child)
+        var sVerts = new List<Vector3>();
+        var sUVs = new List<Vector2>();
+        var sTris = new List<int>();
+
+        // Base edge mesh data (separate child)
+        var bVerts = new List<Vector3>();
+        var bTris = new List<int>();
+
+        // Build wall sections around the gap
+        if (gapFrom > 0f)
+            BuildGateWall(0f, gapFrom, pos, tangent, normal, binormal,
+                verts, uvs, tris0, tris1,
+                sVerts, sUVs, sTris, bVerts, bTris);
+        if (gapTo < 180f)
+            BuildGateWall(gapTo, 180f, pos, tangent, normal, binormal,
+                verts, uvs, tris0, tris1,
+                sVerts, sUVs, sTris, bVerts, bTris);
+
+        // Assemble main gate mesh
+        Mesh mesh = new Mesh();
+        mesh.name = "splineGateMesh";
+        mesh.subMeshCount = 2;
+        mesh.vertices = verts.ToArray();
+        mesh.uv = uvs.ToArray();
+        mesh.SetTriangles(tris0.ToArray(), 0);
+        mesh.SetTriangles(tris1.ToArray(), 1);
+        mesh.Optimize();
+        mesh.RecalculateNormals();
+
+        // Create gate parent — named "torusObstacle" for Sphere.cs collision detection
+        GameObject gateObj = new GameObject("torusObstacle");
+
+        MeshFilter mf = gateObj.AddComponent<MeshFilter>();
+        mf.mesh = mesh;
+
+        MeshRenderer mr = gateObj.AddComponent<MeshRenderer>();
+        mr.materials = new Material[] { frontMat, topMat };
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+        MeshCollider mc = gateObj.AddComponent<MeshCollider>();
+        mc.sharedMesh = mesh;
+
+        // Shadow child
+        if (sVerts.Count > 0)
+        {
+            Mesh sMesh = new Mesh();
+            sMesh.name = "splineGateShadow";
+            sMesh.vertices = sVerts.ToArray();
+            sMesh.uv = sUVs.ToArray();
+            sMesh.triangles = sTris.ToArray();
+            sMesh.Optimize();
+            sMesh.RecalculateNormals();
+
+            GameObject shadowObj = new GameObject("torusObstacleShadow");
+            shadowObj.AddComponent<MeshFilter>().mesh = sMesh;
+            MeshRenderer smr = shadowObj.AddComponent<MeshRenderer>();
+            smr.material = shadowMat;
+            smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            shadowObj.transform.SetParent(gateObj.transform, false);
+        }
+
+        // Base edge child
+        if (bVerts.Count > 0)
+        {
+            Mesh bMesh = new Mesh();
+            bMesh.name = "splineGateBase";
+            bMesh.vertices = bVerts.ToArray();
+            bMesh.triangles = bTris.ToArray();
+            bMesh.RecalculateNormals();
+
+            GameObject baseObj = new GameObject("torusObstacleBase");
+            baseObj.AddComponent<MeshFilter>().mesh = bMesh;
+            MeshRenderer bmr = baseObj.AddComponent<MeshRenderer>();
+            bmr.material = shadowMat;
+            bmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            baseObj.transform.SetParent(gateObj.transform, false);
+        }
+
+        // Store reference in gate data
+        gate.gameObject = gateObj;
+        gates[gateIndex] = gate;
+
+        return gateObj;
+    }
+
+    /// <summary>
+    /// Build one wall section of a gate (from one angle to another on the cross-section).
+    /// Generates front face, ceiling, shadow strip, base edge, and side caps.
+    /// </summary>
+    void BuildGateWall(
+        float fromDeg, float toDeg,
+        Vector3 pos, Vector3 tangent, Vector3 normal, Vector3 binormal,
+        List<Vector3> verts, List<Vector2> uvs, List<int> tris0, List<int> tris1,
+        List<Vector3> sVerts, List<Vector2> sUVs, List<int> sTris,
+        List<Vector3> bVerts, List<int> bTris)
+    {
+        float fromRad = fromDeg * Mathf.Deg2Rad;
+        float toRad = toDeg * Mathf.Deg2Rad;
+        float diff = toRad - fromRad;
+
+        int stepsCount = Mathf.CeilToInt(diff / (GATE_STEP_DEG * Mathf.Deg2Rad)) + 2;
+        float realStep = diff / (float)(stepsCount - 1);
+
+        // Track base indices for this wall section
+        int frontBase = verts.Count;
+        int shadowBase = sVerts.Count;
+        int baseEdgeBase = bVerts.Count;
+
+        // Temporary storage — appended to main lists after front verts
+        var ceilVerts = new List<Vector3>();
+        var ceilUVs = new List<Vector2>();
+        var sideVerts = new List<Vector3>();
+        var sideUVs = new List<Vector2>();
+
+        float angle = fromRad;
+
+        for (int i = 0; i < stepsCount; i++)
+        {
+            // Radial direction from track center toward surface at this cross-section angle
+            // Maps gate angle θ → position: pos - binormal*cos(θ) - normal*sin(θ)
+            Vector3 radDir = -binormal * Mathf.Cos(angle) - normal * Mathf.Sin(angle);
+
+            // === FRONT FACE ===
+            Vector3 upper = pos + radDir * (MINOR_RADIUS * GATE_WALL_RECESS);
+            Vector3 bottom = pos + radDir * MINOR_RADIUS;
+
+            verts.Add(upper);
+            verts.Add(bottom);
+            uvs.Add(Vector2.zero);
+            uvs.Add(Vector2.zero);
+
+            if (i > 0)
+            {
+                int idx = frontBase + (i * 2) - 2;
+                tris0.Add(idx);     tris0.Add(idx + 1); tris0.Add(idx + 2);
+                tris0.Add(idx + 2); tris0.Add(idx + 1); tris0.Add(idx + 3);
+            }
+
+            // === CEILING ===
+            Vector3 ceilFar = pos + tangent * GATE_DEPTH + radDir * (MINOR_RADIUS * GATE_CEIL_INNER);
+            ceilVerts.Add(ceilFar);
+            ceilVerts.Add(upper);
+            ceilUVs.Add(Vector2.zero);
+            ceilUVs.Add(Vector2.zero);
+
+            // === SHADOW (extends toward camera from base) ===
+            Vector3 sInner = bottom + radDir * GATE_SHADOW_OFFSET;
+            Vector3 sOuter = bottom - tangent * GATE_SHADOW_WIDTH + radDir * GATE_SHADOW_OFFSET;
+
+            sVerts.Add(sInner);
+            sVerts.Add(sOuter);
+            sUVs.Add(new Vector2(0f, 1f));
+            sUVs.Add(Vector2.zero);
+
+            if (i > 0)
+            {
+                int si = shadowBase + (i * 2) - 2;
+                sTris.Add(si);     sTris.Add(si + 1); sTris.Add(si + 2);
+                sTris.Add(si + 2); sTris.Add(si + 1); sTris.Add(si + 3);
+            }
+
+            // === BASE EDGE (thin dark strip at front base) ===
+            Vector3 bBottom = bottom - tangent * 0.003f;
+            Vector3 bTop = pos + radDir * (MINOR_RADIUS * (1f - GATE_BASE_HEIGHT)) - tangent * 0.003f;
+
+            bVerts.Add(bBottom);
+            bVerts.Add(bTop);
+
+            if (i > 0)
+            {
+                int bi = baseEdgeBase + (i * 2) - 2;
+                bTris.Add(bi);     bTris.Add(bi + 1); bTris.Add(bi + 2);
+                bTris.Add(bi + 2); bTris.Add(bi + 1); bTris.Add(bi + 3);
+            }
+
+            // === SIDE CAPS (at gap edges) ===
+            if (i == 0 || i == stepsCount - 1)
+            {
+                Vector3 farBottom = bottom + tangent * GATE_DEPTH;
+                sideVerts.Add(upper);
+                sideVerts.Add(ceilFar);
+                sideVerts.Add(bottom);
+                sideVerts.Add(farBottom);
+                sideUVs.Add(Vector2.zero);
+                sideUVs.Add(Vector2.zero);
+                sideUVs.Add(Vector2.zero);
+                sideUVs.Add(Vector2.zero);
+            }
+
+            angle += realStep;
+        }
+
+        // Append ceiling verts and generate ceiling triangles (submesh 1)
+        int ceilStartIdx = verts.Count;
+        verts.AddRange(ceilVerts);
+        uvs.AddRange(ceilUVs);
+
+        for (int i = 1; i < stepsCount; i++)
+        {
+            int idx = ceilStartIdx + (i * 2) - 2;
+            tris1.Add(idx);     tris1.Add(idx + 1); tris1.Add(idx + 2);
+            tris1.Add(idx + 2); tris1.Add(idx + 1); tris1.Add(idx + 3);
+        }
+
+        // Append side cap verts and generate triangles (submesh 0)
+        int sideStartIdx = verts.Count;
+        verts.AddRange(sideVerts);
+        uvs.AddRange(sideUVs);
+
+        // First cap (i=0): face toward gap center
+        if (sideVerts.Count >= 4)
+        {
+            int si = sideStartIdx;
+            tris0.Add(si);     tris0.Add(si + 1); tris0.Add(si + 2);
+            tris0.Add(si + 2); tris0.Add(si + 1); tris0.Add(si + 3);
+        }
+        // Last cap (i=stepsCount-1): reversed winding
+        if (sideVerts.Count >= 8)
+        {
+            int si = sideStartIdx + 4;
+            tris0.Add(si);     tris0.Add(si + 2); tris0.Add(si + 1);
+            tris0.Add(si + 1); tris0.Add(si + 2); tris0.Add(si + 3);
+        }
     }
 }

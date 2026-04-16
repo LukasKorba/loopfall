@@ -432,7 +432,7 @@ public class ScoreSync : MonoBehaviour
 
         CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1080, 1920);
+        scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
 
         canvasObj.AddComponent<GraphicRaycaster>();
@@ -2466,11 +2466,9 @@ public class ScoreSync : MonoBehaviour
                 new Vector2(0.5f, 0.23f), out settingsVSyncLabel);
             vsyncBtn.onClick.AddListener(OnToggleVSync);
 
-            // Theme divider + toggle
+            // Theme divider + selector
             CreateSettingsDivider(cardRT, 0.175f, DIM_TEXT, 0.08f);
-            Button themeBtn = CreateSettingsToggle(cardRT, "ThemeBtn",
-                new Vector2(0.5f, 0.12f), out settingsThemeLabel);
-            themeBtn.onClick.AddListener(OnCycleTheme);
+            CreateThemeSelector(cardRT, new Vector2(0.5f, 0.12f));
         }
         else
         {
@@ -2484,9 +2482,7 @@ public class ScoreSync : MonoBehaviour
             soundBtn.onClick.AddListener(ToggleSound);
 
             CreateSettingsDivider(cardRT, 0.375f, DIM_TEXT, 0.08f);
-            Button themeBtn = CreateSettingsToggle(cardRT, "ThemeBtn",
-                new Vector2(0.5f, 0.28f), out settingsThemeLabel);
-            themeBtn.onClick.AddListener(OnCycleTheme);
+            CreateThemeSelector(cardRT, new Vector2(0.5f, 0.28f));
         }
 
         // Close label
@@ -2599,6 +2595,11 @@ public class ScoreSync : MonoBehaviour
             BuildStatsPanel(canvas.transform);
         RefreshStatsLabels();
         statsPanel.gameObject.SetActive(true);
+    }
+
+    public bool IsStatsOpen()
+    {
+        return statsPanel != null && statsPanel.gameObject.activeSelf;
     }
 
     void CloseStats()
@@ -2828,14 +2829,117 @@ public class ScoreSync : MonoBehaviour
         RefreshSettingsLabels();
     }
 
-    void OnCycleTheme()
+    void OnThemeNext()
     {
         ThemeData[] themes = ThemeData.All();
         int current = ThemeData.LoadSavedIndex();
         int next = (current + 1) % themes.Length;
-        ThemeData.SaveIndex(next);
-        // Reload the scene so all materials/stars rebuild with the new theme
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        ApplyThemeLive(next, themes[next]);
+    }
+
+    void OnThemePrev()
+    {
+        ThemeData[] themes = ThemeData.All();
+        int current = ThemeData.LoadSavedIndex();
+        int prev = (current - 1 + themes.Length) % themes.Length;
+        ApplyThemeLive(prev, themes[prev]);
+    }
+
+    void ApplyThemeLive(int index, ThemeData theme)
+    {
+        ThemeData.SaveIndex(index);
+
+        SceneSetup setup = FindAnyObjectByType<SceneSetup>();
+        if (setup != null)
+            setup.ApplyThemeLive(theme);
+
+        RefreshSettingsLabels();
+    }
+
+    void CreateThemeSelector(RectTransform parent, Vector2 anchor)
+    {
+        // Container — same size as a normal toggle row
+        GameObject container = new GameObject("ThemeSelector");
+        RectTransform crt = container.AddComponent<RectTransform>();
+        crt.SetParent(parent, false);
+        crt.anchorMin = anchor;
+        crt.anchorMax = anchor;
+        crt.pivot = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(400, 55);
+
+        // Background — matches toggle style
+        Image bg = container.AddComponent<Image>();
+        bg.color = new Color(1f, 1f, 1f, 0.04f);
+        bg.raycastTarget = false;
+
+        // Left accent bar
+        GameObject accent = new GameObject("Accent");
+        RectTransform accentRT = accent.AddComponent<RectTransform>();
+        accentRT.SetParent(crt, false);
+        accentRT.anchorMin = new Vector2(0f, 0.15f);
+        accentRT.anchorMax = new Vector2(0f, 0.85f);
+        accentRT.pivot = new Vector2(0f, 0.5f);
+        accentRT.sizeDelta = new Vector2(3f, 0f);
+        Image accentImg = accent.AddComponent<Image>();
+        accentImg.color = NEON_CYAN;
+        accentImg.raycastTarget = false;
+
+        // Left arrow button "<"
+        GameObject leftObj = new GameObject("ThemePrev");
+        RectTransform leftRT = leftObj.AddComponent<RectTransform>();
+        leftRT.SetParent(crt, false);
+        leftRT.anchorMin = new Vector2(0f, 0f);
+        leftRT.anchorMax = new Vector2(0f, 1f);
+        leftRT.pivot = new Vector2(0f, 0.5f);
+        leftRT.anchoredPosition = new Vector2(8f, 0f);
+        leftRT.sizeDelta = new Vector2(55, 0f);
+
+        Image leftBg = leftObj.AddComponent<Image>();
+        leftBg.color = new Color(1f, 1f, 1f, 0f);
+        leftBg.raycastTarget = true;
+
+        Button leftBtn = leftObj.AddComponent<Button>();
+        ColorBlock lcb = leftBtn.colors;
+        lcb.normalColor = Color.white;
+        lcb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+        lcb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
+        leftBtn.colors = lcb;
+        leftBtn.onClick.AddListener(OnThemePrev);
+
+        TMP_Text leftLabel = CreateText(leftRT, "Arrow", "<",
+            28, FontStyles.Bold, NEON_CYAN);
+        StretchFull(leftLabel.rectTransform);
+
+        // Right arrow button ">"
+        GameObject rightObj = new GameObject("ThemeNext");
+        RectTransform rightRT = rightObj.AddComponent<RectTransform>();
+        rightRT.SetParent(crt, false);
+        rightRT.anchorMin = new Vector2(1f, 0f);
+        rightRT.anchorMax = new Vector2(1f, 1f);
+        rightRT.pivot = new Vector2(1f, 0.5f);
+        rightRT.anchoredPosition = new Vector2(-8f, 0f);
+        rightRT.sizeDelta = new Vector2(55, 0f);
+
+        Image rightBg = rightObj.AddComponent<Image>();
+        rightBg.color = new Color(1f, 1f, 1f, 0f);
+        rightBg.raycastTarget = true;
+
+        Button rightBtn = rightObj.AddComponent<Button>();
+        ColorBlock rcb = rightBtn.colors;
+        rcb.normalColor = Color.white;
+        rcb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+        rcb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
+        rightBtn.colors = rcb;
+        rightBtn.onClick.AddListener(OnThemeNext);
+
+        TMP_Text rightLabel = CreateText(rightRT, "Arrow", ">",
+            28, FontStyles.Bold, NEON_CYAN);
+        StretchFull(rightLabel.rectTransform);
+
+        // Center label — theme name
+        settingsThemeLabel = CreateText(crt, "ThemeLabel", "",
+            24, FontStyles.Normal, Color.white);
+        StretchFull(settingsThemeLabel.rectTransform);
     }
 
     void RefreshSettingsLabels()
@@ -2881,8 +2985,8 @@ public class ScoreSync : MonoBehaviour
         if (settingsThemeLabel != null)
         {
             string themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
-            settingsThemeLabel.text = "THEME   " + themeName;
-            StyleSettingsToggle(settingsThemeLabel, true);
+            settingsThemeLabel.text = themeName;
+            settingsThemeLabel.color = Color.white;
         }
     }
 

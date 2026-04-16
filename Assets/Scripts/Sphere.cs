@@ -87,8 +87,8 @@ public class Sphere : MonoBehaviour
 
     void Update()
     {
-        // Block all input during splash screen, settings, pause, or Steam overlay
-        if (mScoreSync != null && (mScoreSync.IsSplash() || mScoreSync.IsSettingsOpen() || mScoreSync.IsPaused())) return;
+        // Block all input during splash screen, settings, stats, pause, or Steam overlay
+        if (mScoreSync != null && (mScoreSync.IsSplash() || mScoreSync.IsSettingsOpen() || mScoreSync.IsStatsOpen() || mScoreSync.IsPaused())) return;
 #if STEAMWORKS
         if (SteamManager.Initialized && Steamworks.SteamUtils.IsOverlayEnabled()
             && Steamworks.SteamUtils.BOverlayNeedsPresent()) return;
@@ -175,7 +175,7 @@ public class Sphere : MonoBehaviour
             if (GetRemoteTap() != 0 || GetGamepadTap() != 0)
 #else
             if (GetGamepadTap() != 0 ||
-                Input.anyKeyDown ||
+                (Input.anyKeyDown && !Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1) && !Input.GetMouseButtonDown(2)) ||
                 (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0)) ||
                 (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began))
 #endif
@@ -379,18 +379,28 @@ public class Sphere : MonoBehaviour
                 mTorusScript.Reset();
         }
 
-        mTorusScript.SetPaused(false);
+        if (mSplineController == null)
+            mTorusScript.SetPaused(false);
         mGameOver = false;
         mRigid.isKinematic = false;
         mRigid.linearDamping = mOriginalDrag;
         mRigid.angularDamping = mOriginalAngularDrag;
         mRigid.linearVelocity = Vector3.zero;
         mRigid.angularVelocity = Vector3.zero;
-        transform.position = mBeginPosition;
-        mPrevPosition = mBeginPosition;
 
-        mCamera.transform.position = mCameraStartPos;
-        mCamera.transform.rotation = mCameraStartRot;
+        // In spline mode, reset to spline start; otherwise torus start
+        if (mSplineController != null)
+            mSplineController.ResetBall();
+        else
+            transform.position = mBeginPosition;
+        mPrevPosition = transform.position;
+
+        // In spline mode, SplineCameraFollow handles camera positioning
+        if (mSplineController == null)
+        {
+            mCamera.transform.position = mCameraStartPos;
+            mCamera.transform.rotation = mCameraStartRot;
+        }
 
         DeathEffect death = mCamera.GetComponent<DeathEffect>();
         if (death != null)
@@ -402,6 +412,10 @@ public class Sphere : MonoBehaviour
             swing.mDiff = Vector3.zero;
             swing.ResetSpring();
         }
+
+        SplineCameraFollow splineCam = mCamera.GetComponent<SplineCameraFollow>();
+        if (splineCam != null)
+            splineCam.ResetSpring();
 
     }
 
@@ -438,7 +452,8 @@ public class Sphere : MonoBehaviour
     {
         if (!mWaitingToStart) return;
         mWaitingToStart = false;
-        mTorusScript.SetPaused(false);
+        if (mSplineController == null)
+            mTorusScript.SetPaused(false);
 
         if (GameConfig.IsTimeWarp())
         {

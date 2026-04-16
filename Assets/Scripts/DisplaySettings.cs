@@ -23,7 +23,7 @@ public class DisplaySettings : MonoBehaviour
         new Vector2Int(2560, 1440),
     };
 
-    private int mCurrentResIndex = 1; // default 1080x1920
+    private int mCurrentResIndex = 1; // default 1920x1080
     private bool mFullscreen;
     private bool mVSync;
 

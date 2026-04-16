@@ -99,6 +99,16 @@ public class RewindSystem : MonoBehaviour
     private static readonly int SpawnProgressID = Shader.PropertyToID("_SpawnProgress");
     private GameAudio mAudio;
 
+    // Spline mode — when active, records/replays spline distances instead of torus angles
+    private SplineGameController splineController;
+    private bool splineMode = false;
+    private const float SPLINE_SEGMENT_DIST = 15f; // trail segment length (distance units)
+    private const float SPLINE_VIEW_RANGE = 120f;  // trail visibility range (distance units)
+    private const float SPLINE_MIN_SPEED = 15f;    // rewind speed (units/s)
+    private const float SPLINE_MAX_SPEED = 45f;
+    private const float SPLINE_RAMP_START = 25f;
+    private const float SPLINE_RAMP_END = 150f;
+
     public void Initialize(Transform ball, Rigidbody ballRb,
                            Torus torus, Transform torusTrans,
                            Material trailMat,
@@ -128,6 +138,37 @@ public class RewindSystem : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Initialize for spline track mode. Records spline distances + world positions.
+    /// </summary>
+    public void InitializeSpline(Transform ball, Rigidbody ballRb,
+                                 SplineGameController splineCtrl,
+                                 Material trailMat,
+                                 Transform camTransform, Vector3 camStartPos, Quaternion camStartRot)
+    {
+        ballTransform = ball;
+        ballRigidbody = ballRb;
+        splineController = splineCtrl;
+        splineMode = true;
+        trailMaterial = trailMat;
+        cameraTransform = camTransform;
+        cameraStartPos = camStartPos;
+        cameraStartRot = camStartRot;
+        mAudio = FindAnyObjectByType<GameAudio>();
+
+        ThemeData t = SceneSetup.activeTheme;
+        if (t != null)
+        {
+            TRAIL_COLOR_NEAR = t.trailColorNear;
+            TRAIL_COLOR_FAR  = t.trailColorFar;
+        }
+        else
+        {
+            TRAIL_COLOR_NEAR = new Color(0.2f, 0.85f, 1.0f, 0.9f);
+            TRAIL_COLOR_FAR  = new Color(0.1f, 0.25f, 0.6f, 0.15f);
+        }
+    }
+
     public void StartRecording()
     {
         frames.Clear();
@@ -143,14 +184,20 @@ public class RewindSystem : MonoBehaviour
         mDeathGrace = DEATH_GRACE_PERIOD;
 
         // Compute rewind speed based on distance traveled
-        float deathAngle = frames.Count > 0 ? frames[frames.Count - 1].torusAngle : 0f;
+        float deathVal = frames.Count > 0 ? frames[frames.Count - 1].torusAngle : 0f;
 
-        // Lerp speed from min to max based on how far we got
-        float speedT = Mathf.Clamp01((deathAngle - REWIND_RAMP_START) / (REWIND_RAMP_END - REWIND_RAMP_START));
-        float speed = Mathf.Lerp(REWIND_MIN_SPEED, REWIND_MAX_SPEED, speedT);
-
-        // Duration = angle / speed, with a minimum floor
-        rewindDuration = Mathf.Max(deathAngle / speed, REWIND_MIN_DURATION);
+        if (splineMode)
+        {
+            float speedT = Mathf.Clamp01((deathVal - SPLINE_RAMP_START) / (SPLINE_RAMP_END - SPLINE_RAMP_START));
+            float speed = Mathf.Lerp(SPLINE_MIN_SPEED, SPLINE_MAX_SPEED, speedT);
+            rewindDuration = Mathf.Max(deathVal / speed, REWIND_MIN_DURATION);
+        }
+        else
+        {
+            float speedT = Mathf.Clamp01((deathVal - REWIND_RAMP_START) / (REWIND_RAMP_END - REWIND_RAMP_START));
+            float speed = Mathf.Lerp(REWIND_MIN_SPEED, REWIND_MAX_SPEED, speedT);
+            rewindDuration = Mathf.Max(deathVal / speed, REWIND_MIN_DURATION);
+        }
     }
 
     public void ResetSystem()
@@ -225,7 +272,10 @@ public class RewindSystem : MonoBehaviour
         {
             case State.Recording:
                 RecordFrame();
-                UpdateSegmentVisibility(torusScript.GetAngle());
+                if (splineMode)
+                    UpdateSegmentVisibility(splineController.Track.BallDistance);
+                else
+                    UpdateSegmentVisibility(torusScript.GetAngle());
                 break;
 
             case State.Pausing:
@@ -273,11 +323,12 @@ public class RewindSystem : MonoBehaviour
         seg.points = new List<Vector3>();
 
         GameObject segObj = new GameObject("TrailSeg_" + startAngle.ToString("F0"));
-        segObj.transform.SetParent(torusTransform, false);
+        if (!splineMode)
+            segObj.transform.SetParent(torusTransform, false);
 
         LineRenderer lr = segObj.AddComponent<LineRenderer>();
         lr.material = new Material(trailMaterial); // Instance so we can tint per-segment
-        lr.useWorldSpace = false;
+        lr.useWorldSpace = splineMode;
         lr.positionCount = 0;
         lr.numCapVertices = 0;  // No caps — segments overlap at boundaries
         lr.numCornerVertices = 2;
@@ -343,6 +394,8 @@ public class RewindSystem : MonoBehaviour
 
     void UpdateSegmentVisibility(float viewAngle, float aheadMargin = 5f)
     {
+        float viewRange = splineMode ? SPLINE_VIEW_RANGE : TRAIL_VIEW_RANGE;
+
         for (int i = 0; i < segments.Count; i++)
         {
             TrailSegment seg = segments[i];
@@ -350,7 +403,7 @@ public class RewindSystem : MonoBehaviour
 
             float distBehind = viewAngle - seg.startAngle;
 
-            bool visible = distBehind > -aheadMargin && distBehind < TRAIL_VIEW_RANGE;
+            bool visible = distBehind > -aheadMargin && distBehind < viewRange;
             seg.renderer.enabled = visible;
             if (visible)
             {
@@ -358,7 +411,7 @@ public class RewindSystem : MonoBehaviour
 
                 // Tint via material color — leaves LineRenderer colorGradient
                 // free for the cone fade effect on the active segment
-                float t = Mathf.Clamp01(distBehind / TRAIL_VIEW_RANGE);
+                float t = Mathf.Clamp01(distBehind / viewRange);
                 Color c = Color.Lerp(TRAIL_COLOR_NEAR, TRAIL_COLOR_FAR, t);
                 seg.renderer.material.SetColor("_Color", c);
             }
@@ -394,14 +447,26 @@ public class RewindSystem : MonoBehaviour
 
     void RecordFrame()
     {
-        if (ballTransform == null || torusTransform == null) return;
+        if (ballTransform == null) return;
+        if (!splineMode && torusTransform == null) return;
 
-        Vector3 localPos = torusTransform.InverseTransformPoint(ballTransform.position);
-        float angle = torusScript.GetAngle();
+        float angle;
+        Vector3 pointPos;
+
+        if (splineMode)
+        {
+            angle = splineController.Track.FindClosestDistance(ballTransform.position);
+            pointPos = ballTransform.position; // world space
+        }
+        else
+        {
+            pointPos = torusTransform.InverseTransformPoint(ballTransform.position);
+            angle = torusScript.GetAngle();
+        }
 
         Frame f;
         f.torusAngle = angle;
-        f.ballLocalPos = localPos;
+        f.ballLocalPos = pointPos;
         frames.Add(f);
 
         // Animate previous segment's taper fade-out
@@ -451,7 +516,8 @@ public class RewindSystem : MonoBehaviour
         }
 
         // Determine which segment this point belongs to
-        float segStart = Mathf.Floor(angle / SEGMENT_DEGREES) * SEGMENT_DEGREES;
+        float segSize = splineMode ? SPLINE_SEGMENT_DIST : SEGMENT_DEGREES;
+        float segStart = Mathf.Floor(angle / segSize) * segSize;
 
         if (segments.Count == 0 || segments[segments.Count - 1].startAngle != segStart)
         {
@@ -478,7 +544,7 @@ public class RewindSystem : MonoBehaviour
 
         // Add control point to the current (last) segment
         TrailSegment current = segments[segments.Count - 1];
-        current.controlPoints.Add(localPos);
+        current.controlPoints.Add(pointPos);
         current.endAngle = angle;
 
         // Rebuild smoothed display points via Catmull-Rom
@@ -643,27 +709,36 @@ public class RewindSystem : MonoBehaviour
         int nextIdx = Mathf.Min(idx + 1, frames.Count - 1);
 
         float angle = Mathf.Lerp(frames[idx].torusAngle, frames[nextIdx].torusAngle, frac);
-        torusScript.SetAngle(angle);
 
-        Vector3 localPos = Vector3.Lerp(frames[idx].ballLocalPos, frames[nextIdx].ballLocalPos, frac);
-        ballTransform.position = torusTransform.TransformPoint(localPos);
-
-        // During rewind: 120° ahead margin (trail already exists ahead of ball)
-        UpdateSegmentVisibility(angle, 120f);
-        UpdateObstacleVisibility(angle);
-
-        // Smoothly return camera to start position + rotation
-        if (cameraTransform != null)
+        if (splineMode)
         {
-            cameraTransform.position = Vector3.Lerp(cameraDeathPos, cameraStartPos, eased);
-            cameraTransform.rotation = Quaternion.Slerp(cameraDeathRot, cameraStartRot, eased);
+            // Replay ball world position along spline path
+            ballTransform.position = Vector3.Lerp(frames[idx].ballLocalPos, frames[nextIdx].ballLocalPos, frac);
+            splineController.Track.BallDistance = angle;
+            UpdateSegmentVisibility(angle, 60f);
+            // SplineCameraFollow handles camera automatically by following the ball
+        }
+        else
+        {
+            torusScript.SetAngle(angle);
+            Vector3 localPos = Vector3.Lerp(frames[idx].ballLocalPos, frames[nextIdx].ballLocalPos, frac);
+            ballTransform.position = torusTransform.TransformPoint(localPos);
+            UpdateSegmentVisibility(angle, 120f);
+            UpdateObstacleVisibility(angle);
+
+            // Smoothly return camera to start position + rotation
+            if (cameraTransform != null)
+            {
+                cameraTransform.position = Vector3.Lerp(cameraDeathPos, cameraStartPos, eased);
+                cameraTransform.rotation = Quaternion.Slerp(cameraDeathRot, cameraStartRot, eased);
+            }
         }
 
         if (progress >= 1f)
         {
             // Ball is at start — begin trail dismiss after brief pause
-            float endAngle = frames[frames.Count - 1].torusAngle;
-            float score = endAngle / 10f;
+            float endVal = frames[frames.Count - 1].torusAngle;
+            float score = splineMode ? endVal / 5f : endVal / 10f;
             landedPause = Mathf.Min(LANDED_PAUSE_BASE + score * LANDED_PAUSE_PER_POINT, LANDED_PAUSE_MAX);
             currentState = State.TrailDismiss;
             stateTimer = -landedPause; // Negative = pause before erasing starts
@@ -687,13 +762,14 @@ public class RewindSystem : MonoBehaviour
         dismissSegCounts.Clear();
         dismissTotalPoints = 0;
 
+        // In spline mode, dismiss range is in distance units (45 ≈ 9 gates visible)
+        float dismissRange = splineMode ? 45f : DISMISS_RANGE;
+
         for (int i = 0; i < segments.Count; i++)
         {
             if (segments[i].renderer == null) continue;
 
-            // Only animate dismiss for segments within DISMISS_RANGE of start (0°).
-            // These are the only ones visible to the camera after rewind.
-            if (segments[i].startAngle < DISMISS_RANGE)
+            if (segments[i].startAngle < dismissRange)
             {
                 segments[i].renderer.enabled = true;
                 segments[i].renderer.positionCount = segments[i].points.Count;
@@ -707,8 +783,8 @@ public class RewindSystem : MonoBehaviour
             }
         }
 
-        // Duration scales with visible points only (much shorter now)
-        float approxScore = DISMISS_RANGE / 10f; // ~6 points worth
+        // Duration scales with visible points only
+        float approxScore = splineMode ? dismissRange / 5f : DISMISS_RANGE / 10f;
         trailDismissDuration = Mathf.Min(TRAIL_DISMISS_BASE + approxScore * TRAIL_DISMISS_PER_POINT, TRAIL_DISMISS_MAX);
     }
 
@@ -770,6 +846,13 @@ public class RewindSystem : MonoBehaviour
 
     void BeginObstacleSwap()
     {
+        // Spline gates are at fixed positions — no swap needed
+        if (splineMode)
+        {
+            currentState = State.Complete;
+            return;
+        }
+
         currentState = State.ObstacleSwap;
         stateTimer = 0f;
         oldPhaseDone = false;
