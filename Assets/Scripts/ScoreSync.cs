@@ -3027,25 +3027,42 @@ public class ScoreSync : MonoBehaviour
     {
         ThemeData[] themes = ThemeData.All();
         int current = ThemeData.LoadSavedIndex();
-        int next = (current + 1) % themes.Length;
-        ApplyThemeLive(next, themes[next]);
+        // Cycle order: AUTO (-1) → 0 → 1 → ... → last → AUTO
+        int next;
+        if (current == ThemeData.AUTO_INDEX) next = 0;
+        else if (current >= themes.Length - 1) next = ThemeData.AUTO_INDEX;
+        else next = current + 1;
+        ApplyThemeSelection(next);
     }
 
     void OnThemePrev()
     {
         ThemeData[] themes = ThemeData.All();
         int current = ThemeData.LoadSavedIndex();
-        int prev = (current - 1 + themes.Length) % themes.Length;
-        ApplyThemeLive(prev, themes[prev]);
+        int prev;
+        if (current == ThemeData.AUTO_INDEX) prev = themes.Length - 1;
+        else if (current == 0) prev = ThemeData.AUTO_INDEX;
+        else prev = current - 1;
+        ApplyThemeSelection(prev);
     }
 
-    void ApplyThemeLive(int index, ThemeData theme)
+    void ApplyThemeSelection(int index)
     {
         ThemeData.SaveIndex(index);
 
         SceneSetup setup = FindAnyObjectByType<SceneSetup>();
         if (setup != null)
-            setup.ApplyThemeLive(theme);
+        {
+            if (index == ThemeData.AUTO_INDEX)
+            {
+                setup.StartAutoMode();
+            }
+            else
+            {
+                setup.StopAutoMode();
+                setup.ApplyThemeLive(ThemeData.All()[index]);
+            }
+        }
 
         RefreshSettingsLabels();
     }
@@ -3178,7 +3195,11 @@ public class ScoreSync : MonoBehaviour
 
         if (settingsThemeLabel != null)
         {
-            string themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
+            string themeName;
+            if (ThemeData.LoadSavedIndex() == ThemeData.AUTO_INDEX)
+                themeName = "AUTO";
+            else
+                themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
             settingsThemeLabel.text = themeName;
             settingsThemeLabel.color = Color.white;
         }

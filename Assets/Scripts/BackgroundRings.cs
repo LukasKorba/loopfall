@@ -8,11 +8,33 @@ public class BackgroundRings : MonoBehaviour
     private float[] starBaseIntensity;
     private float[] starDriftSpeed;
 
+    // Kept for AUTO-theme live updates; stars remain baked with per-instance colors.
+    private Material nebulaMat;
+    private Material godRaysMat;
+
     public void Setup()
     {
         CreateNebula();
         CreateGodRays();
         CreateStarfield();
+    }
+
+    /// <summary>Update nebula + godrays colors to match a new theme (called by AUTO crossfader).</summary>
+    public void ApplyThemeLive(ThemeData t)
+    {
+        if (nebulaMat != null)
+        {
+            nebulaMat.SetFloat("_Brightness", t.nebulaBrightness);
+            nebulaMat.SetColor("_Color1", t.nebulaColor1);
+            nebulaMat.SetColor("_Color2", t.nebulaColor2);
+            nebulaMat.SetColor("_Color3", t.nebulaColor3);
+        }
+        if (godRaysMat != null)
+        {
+            godRaysMat.SetFloat("_Intensity", t.rayIntensity);
+            godRaysMat.SetColor("_Color1", t.rayColor1);
+            godRaysMat.SetColor("_Color2", t.rayColor2);
+        }
     }
 
     void CreateNebula()
@@ -43,6 +65,7 @@ public class BackgroundRings : MonoBehaviour
         mat.SetColor("_Color2", t.nebulaColor2);
         mat.SetColor("_Color3", t.nebulaColor3);
         mat.renderQueue = 1000; // Background queue
+        nebulaMat = mat;
 
         MeshRenderer mr = nebulaObj.AddComponent<MeshRenderer>();
         mr.material = mat;
@@ -83,6 +106,7 @@ public class BackgroundRings : MonoBehaviour
         mat.SetFloat("_PulseSpeed", 0.3f);
         mat.SetFloat("_PulseAmount", 0.12f);
         mat.renderQueue = 2900; // After nebula (1000), before stars (2950)
+        godRaysMat = mat;
 
         MeshRenderer mr = raysObj.AddComponent<MeshRenderer>();
         mr.material = mat;

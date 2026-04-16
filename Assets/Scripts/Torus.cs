@@ -74,7 +74,6 @@ public class Torus : MonoBehaviour
     public Material mBlitzGateMat;
     public Material mBlitzButtonMat;
     public Material mBlitzConnectionMat;
-    public Material mBlitzRingMat;
     public BlitzBeam mBlitzBeam;
     private List<BlitzBox> mBlitzBoxes;
     private List<BlitzGate> mBlitzGates;
@@ -533,7 +532,7 @@ public class Torus : MonoBehaviour
     void SpawnBlitzBox(float spacing, int hp)
     {
         float cross = Random.Range(30f, 150f);
-        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp, ringMat: hp >= 3 ? mBlitzRingMat : null);
+        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp);
         mLastBlitzAngle += spacing;
         box.mAngle = mLastBlitzAngle;
         box.mGameObject.transform.parent = transform;

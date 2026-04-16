@@ -425,14 +425,61 @@ public class ThemeData
 
     private const string PREF_THEME = "SelectedTheme";
 
+    // Sentinel for AUTO mode — crossfades between random themes. Also the first-launch default.
+    public const int AUTO_INDEX = -1;
+
     public static int LoadSavedIndex()
     {
-        return PlayerPrefs.GetInt(PREF_THEME, 0);
+        return PlayerPrefs.GetInt(PREF_THEME, AUTO_INDEX);
     }
 
     public static void SaveIndex(int index)
     {
         PlayerPrefs.SetInt(PREF_THEME, index);
         PlayerPrefs.Save();
+    }
+
+    /// <summary>Fill `dst` with fields lerped between `a` and `b` by `t`. Zero-alloc.</summary>
+    public static void LerpInto(ThemeData dst, ThemeData a, ThemeData b, float t)
+    {
+        dst.name = "AUTO";
+        dst.trackBase      = Color.Lerp(a.trackBase,      b.trackBase,      t);
+        dst.gridColor1     = Color.Lerp(a.gridColor1,     b.gridColor1,     t);
+        dst.gridColor2     = Color.Lerp(a.gridColor2,     b.gridColor2,     t);
+        dst.gridColor3     = Color.Lerp(a.gridColor3,     b.gridColor3,     t);
+        dst.gridFarColor   = Color.Lerp(a.gridFarColor,   b.gridFarColor,   t);
+        dst.sparkColor1    = Color.Lerp(a.sparkColor1,    b.sparkColor1,    t);
+        dst.sparkColor2    = Color.Lerp(a.sparkColor2,    b.sparkColor2,    t);
+        dst.sparkColor3    = Color.Lerp(a.sparkColor3,    b.sparkColor3,    t);
+        dst.gateFrontColor    = Color.Lerp(a.gateFrontColor,    b.gateFrontColor,    t);
+        dst.gateFrontEmission = Color.Lerp(a.gateFrontEmission, b.gateFrontEmission, t);
+        dst.gateTopColor      = Color.Lerp(a.gateTopColor,      b.gateTopColor,      t);
+        dst.gateTopEmission   = Color.Lerp(a.gateTopEmission,   b.gateTopEmission,   t);
+        dst.ballColor        = Color.Lerp(a.ballColor,        b.ballColor,        t);
+        dst.ballRimColor     = Color.Lerp(a.ballRimColor,     b.ballRimColor,     t);
+        dst.ballEmissionBase = Color.Lerp(a.ballEmissionBase, b.ballEmissionBase, t);
+        dst.railLeftNear         = Color.Lerp(a.railLeftNear,         b.railLeftNear,         t);
+        dst.railLeftFar          = Color.Lerp(a.railLeftFar,          b.railLeftFar,          t);
+        dst.railLeftEmissionNear = Color.Lerp(a.railLeftEmissionNear, b.railLeftEmissionNear, t);
+        dst.railLeftEmissionFar  = Color.Lerp(a.railLeftEmissionFar,  b.railLeftEmissionFar,  t);
+        dst.railRightNear         = Color.Lerp(a.railRightNear,         b.railRightNear,         t);
+        dst.railRightFar          = Color.Lerp(a.railRightFar,          b.railRightFar,          t);
+        dst.railRightEmissionNear = Color.Lerp(a.railRightEmissionNear, b.railRightEmissionNear, t);
+        dst.railRightEmissionFar  = Color.Lerp(a.railRightEmissionFar,  b.railRightEmissionFar,  t);
+        dst.nebulaColor1    = Color.Lerp(a.nebulaColor1,    b.nebulaColor1,    t);
+        dst.nebulaColor2    = Color.Lerp(a.nebulaColor2,    b.nebulaColor2,    t);
+        dst.nebulaColor3    = Color.Lerp(a.nebulaColor3,    b.nebulaColor3,    t);
+        dst.nebulaBrightness = Mathf.Lerp(a.nebulaBrightness, b.nebulaBrightness, t);
+        dst.rayColor1    = Color.Lerp(a.rayColor1,    b.rayColor1,    t);
+        dst.rayColor2    = Color.Lerp(a.rayColor2,    b.rayColor2,    t);
+        dst.rayIntensity = Mathf.Lerp(a.rayIntensity, b.rayIntensity, t);
+        dst.starAccent1 = Color.Lerp(a.starAccent1, b.starAccent1, t);
+        dst.starAccent2 = Color.Lerp(a.starAccent2, b.starAccent2, t);
+        dst.starAccent3 = Color.Lerp(a.starAccent3, b.starAccent3, t);
+        dst.starAccent4 = Color.Lerp(a.starAccent4, b.starAccent4, t);
+        dst.starBase    = Color.Lerp(a.starBase,    b.starBase,    t);
+        dst.trailColorNear = Color.Lerp(a.trailColorNear, b.trailColorNear, t);
+        dst.trailColorFar  = Color.Lerp(a.trailColorFar,  b.trailColorFar,  t);
+        dst.cameraBg = Color.Lerp(a.cameraBg, b.cameraBg, t);
     }
 }

@@ -87,10 +87,23 @@ public class SceneSetup : MonoBehaviour
     Material blitzOrbCadencyMaterial;
     Material blitzOrbShieldMaterial;
     Material blitzShieldVisualMaterial;
-    Material blitzRingMaterial;
     Shader depthHueShiftShader;
+    BackgroundRings backgroundRings;
 
     public static ThemeData activeTheme;
+
+    // ── AUTO THEME MODE ──────────────────────────────────────
+    // Crossfades between random themes every AUTO_CYCLE_SECONDS.
+    // Active when saved index == ThemeData.AUTO_INDEX.
+    bool mAutoActive;
+    int mAutoFromIdx;
+    int mAutoToIdx;
+    float mAutoPhase;
+    ThemeData mAutoBuffer;
+    ThemeData[] mAutoThemes;  // cached — rebuilding each frame would allocate 8 themes
+    const float AUTO_CYCLE_SECONDS = 10f;
+
+    public bool IsAutoThemeActive() { return mAutoActive; }
 
     /// <summary>
     /// Apply a theme to all existing materials without reloading the scene.
@@ -141,16 +154,84 @@ public class SceneSetup : MonoBehaviour
             railMaterialRight.SetColor("_NearEmission", t.railRightEmissionNear);
             railMaterialRight.SetColor("_FarEmission", t.railRightEmissionFar);
         }
+        if (backgroundRings != null) backgroundRings.ApplyThemeLive(t);
 
         Camera cam = Camera.main;
         if (cam != null) cam.backgroundColor = t.cameraBg;
     }
 
+    /// <summary>Begin AUTO mode: crossfade from the currently-shown theme to a random different one.</summary>
+    public void StartAutoMode()
+    {
+        if (mAutoThemes == null) mAutoThemes = ThemeData.All();
+        mAutoActive = true;
+        mAutoPhase = 0f;
+        if (mAutoBuffer == null) mAutoBuffer = new ThemeData();
+
+        // Start from whatever is currently shown so the switch into AUTO is smooth.
+        // If no active theme yet, start from a random one.
+        if (activeTheme == null)
+        {
+            mAutoFromIdx = Random.Range(0, mAutoThemes.Length);
+            activeTheme = mAutoThemes[mAutoFromIdx];
+        }
+        else
+        {
+            mAutoFromIdx = FindThemeIndex(mAutoThemes, activeTheme);
+            if (mAutoFromIdx < 0) mAutoFromIdx = 0;
+        }
+        mAutoToIdx = PickDifferentIndex(mAutoThemes.Length, mAutoFromIdx);
+    }
+
+    public void StopAutoMode()
+    {
+        mAutoActive = false;
+    }
+
+    static int FindThemeIndex(ThemeData[] themes, ThemeData t)
+    {
+        if (t == null) return -1;
+        for (int i = 0; i < themes.Length; i++)
+            if (themes[i].name == t.name) return i;
+        return -1;
+    }
+
+    static int PickDifferentIndex(int count, int exclude)
+    {
+        if (count <= 1) return 0;
+        int pick = Random.Range(0, count - 1);
+        if (pick >= exclude) pick++;
+        return pick;
+    }
+
+    void Update()
+    {
+        if (!mAutoActive) return;
+
+        mAutoPhase += Time.deltaTime / AUTO_CYCLE_SECONDS;
+        if (mAutoPhase >= 1f)
+        {
+            mAutoFromIdx = mAutoToIdx;
+            mAutoToIdx = PickDifferentIndex(mAutoThemes.Length, mAutoFromIdx);
+            mAutoPhase = 0f;
+        }
+
+        float eased = mAutoPhase * mAutoPhase * (3f - 2f * mAutoPhase); // smoothstep
+        ThemeData.LerpInto(mAutoBuffer, mAutoThemes[mAutoFromIdx], mAutoThemes[mAutoToIdx], eased);
+        ApplyThemeLive(mAutoBuffer);
+    }
+
     void CreateMaterials()
     {
-        // Load saved theme
+        // Load saved theme. AUTO_INDEX (-1) means "crossfade between random themes";
+        // a specific index sticks until the user changes it in settings.
         ThemeData[] themes = ThemeData.All();
-        int idx = Mathf.Clamp(ThemeData.LoadSavedIndex(), 0, themes.Length - 1);
+        int savedIdx = ThemeData.LoadSavedIndex();
+        int idx;
+        if (savedIdx == ThemeData.AUTO_INDEX)
+            idx = Random.Range(0, themes.Length);
+        else
+            idx = Mathf.Clamp(savedIdx, 0, themes.Length - 1);
         activeTheme = themes[idx];
         ThemeData t = activeTheme;
 
@@ -267,12 +348,6 @@ public class SceneSetup : MonoBehaviour
         blitzConnectionMaterial.SetColor("_Color", new Color(0.5f, 0.2f, 1.0f));
         blitzConnectionMaterial.SetFloat("_Intensity", 2.0f);
         blitzConnectionMaterial.renderQueue = 3000;
-
-        // Blitz shield ring material — cyan-white glow around 3HP sentinels
-        blitzRingMaterial = new Material(connectionShader);
-        blitzRingMaterial.SetColor("_Color", new Color(0.6f, 0.9f, 1.0f));
-        blitzRingMaterial.SetFloat("_Intensity", 3.5f);
-        blitzRingMaterial.renderQueue = 3000;
 
         // Blitz orb materials — additive glow (TrailGlow) for semi-transparent look.
         // Intensity 2.5 still clears the DepthHueShift bright-exemption threshold
@@ -520,7 +595,6 @@ public class SceneSetup : MonoBehaviour
             torusScript.mBlitzGateMat = blitzGateMaterial;
             torusScript.mBlitzButtonMat = blitzButtonMaterial;
             torusScript.mBlitzConnectionMat = blitzConnectionMaterial;
-            torusScript.mBlitzRingMat = blitzRingMaterial;
             torusScript.mBlitzOrbGunMat = blitzOrbGunMaterial;
             torusScript.mBlitzOrbCadencyMat = blitzOrbCadencyMaterial;
             torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;
@@ -657,6 +731,11 @@ public class SceneSetup : MonoBehaviour
         GameObject bgObj = new GameObject("BackgroundRings");
         BackgroundRings bg = bgObj.AddComponent<BackgroundRings>();
         bg.Setup();
+        backgroundRings = bg;
+
+        // Start AUTO crossfader if saved preference is AUTO (default for new players).
+        if (ThemeData.LoadSavedIndex() == ThemeData.AUTO_INDEX)
+            StartAutoMode();
     }
 
     void CreateAudio()
