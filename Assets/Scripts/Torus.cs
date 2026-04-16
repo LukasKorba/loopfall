@@ -81,6 +81,7 @@ public class Torus : MonoBehaviour
     public Material mBlitzGateMat;
     public Material mBlitzButtonMat;
     public Material mBlitzConnectionMat;
+    public Material mBlitzRingMat;
     public BlitzBeam mBlitzBeam;
     private List<BlitzBox> mBlitzBoxes;
     private List<BlitzGate> mBlitzGates;
@@ -163,6 +164,7 @@ public class Torus : MonoBehaviour
             CheckBlitzOrbPickups();
             AnimateBlitzOrbs();
             AnimateBlitzGates();
+            AnimateBlitzBoxes();
             UpdateBlitzFireRate();
             return;
         }
@@ -660,7 +662,7 @@ public class Torus : MonoBehaviour
     void SpawnBlitzBox(float spacing, int hp)
     {
         float cross = Random.Range(30f, 150f);
-        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp);
+        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp, ringMat: hp >= 3 ? mBlitzRingMat : null);
         mLastBlitzAngle += spacing;
         box.mAngle = mLastBlitzAngle;
         box.mGameObject.transform.parent = transform;
@@ -670,11 +672,14 @@ public class Torus : MonoBehaviour
 
     void SpawnGateWithGap(float spacing)
     {
-        float gapCenter = Random.Range(50f, 130f);
-        float gapSize = Random.Range(30f, 45f);
         mLastBlitzAngle += spacing;
 
-        BlitzGate gate = new BlitzGate(gapCenter, gapSize, mBlitzGateMat, mBlitzConnectionMat);
+        // Half-gate: randomly block left or right side of the cross-section
+        bool blockLeft = Random.value < 0.5f;
+        float from = blockLeft ? 25f : 90f;
+        float to = blockLeft ? 90f : 155f;
+
+        BlitzGate gate = new BlitzGate(from, to, true, mBlitzGateMat, mBlitzConnectionMat);
         gate.mAngle = mLastBlitzAngle;
         gate.mGameObject.transform.parent = transform;
         gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
@@ -744,6 +749,16 @@ public class Torus : MonoBehaviour
         {
             if (orb.mGameObject != null && orb.mGameObject.activeSelf)
                 orb.Animate(time);
+        }
+    }
+
+    void AnimateBlitzBoxes()
+    {
+        float time = Time.time;
+        foreach (BlitzBox box in mBlitzBoxes)
+        {
+            if (box.mGameObject.activeSelf)
+                box.Animate(time);
         }
     }
 
@@ -819,7 +834,7 @@ public class Torus : MonoBehaviour
                      : mBlitzOrbShieldMat;
 
         float cross = Random.Range(40f, 140f);
-        BlitzOrb orb = new BlitzOrb(type, cross, mObstacleStepInv, mat);
+        BlitzOrb orb = new BlitzOrb(type, cross, mat);
         orb.mAngle = baseAngle + Random.Range(2f, 5f);
         orb.mGameObject.transform.parent = transform;
         orb.mGameObject.transform.Rotate(0f, 0f, orb.mAngle - mAngle);
@@ -840,11 +855,13 @@ public class Torus : MonoBehaviour
         return BlitzOrb.OrbType.Shield;
     }
 
+    const float ORB_COLLECT_RADIUS = 0.7f;
+
     void CheckBlitzOrbPickups()
     {
         if (mBlitzOrbs == null || mBallTransform == null) return;
 
-        float ballCross = GetBallCrossSectionAngle();
+        Vector3 ballPos = mBallTransform.position;
 
         foreach (BlitzOrb orb in mBlitzOrbs)
         {
@@ -853,11 +870,12 @@ public class Torus : MonoBehaviour
 
             float ringDist = mAngle - orb.mAngle;
 
-            // Collection window: check cross-section while orb is near the ball
-            if (ringDist >= -1f && ringDist <= 4f)
+            // Collection window: check proximity while orb is near the ball
+            if (ringDist >= -2f && ringDist <= 5f)
             {
-                float diff = Mathf.Abs(ballCross - orb.mCrossCenterDeg);
-                if (diff <= BlitzOrb.ARC_HALF_SPAN + 15f) // generous grace margin
+                Vector3 orbCenter = orb.GetWorldCenter();
+                float dist = Vector3.Distance(ballPos, orbCenter);
+                if (dist < ORB_COLLECT_RADIUS)
                 {
                     // Collected — flash + spark to HUD
                     orb.StartCollectedFade();
@@ -866,15 +884,14 @@ public class Torus : MonoBehaviour
 
                     if (mScoreSync != null)
                     {
-                        Vector3 worldPos = orb.GetWorldCenter();
                         int slotIndex = GetOrbSlotIndex(orb.mType);
-                        mScoreSync.TriggerOrbSpark(worldPos, orb.mType, slotIndex);
+                        mScoreSync.TriggerOrbSpark(orbCenter, orb.mType, slotIndex);
                     }
                 }
             }
 
             // Past collection window — missed
-            if (ringDist > 4f)
+            if (ringDist > 5f)
             {
                 orb.StartMissedFade();
             }
