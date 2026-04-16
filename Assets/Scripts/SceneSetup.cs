@@ -17,6 +17,8 @@ public class SceneSetup : MonoBehaviour
     public bool halfTubeOnly = true;
     // MANUAL PARAM: Use spline-extruded track instead of fixed torus
     public bool useSplineTrack = false;
+    // MANUAL PARAM: Blitz mode — laser beam shooting, no gates
+    public bool useBlitzMode = false;
 
     // Direct references — ensures shaders are included in builds
     public Shader depthHueShiftRef;
@@ -31,6 +33,10 @@ public class SceneSetup : MonoBehaviour
 
     void Awake()
     {
+        // Set mode before anything else — other scripts read GameConfig on Start
+        if (useBlitzMode)
+            GameConfig.ActiveMode = GameModeType.Blitz;
+
         // Force highest graphics tier — Tier2 on iOS disables HDR, killing emission glow
         Graphics.activeTier = UnityEngine.Rendering.GraphicsTier.Tier3;
 
@@ -76,6 +82,15 @@ public class SceneSetup : MonoBehaviour
     Material trailMaterial;
     Material itemTimePlusMaterial;
     Material itemTimeMinusMaterial;
+    Material beamMaterial;
+    Material blitzBoxMaterial;
+    Material blitzGateMaterial;
+    Material blitzButtonMaterial;
+    Material blitzConnectionMaterial;
+    Material blitzOrbGunMaterial;
+    Material blitzOrbCadencyMaterial;
+    Material blitzOrbShieldMaterial;
+    Material blitzShieldVisualMaterial;
     Shader depthHueShiftShader;
 
     public static ThemeData activeTheme;
@@ -233,6 +248,57 @@ public class SceneSetup : MonoBehaviour
         itemTimeMinusMaterial = new Material(trackItemShader);
         itemTimeMinusMaterial.SetColor("_Color", new Color(0.9f, 0.1f, 0.1f));
         itemTimeMinusMaterial.SetFloat("_Intensity", 2.0f);
+
+        // Blitz beam material — additive glow, same shader as trail
+        Shader beamShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        beamMaterial = new Material(beamShader);
+        beamMaterial.SetColor("_Color", Color.white);
+        beamMaterial.SetFloat("_Intensity", 3.0f);
+        beamMaterial.renderQueue = 3000;
+
+        // Blitz box material — cyan glowing target cubes (shoot for points)
+        blitzBoxMaterial = new Material(gateShader);
+        blitzBoxMaterial.SetColor("_Color", new Color(0.15f, 0.85f, 0.95f));
+        blitzBoxMaterial.SetColor("_EmissionColor", new Color(0.08f, 0.55f, 0.75f));
+        blitzBoxMaterial.SetFloat("_EmissionIntensity", 1.5f);
+
+        // Blitz gate material — purple-blue electric bars (deadly barrier)
+        blitzGateMaterial = new Material(gateShader);
+        blitzGateMaterial.SetColor("_Color", new Color(0.5f, 0.2f, 1.0f));
+        blitzGateMaterial.SetColor("_EmissionColor", new Color(0.3f, 0.1f, 0.9f));
+        blitzGateMaterial.SetFloat("_EmissionIntensity", 2.0f);
+
+        // Blitz button material — orange/amber (shoot to open linked gate)
+        blitzButtonMaterial = new Material(gateShader);
+        blitzButtonMaterial.SetColor("_Color", new Color(0.95f, 0.5f, 0.1f));
+        blitzButtonMaterial.SetColor("_EmissionColor", new Color(0.8f, 0.35f, 0.05f));
+        blitzButtonMaterial.SetFloat("_EmissionIntensity", 2.0f);
+
+        // Blitz connection material — electric trail from button to gate
+        Shader connectionShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        blitzConnectionMaterial = new Material(connectionShader);
+        blitzConnectionMaterial.SetColor("_Color", new Color(0.5f, 0.2f, 1.0f));
+        blitzConnectionMaterial.SetFloat("_Intensity", 2.0f);
+        blitzConnectionMaterial.renderQueue = 3000;
+
+        // Blitz orb materials — collectible upgrade pickups (same shader as time items)
+        blitzOrbGunMaterial = new Material(trackItemShader);
+        blitzOrbGunMaterial.SetColor("_Color", new Color(1.0f, 0.85f, 0.1f));
+        blitzOrbGunMaterial.SetFloat("_Intensity", 2.5f);
+
+        blitzOrbCadencyMaterial = new Material(trackItemShader);
+        blitzOrbCadencyMaterial.SetColor("_Color", new Color(0.2f, 0.7f, 1.0f));
+        blitzOrbCadencyMaterial.SetFloat("_Intensity", 2.5f);
+
+        blitzOrbShieldMaterial = new Material(trackItemShader);
+        blitzOrbShieldMaterial.SetColor("_Color", new Color(0.1f, 1.0f, 0.4f));
+        blitzOrbShieldMaterial.SetFloat("_Intensity", 2.5f);
+
+        // Blitz shield visual — green glow around ball when shield is active
+        Shader shieldShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        blitzShieldVisualMaterial = new Material(shieldShader);
+        blitzShieldVisualMaterial.SetColor("_Color", new Color(0.1f, 1.0f, 0.4f));
+        blitzShieldVisualMaterial.SetFloat("_Intensity", 1.5f);
 
         // Use direct scene reference (Shader.Find gets stripped on iOS)
         depthHueShiftShader = depthHueShiftRef;
@@ -448,6 +514,24 @@ public class SceneSetup : MonoBehaviour
         torusScript.mBallTransform = ball.transform;
         torusScript.mItemTimePlus = itemTimePlusMaterial;
         torusScript.mItemTimeMinus = itemTimeMinusMaterial;
+
+        // Blitz mode — wire materials and beam system
+        if (GameConfig.IsBlitz())
+        {
+            torusScript.mBlitzBoxMat = blitzBoxMaterial;
+            torusScript.mBlitzGateMat = blitzGateMaterial;
+            torusScript.mBlitzButtonMat = blitzButtonMaterial;
+            torusScript.mBlitzConnectionMat = blitzConnectionMaterial;
+            torusScript.mBlitzOrbGunMat = blitzOrbGunMaterial;
+            torusScript.mBlitzOrbCadencyMat = blitzOrbCadencyMaterial;
+            torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;
+
+            BlitzBeam beam = ball.AddComponent<BlitzBeam>();
+            beam.Initialize(beamMaterial, new Color(1f, 0.5f, 0.1f), torusObj.transform, torusScript);
+            sphereScript.mBlitzBeam = beam;
+            sphereScript.mBlitzShieldMat = blitzShieldVisualMaterial;
+            torusScript.mBlitzBeam = beam;
+        }
     }
 
     void CreateCamera()
@@ -696,6 +780,9 @@ public class SceneSetup : MonoBehaviour
 
     void CreateRewindSystem()
     {
+        // Blitz has no rewind — no data to collect, no replay to show
+        if (GameConfig.IsBlitz()) return;
+
         GameObject rewindObj = new GameObject("RewindSystem");
         RewindSystem rewind = rewindObj.AddComponent<RewindSystem>();
 

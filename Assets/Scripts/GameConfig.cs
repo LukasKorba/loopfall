@@ -5,7 +5,8 @@
 public enum GameModeType
 {
     PureHell,
-    TimeWarp
+    TimeWarp,
+    Blitz
 }
 
 public static class GameConfig
@@ -14,23 +15,41 @@ public static class GameConfig
 
     public static string GetScoresKey()
     {
-        return ActiveMode == GameModeType.TimeWarp ? "TopScores_TimeWarp" : "TopScores";
+        switch (ActiveMode)
+        {
+            case GameModeType.TimeWarp: return "TopScores_TimeWarp";
+            case GameModeType.Blitz:    return "TopScores_Blitz";
+            default:                    return "TopScores";
+        }
     }
 
     public static string GetLeaderboardID()
     {
-        return ActiveMode == GameModeType.TimeWarp
-            ? "com.lukaskorba.loopfall.timewarp"
-            : "com.lukaskorba.loopfall.purehell";
+        switch (ActiveMode)
+        {
+            case GameModeType.TimeWarp: return "com.lukaskorba.loopfall.timewarp";
+            case GameModeType.Blitz:    return "com.lukaskorba.loopfall.blitz";
+            default:                    return "com.lukaskorba.loopfall.purehell";
+        }
     }
 
     public static string GetModeName()
     {
-        return ActiveMode == GameModeType.TimeWarp ? "TIME WARP" : "PURE HELL";
+        switch (ActiveMode)
+        {
+            case GameModeType.TimeWarp: return "TIME WARP";
+            case GameModeType.Blitz:    return "BLITZ";
+            default:                    return "PURE HELL";
+        }
     }
 
     public static bool IsTimeWarp()
     {
         return ActiveMode == GameModeType.TimeWarp;
+    }
+
+    public static bool IsBlitz()
+    {
+        return ActiveMode == GameModeType.Blitz;
     }
 }

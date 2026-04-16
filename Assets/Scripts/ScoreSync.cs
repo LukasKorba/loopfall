@@ -102,6 +102,15 @@ public class ScoreSync : MonoBehaviour
     private int currentStreak = 0;
     private float streakFlashTimer = -1f;
 
+    // ── BLITZ UPGRADE HUD ────────────────────────────────────
+    private RectTransform blitzUpgradeGroup;
+    private Image[] blitzGunSlots;
+    private Image[] blitzCadencySlots;
+    private Image[] blitzShieldSlots;
+    private int blitzLastGunCount = -1;
+    private int blitzLastCadencyCount = -1;
+    private int blitzLastShieldCount = -1;
+
     // ── TIME WARP POPUP ──────────────────────────────────────
     private TMP_Text playingPopupText;
     private float popupAnimTimer = -1f;
@@ -308,6 +317,9 @@ public class ScoreSync : MonoBehaviour
                 scoreGlowTimer = -1f;
                 currentStreak = 0;
                 streakFlashTimer = -1f;
+                blitzLastGunCount = -1;
+                blitzLastCadencyCount = -1;
+                blitzLastShieldCount = -1;
                 titleFadeOutTimer = 0f;
 
                 // First-run tutorial: mark as played (hint text won't show again)
@@ -352,6 +364,19 @@ public class ScoreSync : MonoBehaviour
 
     void OnGameOver()
     {
+        if (GameConfig.IsBlitz())
+        {
+            Torus torus = FindAnyObjectByType<Torus>();
+            goFinalScore = torus != null ? torus.GetScore() : 0;
+            lastScoreText = goFinalScore.ToString();
+            goRank = InsertScore(goFinalScore);
+            isNewBest = (goRank == 1);
+            isTopFive = (goRank >= 2 && goRank <= 5);
+            goLastDisplayScore = -1;
+            goNewBestSfxPlayed = false;
+            return;
+        }
+
         if (GameConfig.IsTimeWarp())
         {
             FrenzyTimer timer = FindAnyObjectByType<FrenzyTimer>();
@@ -382,6 +407,12 @@ public class ScoreSync : MonoBehaviour
         return (deciseconds / 10f).ToString("F1") + "s";
     }
 
+    string FormatModeScore(int score)
+    {
+        if (GameConfig.IsTimeWarp()) return FormatTimeScore(score);
+        return score.ToString();
+    }
+
     string FormatTimestamp(long unixSeconds)
     {
         if (unixSeconds <= 0) return "---";
@@ -401,7 +432,7 @@ public class ScoreSync : MonoBehaviour
     {
         if (state != State.GameOver || stateTimer < 1.0f) return false;
 
-        if (!GameConfig.IsTimeWarp())
+        if (!GameConfig.IsTimeWarp() && !GameConfig.IsBlitz())
         {
             if (mSphere != null && mSphere.mRewindSystem != null
                 && !mSphere.mRewindSystem.IsFullyComplete())
@@ -761,6 +792,9 @@ public class ScoreSync : MonoBehaviour
             52, FontStyles.Bold, new Color(1f, 1f, 1f, 0f));
         SetAnchored(playingPopupText.rectTransform, new Vector2(0.5f, 0.85f), new Vector2(300, 80));
         ApplyDropShadow(playingPopupText);
+
+        if (GameConfig.IsBlitz())
+            BuildBlitzUpgradeHUD(playingGroup);
     }
 
     void BuildGameOverGroup(Transform parent)
@@ -1258,9 +1292,7 @@ public class ScoreSync : MonoBehaviour
         if (topScores.Count > 0)
         {
             float bestFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
-            string bestStr = GameConfig.IsTimeWarp()
-                ? FormatTimeScore(topScores[0])
-                : topScores[0].ToString();
+            string bestStr = FormatModeScore(topScores[0]);
             bestScoreText.text = "BEST  " + bestStr;
             SetAlpha(bestScoreText, bestFade);
 
@@ -1415,6 +1447,10 @@ public class ScoreSync : MonoBehaviour
             return;
         }
 
+        // Blitz: update upgrade HUD each frame
+        if (GameConfig.IsBlitz())
+            UpdateBlitzUpgradeHUD();
+
         if (source == null) return;
         string text = source.text;
         string scoreOnly = text.Contains("\n") ? text.Split('\n')[0] : text;
@@ -1502,6 +1538,97 @@ public class ScoreSync : MonoBehaviour
 
         // Streak dots
         UpdateStreakDots();
+    }
+
+    // ── BLITZ UPGRADE HUD ──────────────────────────────────
+
+    void BuildBlitzUpgradeHUD(RectTransform parent)
+    {
+        const float SLOT_SIZE = 28f;
+        const float SLOT_GAP = 4f;
+        const float ROW_GAP = 6f;
+        const float LEVEL_GAP = 10f; // extra gap between L1 and L2 slots
+        const float MARGIN_X = 30f;
+        const float MARGIN_Y = 30f;
+
+        GameObject grp = new GameObject("BlitzUpgradeHUD");
+        blitzUpgradeGroup = grp.AddComponent<RectTransform>();
+        blitzUpgradeGroup.SetParent(parent, false);
+        blitzUpgradeGroup.anchorMin = new Vector2(0f, 1f);
+        blitzUpgradeGroup.anchorMax = new Vector2(0f, 1f);
+        blitzUpgradeGroup.pivot = new Vector2(0f, 1f);
+        blitzUpgradeGroup.anchoredPosition = new Vector2(MARGIN_X, -MARGIN_Y);
+        blitzUpgradeGroup.sizeDelta = new Vector2(400f, 120f);
+
+        Color gunColor = new Color(1f, 0.85f, 0.1f);
+        Color cadencyColor = new Color(0.2f, 0.7f, 1.0f);
+        Color shieldColor = new Color(0.1f, 1.0f, 0.4f);
+
+        blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 10, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LEVEL_GAP);
+        blitzCadencySlots = CreateSlotRow(blitzUpgradeGroup, 1, 10, cadencyColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LEVEL_GAP);
+        blitzShieldSlots = CreateSlotRow(blitzUpgradeGroup, 2, 5, shieldColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, 0f);
+    }
+
+    Image[] CreateSlotRow(RectTransform parent, int rowIndex, int count, Color color,
+        float slotSize, float slotGap, float rowGap, float levelGap)
+    {
+        Image[] slots = new Image[count];
+        float y = -(rowIndex * (slotSize + rowGap));
+
+        for (int i = 0; i < count; i++)
+        {
+            float extraGap = (levelGap > 0f && i >= 5) ? levelGap : 0f;
+            float x = i * (slotSize + slotGap) + extraGap;
+
+            Image img = CreateImage(parent, "Slot_" + rowIndex + "_" + i,
+                new Color(color.r, color.g, color.b, 0.15f));
+            RectTransform rt = img.rectTransform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, y);
+            rt.sizeDelta = new Vector2(slotSize, slotSize);
+            slots[i] = img;
+        }
+
+        return slots;
+    }
+
+    void UpdateBlitzUpgradeHUD()
+    {
+        if (blitzUpgradeGroup == null) return;
+        Torus torus = FindAnyObjectByType<Torus>();
+        if (torus == null) return;
+
+        int gun = torus.GetGunOrbCount();
+        int cadency = torus.GetCadencyOrbCount();
+        int shield = torus.GetShieldOrbCount();
+
+        if (gun != blitzLastGunCount)
+        {
+            blitzLastGunCount = gun;
+            UpdateSlotRow(blitzGunSlots, gun, new Color(1f, 0.85f, 0.1f));
+        }
+        if (cadency != blitzLastCadencyCount)
+        {
+            blitzLastCadencyCount = cadency;
+            UpdateSlotRow(blitzCadencySlots, cadency, new Color(0.2f, 0.7f, 1.0f));
+        }
+        if (shield != blitzLastShieldCount)
+        {
+            blitzLastShieldCount = shield;
+            UpdateSlotRow(blitzShieldSlots, shield, new Color(0.1f, 1.0f, 0.4f));
+        }
+    }
+
+    void UpdateSlotRow(Image[] slots, int filledCount, Color color)
+    {
+        if (slots == null) return;
+        for (int i = 0; i < slots.Length; i++)
+        {
+            float alpha = i < filledCount ? 1f : 0.15f;
+            slots[i].color = new Color(color.r, color.g, color.b, alpha);
+        }
     }
 
     void AnimatePlayingTimeWarp()
@@ -1649,7 +1776,8 @@ public class ScoreSync : MonoBehaviour
         if (t > 0.3f)
         {
             // Duration scales with score (0.3s min, 1.2s max)
-            float countScale = GameConfig.IsTimeWarp() ? 0.005f : 0.04f;
+            float countScale = GameConfig.IsTimeWarp() ? 0.005f
+                             : GameConfig.IsBlitz() ? 0.002f : 0.04f;
             float countDuration = Mathf.Clamp(goFinalScore * countScale, 0.3f, 1.2f);
             float countP = Mathf.Clamp01((t - 0.3f) / countDuration);
             float countEased = EaseOutCubic(countP);
@@ -1659,9 +1787,7 @@ public class ScoreSync : MonoBehaviour
                 goLastDisplayScore = displayScore;
                 if (mAudio != null) mAudio.PlayCount();
             }
-            string displayText = GameConfig.IsTimeWarp()
-                ? FormatTimeScore(displayScore)
-                : displayScore.ToString();
+            string displayText = FormatModeScore(displayScore);
             goScoreText.text = displayText;
             goScoreGlowText.text = displayText;
 
@@ -1878,7 +2004,7 @@ public class ScoreSync : MonoBehaviour
             int score = topScores[i];
             bool isCurrent = (score == goFinalScore && i == goRank - 1);
 
-            string scoreStr = GameConfig.IsTimeWarp() ? FormatTimeScore(score) : score.ToString();
+            string scoreStr = FormatModeScore(score);
             goLeaderboardTexts[i].text = (i + 1) + ".   " + scoreStr;
 
             // Color hierarchy: new best = gold, current run = cyan, #1 = gold, rest = dim

@@ -76,6 +76,36 @@ public class Torus : MonoBehaviour
     private List<TrackItem> mTrackItems;
     private TrackItem mLastTrackItem = null;
 
+    // Blitz mode
+    public Material mBlitzBoxMat;
+    public Material mBlitzGateMat;
+    public Material mBlitzButtonMat;
+    public Material mBlitzConnectionMat;
+    public BlitzBeam mBlitzBeam;
+    private List<BlitzBox> mBlitzBoxes;
+    private List<BlitzGate> mBlitzGates;
+    private float mBlitzTimer;
+    private float mLastBlitzAngle;
+
+    // Blitz speed ramp
+    private const float BLITZ_BASE_SPEED = 0.12f;
+    private const float BLITZ_MAX_SPEED = 0.22f;
+    private const float BLITZ_SPEED_RAMP = 0.001f; // per second
+
+    // Blitz orbs (upgrade pickups)
+    public Material mBlitzOrbGunMat;
+    public Material mBlitzOrbCadencyMat;
+    public Material mBlitzOrbShieldMat;
+    private List<BlitzOrb> mBlitzOrbs;
+    private int mGunOrbCount;
+    private int mCadencyOrbCount;
+    private int mShieldOrbCount;
+    private int mGunLevel;
+    private int mCadencyLevel;
+    private int mShieldLevel;
+    private bool mShieldActive;
+    private const int ORBS_PER_UPGRADE = 5;
+
     void Awake()
     {
         mBeginRotation = transform.rotation;
@@ -87,7 +117,20 @@ public class Torus : MonoBehaviour
         mObstacleStepInv = 1.0f / mObstacleStep;
 
         mObstacles = new List<Obstacle>();
-        UpdateObstacles();
+
+        if (GameConfig.IsBlitz())
+        {
+            mAngleStep = BLITZ_BASE_SPEED;
+            mBlitzBoxes = new List<BlitzBox>();
+            mBlitzGates = new List<BlitzGate>();
+            mBlitzOrbs = new List<BlitzOrb>();
+            mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
+            UpdateBlitzObstacles();
+        }
+        else
+        {
+            UpdateObstacles();
+        }
     }
 
     void Update()
@@ -108,6 +151,18 @@ public class Torus : MonoBehaviour
 
         // Rotate mesh
         transform.Rotate(0.0f, 0.0f, -mAngleStep);
+
+        // Blitz: boxes, electric gates, points scoring
+        if (GameConfig.IsBlitz())
+        {
+            mBlitzTimer += Time.deltaTime;
+            UpdateBlitzSpeed();
+            UpdateBlitzObstacles();
+            CheckBlitzOrbPickups();
+            AnimateBlitzGates();
+            UpdateBlitzFireRate();
+            return;
+        }
 
         // Time Warp: handle items instead of obstacles
         if (GameConfig.IsTimeWarp() && mTrackItems != null)
@@ -278,7 +333,43 @@ public class Torus : MonoBehaviour
         mLastObstacle = null;
         mCurrentObstacle = null;
 
-        UpdateObstacles();
+        if (GameConfig.IsBlitz())
+        {
+            mAngleStep = BLITZ_BASE_SPEED;
+            mBlitzTimer = 0f;
+            if (mBlitzBoxes != null)
+            {
+                foreach (BlitzBox box in mBlitzBoxes)
+                    Destroy(box.mGameObject);
+                mBlitzBoxes.Clear();
+            }
+            if (mBlitzGates != null)
+            {
+                foreach (BlitzGate gate in mBlitzGates)
+                    Destroy(gate.mGameObject);
+                mBlitzGates.Clear();
+            }
+            if (mBlitzOrbs != null)
+            {
+                foreach (BlitzOrb orb in mBlitzOrbs)
+                    Destroy(orb.mGameObject);
+                mBlitzOrbs.Clear();
+            }
+            mGunOrbCount = 0;
+            mCadencyOrbCount = 0;
+            mShieldOrbCount = 0;
+            mGunLevel = 0;
+            mCadencyLevel = 0;
+            mShieldLevel = 0;
+            mShieldActive = false;
+            if (mBlitzBeam != null) mBlitzBeam.SetBeamCount(1);
+            mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
+            UpdateBlitzObstacles();
+        }
+        else
+        {
+            UpdateObstacles();
+        }
 
         mScoreWithoutInteraction = 0;
         ResetSwing();
@@ -297,6 +388,7 @@ public class Torus : MonoBehaviour
 
     public int GetScore() { return mScore; }
     public float GetAngle() { return mAngle; }
+    public float GetBlitzTime() { return mBlitzTimer; }
 
     public void SetAngle(float angle)
     {
@@ -484,5 +576,319 @@ public class Torus : MonoBehaviour
 
         mTrackItems.Add(item);
         return item;
+    }
+
+    // ── BLITZ MODE ──────────────────────────────────────────
+
+    void UpdateBlitzSpeed()
+    {
+        mAngleStep = Mathf.Min(BLITZ_BASE_SPEED + mBlitzTimer * BLITZ_SPEED_RAMP, BLITZ_MAX_SPEED);
+    }
+
+    void UpdateBlitzObstacles()
+    {
+        if (mBlitzBoxes == null) return;
+
+        // Generate ahead
+        while (mLastBlitzAngle < mAngle + 85f)
+            SpawnNextBlitzObstacle();
+
+        // Hide behind (rolling window)
+        foreach (BlitzBox box in mBlitzBoxes)
+        {
+            if (box.mAngle > mAngle - 240f) break;
+            if (box.mGameObject != null && box.mGameObject.activeSelf)
+                box.mGameObject.SetActive(false);
+        }
+        foreach (BlitzGate gate in mBlitzGates)
+        {
+            if (gate.mAngle > mAngle - 240f) break;
+            if (gate.mGameObject != null && gate.mGameObject.activeSelf)
+                gate.mGameObject.SetActive(false);
+        }
+        foreach (BlitzOrb orb in mBlitzOrbs)
+        {
+            if (orb.mAngle > mAngle - 240f) break;
+            if (orb.mGameObject != null && orb.mGameObject.activeSelf)
+                orb.mGameObject.SetActive(false);
+        }
+    }
+
+    void SpawnNextBlitzObstacle()
+    {
+        float r = Random.value;
+
+        if (mBlitzTimer > 90f)
+        {
+            // Phase 4: dense, full gates required
+            float sp = Random.Range(5f, 8f);
+            if (r < 0.25f) SpawnFullGateWithButton(sp);
+            else if (r < 0.50f) SpawnGateWithGap(sp);
+            else if (r < 0.70f) SpawnGateWithButton(sp);
+            else SpawnBlitzBox(sp, Random.value < 0.5f ? 3 : 1);
+        }
+        else if (mBlitzTimer > 45f)
+        {
+            // Phase 3: gates appear, some with buttons
+            float sp = Random.Range(6f, 10f);
+            if (r < 0.15f) SpawnFullGateWithButton(sp);
+            else if (r < 0.35f) SpawnGateWithGap(sp);
+            else if (r < 0.50f) SpawnGateWithButton(sp);
+            else SpawnBlitzBox(sp, Random.value < 0.35f ? 3 : 1);
+        }
+        else if (mBlitzTimer > 15f)
+        {
+            // Phase 2: first gates, more variety
+            float sp = Random.Range(7f, 12f);
+            if (r < 0.20f) SpawnGateWithGap(sp);
+            else SpawnBlitzBox(sp, Random.value < 0.2f ? 3 : 1);
+        }
+        else
+        {
+            // Phase 1: easy intro, boxes only
+            SpawnBlitzBox(Random.Range(10f, 14f), 1);
+        }
+
+        // Chance to spawn an upgrade orb after each obstacle
+        if (Random.value < 0.3f)
+            SpawnBlitzOrb(mLastBlitzAngle);
+    }
+
+    void SpawnBlitzBox(float spacing, int hp)
+    {
+        float cross = Random.Range(30f, 150f);
+        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp);
+        mLastBlitzAngle += spacing;
+        box.mAngle = mLastBlitzAngle;
+        box.mGameObject.transform.parent = transform;
+        box.mGameObject.transform.Rotate(0f, 0f, box.mAngle - mAngle);
+        mBlitzBoxes.Add(box);
+    }
+
+    void SpawnGateWithGap(float spacing)
+    {
+        float gapCenter = Random.Range(50f, 130f);
+        float gapSize = Random.Range(30f, 45f);
+        mLastBlitzAngle += spacing;
+
+        BlitzGate gate = new BlitzGate(gapCenter, gapSize, mBlitzGateMat, mBlitzConnectionMat);
+        gate.mAngle = mLastBlitzAngle;
+        gate.mGameObject.transform.parent = transform;
+        gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
+        mBlitzGates.Add(gate);
+    }
+
+    void SpawnGateWithButton(float spacing)
+    {
+        float gapCenter = Random.Range(50f, 130f);
+        float gapSize = Random.Range(25f, 35f);
+        float buttonCross = Random.Range(40f, 140f);
+
+        // Button appears first
+        mLastBlitzAngle += spacing;
+        BlitzBox button = new BlitzBox(buttonCross, mBlitzButtonMat, 3, isButton: true);
+        button.mAngle = mLastBlitzAngle;
+        button.mGameObject.transform.parent = transform;
+        button.mGameObject.transform.Rotate(0f, 0f, button.mAngle - mAngle);
+        mBlitzBoxes.Add(button);
+
+        // Gate follows at 25° behind button
+        mLastBlitzAngle += 25f;
+        BlitzGate gate = new BlitzGate(gapCenter, gapSize, mBlitzGateMat, mBlitzConnectionMat);
+        gate.mAngle = mLastBlitzAngle;
+        gate.mGameObject.transform.parent = transform;
+        gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
+        gate.LinkButton(button);
+        mBlitzGates.Add(gate);
+    }
+
+    void SpawnFullGateWithButton(float spacing)
+    {
+        float buttonCross = Random.Range(50f, 130f);
+
+        // Button appears first
+        mLastBlitzAngle += spacing;
+        BlitzBox button = new BlitzBox(buttonCross, mBlitzButtonMat, 3, isButton: true);
+        button.mAngle = mLastBlitzAngle;
+        button.mGameObject.transform.parent = transform;
+        button.mGameObject.transform.Rotate(0f, 0f, button.mAngle - mAngle);
+        mBlitzBoxes.Add(button);
+
+        // Full gate (no gap) — must destroy button or die
+        mLastBlitzAngle += 30f;
+        BlitzGate gate = new BlitzGate(90f, 0f, mBlitzGateMat, mBlitzConnectionMat);
+        gate.mAngle = mLastBlitzAngle;
+        gate.mGameObject.transform.parent = transform;
+        gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
+        gate.LinkButton(button);
+        mBlitzGates.Add(gate);
+    }
+
+    void AnimateBlitzGates()
+    {
+        float time = Time.time;
+        foreach (BlitzGate gate in mBlitzGates)
+        {
+            if (gate.mGameObject.activeSelf)
+                gate.Animate(time);
+        }
+    }
+
+    void UpdateBlitzFireRate()
+    {
+        if (mBlitzBeam == null) return;
+        float interval = mBlitzTimer > 90f ? 0.4f
+                       : mBlitzTimer > 45f ? 0.5f
+                       : mBlitzTimer > 15f ? 0.65f
+                       : 0.8f;
+
+        // Cadency upgrade reduces fire interval
+        float multiplier = mCadencyLevel >= 2 ? 0.5f
+                         : mCadencyLevel >= 1 ? 0.7f
+                         : 1.0f;
+        mBlitzBeam.SetFireInterval(interval * multiplier);
+    }
+
+    /// <summary>
+    /// Called by BlitzBeam when a beam hits a box/button.
+    /// Reduces HP; on destruction awards points and handles gate link.
+    /// </summary>
+    public void OnBlitzBoxHit(GameObject cubeObj)
+    {
+        foreach (BlitzBox box in mBlitzBoxes)
+        {
+            if (box.mCube == cubeObj && !box.mDestroyed)
+            {
+                bool destroyed = box.Hit();
+                LightHaptic();
+
+                if (destroyed)
+                {
+                    // Points: 1HP = 10, 3HP = 20
+                    int points = box.mMaxHitPoints >= 3 ? 20 : 10;
+                    mScore += points;
+
+                    // Gate deactivation bonus
+                    if (box.mLinkedGate != null)
+                    {
+                        box.mLinkedGate.Deactivate();
+                        mScore += 50;
+                        HeavyHaptic();
+                    }
+
+                    mScoreLbl.text = mScore.ToString();
+
+                    // Grid pulse at destruction point
+                    if (mBallTransform != null)
+                    {
+                        Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
+                        Shader.SetGlobalVector("_ScorePulsePos", cubeObj.transform.position);
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // ── BLITZ ORBS ──────────────────────────────────────────
+
+    void SpawnBlitzOrb(float baseAngle)
+    {
+        // Don't spawn if all tracks maxed
+        bool gunMaxed = mGunOrbCount >= ORBS_PER_UPGRADE * 2;
+        bool cadencyMaxed = mCadencyOrbCount >= ORBS_PER_UPGRADE * 2;
+        bool shieldMaxed = mShieldOrbCount >= ORBS_PER_UPGRADE;
+        if (gunMaxed && cadencyMaxed && shieldMaxed) return;
+
+        BlitzOrb.OrbType type = PickOrbType(gunMaxed, cadencyMaxed, shieldMaxed);
+        Material mat = type == BlitzOrb.OrbType.Gun ? mBlitzOrbGunMat
+                     : type == BlitzOrb.OrbType.Cadency ? mBlitzOrbCadencyMat
+                     : mBlitzOrbShieldMat;
+
+        float cross = Random.Range(40f, 140f);
+        BlitzOrb orb = new BlitzOrb(type, cross, mObstacleStepInv, mat);
+        orb.mAngle = baseAngle + Random.Range(2f, 5f);
+        orb.mGameObject.transform.parent = transform;
+        orb.mGameObject.transform.Rotate(0f, 0f, orb.mAngle - mAngle);
+        mBlitzOrbs.Add(orb);
+    }
+
+    BlitzOrb.OrbType PickOrbType(bool gunMaxed, bool cadencyMaxed, bool shieldMaxed)
+    {
+        // Weight toward incomplete tracks
+        float gW = gunMaxed ? 0f : 1f;
+        float cW = cadencyMaxed ? 0f : 1f;
+        float sW = shieldMaxed ? 0f : 1f;
+        float total = gW + cW + sW;
+
+        float r = Random.value * total;
+        if (r < gW) return BlitzOrb.OrbType.Gun;
+        if (r < gW + cW) return BlitzOrb.OrbType.Cadency;
+        return BlitzOrb.OrbType.Shield;
+    }
+
+    void CheckBlitzOrbPickups()
+    {
+        if (mBlitzOrbs == null) return;
+
+        foreach (BlitzOrb orb in mBlitzOrbs)
+        {
+            if (orb.mCollected) continue;
+            if (orb.mGameObject == null || !orb.mGameObject.activeSelf) continue;
+
+            if (mAngle - 0.8f > orb.mAngle)
+            {
+                orb.mCollected = true;
+                orb.mGameObject.SetActive(false);
+                OnOrbCollected(orb.mType);
+                LightHaptic();
+            }
+        }
+    }
+
+    void OnOrbCollected(BlitzOrb.OrbType type)
+    {
+        switch (type)
+        {
+            case BlitzOrb.OrbType.Gun:
+                mGunOrbCount++;
+                if (mGunOrbCount == ORBS_PER_UPGRADE) ApplyGunUpgrade(1);
+                else if (mGunOrbCount == ORBS_PER_UPGRADE * 2) ApplyGunUpgrade(2);
+                break;
+            case BlitzOrb.OrbType.Cadency:
+                mCadencyOrbCount++;
+                if (mCadencyOrbCount == ORBS_PER_UPGRADE) ApplyCadencyUpgrade(1);
+                else if (mCadencyOrbCount == ORBS_PER_UPGRADE * 2) ApplyCadencyUpgrade(2);
+                break;
+            case BlitzOrb.OrbType.Shield:
+                mShieldOrbCount++;
+                if (mShieldOrbCount == ORBS_PER_UPGRADE) ApplyShieldUpgrade();
+                break;
+        }
+    }
+
+    void ApplyGunUpgrade(int level)
+    {
+        mGunLevel = level;
+        if (mBlitzBeam != null) mBlitzBeam.SetBeamCount(level + 1);
+    }
+    void ApplyCadencyUpgrade(int level) { mCadencyLevel = level; }
+    void ApplyShieldUpgrade() { mShieldLevel = 1; mShieldActive = true; }
+
+    public int GetGunOrbCount() { return mGunOrbCount; }
+    public int GetCadencyOrbCount() { return mCadencyOrbCount; }
+    public int GetShieldOrbCount() { return mShieldOrbCount; }
+    public int GetGunLevel() { return mGunLevel; }
+    public int GetCadencyLevel() { return mCadencyLevel; }
+    public int GetShieldLevel() { return mShieldLevel; }
+    public bool IsShieldActive() { return mShieldActive; }
+
+    public bool ConsumeShield()
+    {
+        if (!mShieldActive) return false;
+        mShieldActive = false;
+        mShieldLevel = 0;
+        mShieldOrbCount = 0;
+        return true;
     }
 }

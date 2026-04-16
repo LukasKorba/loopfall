@@ -41,6 +41,11 @@ public class Sphere : MonoBehaviour
     // Spline track (optional — null when using classic torus)
     public SplineGameController mSplineController;
 
+    // Blitz mode beam (optional — null when not in Blitz)
+    public BlitzBeam mBlitzBeam;
+    public Material mBlitzShieldMat;
+    private GameObject mShieldVisual;
+
     // Cached references
     private ScoreSync mScoreSync;
     private GameAudio mAudio;
@@ -76,6 +81,22 @@ public class Sphere : MonoBehaviour
         mScoreSync = FindAnyObjectByType<ScoreSync>();
         mAudio = FindAnyObjectByType<GameAudio>();
 
+        // Blitz shield visual — transparent green sphere around ball
+        if (GameConfig.IsBlitz() && mBlitzShieldMat != null)
+        {
+            GameObject shield = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            shield.name = "ShieldVisual";
+            Object.Destroy(shield.GetComponent<Collider>());
+            shield.transform.SetParent(transform, false);
+            shield.transform.localScale = Vector3.one * 1.4f;
+            MeshRenderer smr = shield.GetComponent<MeshRenderer>();
+            smr.material = mBlitzShieldMat;
+            smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            smr.receiveShadows = false;
+            shield.SetActive(false);
+            mShieldVisual = shield;
+        }
+
         // Start paused — waiting for first tap
         mTorusScript.SetPaused(true);
     }
@@ -100,6 +121,10 @@ public class Sphere : MonoBehaviour
         {
             TriggerGameOver();
         }
+
+        // Blitz shield visual toggle
+        if (mShieldVisual != null)
+            mShieldVisual.SetActive(mTorusScript.IsShieldActive());
 
         // Title state — tap anywhere to start
         if (mWaitingToStart)
@@ -365,6 +390,11 @@ public class Sphere : MonoBehaviour
             if (mFrenzyTimer != null)
                 mFrenzyTimer.StartTimer();
         }
+        else if (GameConfig.IsBlitz())
+        {
+            mTorusScript.Reset();
+            if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+        }
         else
         {
             bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
@@ -434,12 +464,16 @@ public class Sphere : MonoBehaviour
         if (death != null) death.TriggerDeath(transform.position);
 
         // Rewind only in Pure Hell
-        if (!GameConfig.IsTimeWarp() && mRewindSystem != null)
+        if (!GameConfig.IsTimeWarp() && !GameConfig.IsBlitz() && mRewindSystem != null)
             mRewindSystem.OnDeath();
 
         // Stop timer in Time Warp
         if (GameConfig.IsTimeWarp() && mFrenzyTimer != null)
             mFrenzyTimer.StopTimer();
+
+        // Deactivate beam in Blitz
+        if (GameConfig.IsBlitz() && mBlitzBeam != null)
+            mBlitzBeam.SetActive(false);
 
         if (mAudio != null) mAudio.PlayGameOver();
     }
@@ -461,6 +495,10 @@ public class Sphere : MonoBehaviour
             if (mFrenzyTimer != null)
                 mFrenzyTimer.StartTimer();
         }
+        else if (GameConfig.IsBlitz())
+        {
+            if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+        }
         else
         {
             if (mRewindSystem != null)
@@ -481,8 +519,17 @@ public class Sphere : MonoBehaviour
             mNormal = collision.contacts[0].normal;
         }
 
-        if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh"))
+        if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar"))
         {
+            // Blitz shield absorbs one lethal hit
+            if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())
+            {
+                // Visual feedback — camera death flash
+                DeathEffect death = mCamera.GetComponent<DeathEffect>();
+                if (death != null) death.TriggerDeath(transform.position);
+                return;
+            }
+
             TriggerGameOver();
         }
     }
