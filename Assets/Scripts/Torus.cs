@@ -104,6 +104,7 @@ public class Torus : MonoBehaviour
     private int mCadencyLevel;
     private int mShieldLevel;
     private bool mShieldActive;
+    private ScoreSync mScoreSync;
     private const int ORBS_PER_UPGRADE = 5;
 
     void Awake()
@@ -121,6 +122,7 @@ public class Torus : MonoBehaviour
         if (GameConfig.IsBlitz())
         {
             mAngleStep = BLITZ_BASE_SPEED;
+            mScoreSync = FindAnyObjectByType<ScoreSync>();
             mBlitzBoxes = new List<BlitzBox>();
             mBlitzGates = new List<BlitzGate>();
             mBlitzOrbs = new List<BlitzOrb>();
@@ -840,20 +842,51 @@ public class Torus : MonoBehaviour
 
     void CheckBlitzOrbPickups()
     {
-        if (mBlitzOrbs == null) return;
+        if (mBlitzOrbs == null || mBallTransform == null) return;
+
+        float ballCross = GetBallCrossSectionAngle();
 
         foreach (BlitzOrb orb in mBlitzOrbs)
         {
-            if (orb.mCollected) continue;
+            if (orb.mDismissed) continue;
             if (orb.mGameObject == null || !orb.mGameObject.activeSelf) continue;
 
             if (mAngle > orb.mAngle)
             {
-                orb.mCollected = true;
-                orb.StartFade();
-                OnOrbCollected(orb.mType);
-                LightHaptic();
+                // Check if ball is within the orb's cross-section arc
+                float diff = Mathf.Abs(ballCross - orb.mCrossCenterDeg);
+                if (diff <= BlitzOrb.ARC_HALF_SPAN + 10f) // +10° grace margin
+                {
+                    // Collected — flash + spark to HUD
+                    orb.StartCollectedFade();
+                    OnOrbCollected(orb.mType);
+                    LightHaptic();
+
+                    // Trigger spark effect toward HUD
+                    if (mScoreSync != null)
+                    {
+                        Vector3 worldPos = orb.GetWorldCenter();
+                        int slotIndex = GetOrbSlotIndex(orb.mType);
+                        mScoreSync.TriggerOrbSpark(worldPos, orb.mType, slotIndex);
+                    }
+                }
+                else
+                {
+                    // Missed — gentle fade
+                    orb.StartMissedFade();
+                }
             }
+        }
+    }
+
+    int GetOrbSlotIndex(BlitzOrb.OrbType type)
+    {
+        switch (type)
+        {
+            case BlitzOrb.OrbType.Gun: return mGunOrbCount - 1;
+            case BlitzOrb.OrbType.Cadency: return mCadencyOrbCount - 1;
+            case BlitzOrb.OrbType.Shield: return mShieldOrbCount - 1;
+            default: return 0;
         }
     }
 

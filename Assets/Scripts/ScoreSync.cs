@@ -111,6 +111,18 @@ public class ScoreSync : MonoBehaviour
     private int blitzLastCadencyCount = -1;
     private int blitzLastShieldCount = -1;
 
+    // ── BLITZ ORB SPARKS ────────────────────────────────────
+    private const int MAX_SPARKS = 6;
+    private const float SPARK_DURATION = 0.45f;
+    private const float SPARK_SIZE = 16f;
+    private Image[] sparkImages;
+    private Vector2[] sparkFrom;
+    private Vector2[] sparkTo;
+    private float[] sparkTimers;
+    private int[] sparkSlotIndex;
+    private BlitzOrb.OrbType[] sparkOrbType;
+    private RectTransform canvasRT;
+
     // ── TIME WARP POPUP ──────────────────────────────────────
     private TMP_Text playingPopupText;
     private float popupAnimTimer = -1f;
@@ -499,6 +511,34 @@ public class ScoreSync : MonoBehaviour
         BuildPauseGroup(canvasObj.transform);
 
         ShowGroup(state);
+
+        // Spark pool for orb collection effects
+        canvasRT = canvasObj.GetComponent<RectTransform>();
+        if (GameConfig.IsBlitz())
+            InitOrbSparks(canvasObj.transform);
+    }
+
+    void InitOrbSparks(Transform parent)
+    {
+        sparkImages = new Image[MAX_SPARKS];
+        sparkFrom = new Vector2[MAX_SPARKS];
+        sparkTo = new Vector2[MAX_SPARKS];
+        sparkTimers = new float[MAX_SPARKS];
+        sparkSlotIndex = new int[MAX_SPARKS];
+        sparkOrbType = new BlitzOrb.OrbType[MAX_SPARKS];
+
+        for (int i = 0; i < MAX_SPARKS; i++)
+        {
+            Image img = CreateImage(parent, "OrbSpark_" + i, Color.white);
+            RectTransform srt = img.rectTransform;
+            srt.anchorMin = new Vector2(0.5f, 0.5f);
+            srt.anchorMax = new Vector2(0.5f, 0.5f);
+            srt.pivot = new Vector2(0.5f, 0.5f);
+            srt.sizeDelta = new Vector2(SPARK_SIZE, SPARK_SIZE);
+            img.gameObject.SetActive(false);
+            sparkImages[i] = img;
+            sparkTimers[i] = -1f;
+        }
     }
 
     void BuildSplashGroup(Transform parent)
@@ -1447,9 +1487,12 @@ public class ScoreSync : MonoBehaviour
             return;
         }
 
-        // Blitz: update upgrade HUD each frame
+        // Blitz: update upgrade HUD and spark effects
         if (GameConfig.IsBlitz())
+        {
             UpdateBlitzUpgradeHUD();
+            AnimateOrbSparks();
+        }
 
         if (source == null) return;
         string text = source.text;
@@ -1628,6 +1671,119 @@ public class ScoreSync : MonoBehaviour
         {
             float alpha = i < filledCount ? 1f : 0.15f;
             slots[i].color = new Color(color.r, color.g, color.b, alpha);
+
+            // Decay pop scale back to 1
+            Vector3 s = slots[i].rectTransform.localScale;
+            if (s.x > 1.01f)
+            {
+                float ns = Mathf.Lerp(s.x, 1f, Time.deltaTime * 8f);
+                slots[i].rectTransform.localScale = Vector3.one * ns;
+            }
+            else if (s.x != 1f)
+            {
+                slots[i].rectTransform.localScale = Vector3.one;
+            }
+        }
+    }
+
+    /// <summary>Spawn a spark that flies from world position to the target HUD slot.</summary>
+    public void TriggerOrbSpark(Vector3 worldPos, BlitzOrb.OrbType type, int slotIndex)
+    {
+        if (sparkImages == null || canvasRT == null) return;
+
+        // Convert world position to canvas local position
+        Camera cam = Camera.main;
+        if (cam == null) return;
+        Vector2 screenPos = cam.WorldToScreenPoint(worldPos);
+        Vector2 canvasPos;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvasRT, screenPos, null, out canvasPos);
+
+        // Find target slot position
+        Image[] slots = type == BlitzOrb.OrbType.Gun ? blitzGunSlots
+                      : type == BlitzOrb.OrbType.Cadency ? blitzCadencySlots
+                      : blitzShieldSlots;
+        if (slots == null || slotIndex < 0 || slotIndex >= slots.Length) return;
+
+        Vector2 slotScreenPos = RectTransformUtility.WorldToScreenPoint(
+            null, slots[slotIndex].rectTransform.position);
+        Vector2 targetPos;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvasRT, slotScreenPos, null, out targetPos);
+
+        // Find a free spark slot
+        int s = -1;
+        for (int i = 0; i < MAX_SPARKS; i++)
+        {
+            if (sparkTimers[i] < 0f)
+            {
+                s = i;
+                break;
+            }
+        }
+        if (s < 0) return; // all slots busy
+
+        // Set spark color to match orb type
+        Color c = type == BlitzOrb.OrbType.Gun ? new Color(1f, 0.85f, 0.1f)
+                : type == BlitzOrb.OrbType.Cadency ? new Color(0.2f, 0.7f, 1.0f)
+                : new Color(0.1f, 1.0f, 0.4f);
+
+        sparkImages[s].color = c;
+        sparkImages[s].gameObject.SetActive(true);
+        sparkImages[s].rectTransform.anchoredPosition = canvasPos;
+        sparkFrom[s] = canvasPos;
+        sparkTo[s] = targetPos;
+        sparkTimers[s] = 0f;
+        sparkSlotIndex[s] = slotIndex;
+        sparkOrbType[s] = type;
+    }
+
+    void AnimateOrbSparks()
+    {
+        if (sparkImages == null) return;
+
+        for (int i = 0; i < MAX_SPARKS; i++)
+        {
+            if (sparkTimers[i] < 0f) continue;
+
+            sparkTimers[i] += Time.deltaTime;
+            float p = sparkTimers[i] / SPARK_DURATION;
+
+            if (p >= 1f)
+            {
+                // Arrived — hide spark, light up the slot
+                sparkImages[i].gameObject.SetActive(false);
+                sparkTimers[i] = -1f;
+
+                Image[] slots = sparkOrbType[i] == BlitzOrb.OrbType.Gun ? blitzGunSlots
+                              : sparkOrbType[i] == BlitzOrb.OrbType.Cadency ? blitzCadencySlots
+                              : blitzShieldSlots;
+                int idx = sparkSlotIndex[i];
+                if (slots != null && idx >= 0 && idx < slots.Length)
+                {
+                    // Pop effect on arrival — scale up briefly
+                    slots[idx].rectTransform.localScale = Vector3.one * 1.6f;
+                }
+                continue;
+            }
+
+            // Ease-in-out arc path
+            float eased = p < 0.5f ? 2f * p * p : 1f - Mathf.Pow(-2f * p + 2f, 2f) * 0.5f;
+            Vector2 pos = Vector2.Lerp(sparkFrom[i], sparkTo[i], eased);
+            // Slight upward arc
+            float arc = Mathf.Sin(p * Mathf.PI) * 60f;
+            pos.y += arc;
+
+            sparkImages[i].rectTransform.anchoredPosition = pos;
+
+            // Size: starts big, shrinks to slot size
+            float size = Mathf.Lerp(SPARK_SIZE * 1.5f, SPARK_SIZE * 0.5f, eased);
+            sparkImages[i].rectTransform.sizeDelta = new Vector2(size, size);
+
+            // Fade alpha: full brightness, slight fade at end
+            float alpha = p < 0.8f ? 1f : Mathf.Lerp(1f, 0.6f, (p - 0.8f) / 0.2f);
+            Color sc = sparkImages[i].color;
+            sparkImages[i].color = new Color(sc.r, sc.g, sc.b, alpha);
         }
     }
 

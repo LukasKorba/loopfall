@@ -5,31 +5,36 @@ using System.Collections.Generic;
 /// Collectible orb for Blitz mode upgrade tracks.
 /// Short arc strip on torus inner surface — player steers to collect.
 /// Three types power three upgrade tracks (Gun, Cadency, Shield).
-/// Uses TrailGlow (additive) for semi-transparent glow.
+/// Two dismissal modes: collected (flash + spark) vs missed (gentle fade).
 /// </summary>
 public class BlitzOrb
 {
     public enum OrbType { Gun, Cadency, Shield }
+    public enum FadeMode { None, Collected, Missed }
 
     public GameObject mGameObject;
     public float mAngle;
+    public float mCrossCenterDeg; // cross-section center for position check
     public OrbType mType;
     public bool mCollected = false;
-    public bool mFading = false;
+    public bool mDismissed = false; // true once any fade starts
+    public FadeMode mFadeMode = FadeMode.None;
 
     Material mMat;
     float mBaseIntensity;
     float mPulsePhase;
     float mFadeTimer;
 
-    const float FADE_DURATION = 1.2f;
+    const float COLLECTED_FADE_DURATION = 0.8f;
+    const float MISSED_FADE_DURATION = 1.5f;
     const float STRIP_WIDTH = 0.25f;
     const float SURFACE_OFFSET = 0.03f;
-    const float ARC_HALF_SPAN = 20f; // degrees — 40° total arc
+    public const float ARC_HALF_SPAN = 20f; // degrees — 40° total arc
 
     public BlitzOrb(OrbType type, float crossAngleDeg, float obstacleStepInv, Material material)
     {
         mType = type;
+        mCrossCenterDeg = crossAngleDeg;
         mPulsePhase = Random.value * Mathf.PI * 2f;
         mGameObject = new GameObject("blitzOrb");
 
@@ -43,25 +48,39 @@ public class BlitzOrb
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
-    /// <summary>Call each frame for breathing glow + fade-out animation.</summary>
+    /// <summary>Call each frame for breathing glow + fade animation.</summary>
     public void Animate(float time)
     {
         if (mGameObject == null || !mGameObject.activeSelf) return;
 
-        if (mFading)
+        if (mFadeMode == FadeMode.Collected)
         {
             mFadeTimer += Time.deltaTime;
-            float p = mFadeTimer / FADE_DURATION;
+            float p = mFadeTimer / COLLECTED_FADE_DURATION;
             if (p >= 1f)
             {
                 mGameObject.SetActive(false);
                 return;
             }
-            // Bright flash at start, then smooth decay
-            float flash = p < 0.15f ? Mathf.Lerp(3f, 1f, p / 0.15f) : 1f;
-            float fade = 1f - p * p; // quadratic — stays visible longer, drops off at end
+            // Bright flash at start, then smooth decay (intensity only, no scale)
+            float flash = p < 0.15f ? Mathf.Lerp(4f, 1f, p / 0.15f) : 1f;
+            float fade = 1f - p * p;
             mMat.SetFloat("_Intensity", mBaseIntensity * fade * flash);
-            mGameObject.transform.localScale = Vector3.one * (1f + p * 2f); // expand 3x over duration
+            return;
+        }
+
+        if (mFadeMode == FadeMode.Missed)
+        {
+            mFadeTimer += Time.deltaTime;
+            float p = mFadeTimer / MISSED_FADE_DURATION;
+            if (p >= 1f)
+            {
+                mGameObject.SetActive(false);
+                return;
+            }
+            // Gentle linear fade — no flash, just dims away
+            float fade = 1f - p;
+            mMat.SetFloat("_Intensity", mBaseIntensity * fade * 0.5f);
             return;
         }
 
@@ -72,11 +91,30 @@ public class BlitzOrb
         mMat.SetFloat("_Intensity", pulse);
     }
 
-    /// <summary>Start fade-out (called on collection).</summary>
-    public void StartFade()
+    /// <summary>Start collected fade (flash + decay).</summary>
+    public void StartCollectedFade()
     {
-        mFading = true;
+        mDismissed = true;
+        mCollected = true;
+        mFadeMode = FadeMode.Collected;
         mFadeTimer = 0f;
+    }
+
+    /// <summary>Start missed fade (gentle dim-out).</summary>
+    public void StartMissedFade()
+    {
+        mDismissed = true;
+        mFadeMode = FadeMode.Missed;
+        mFadeTimer = 0f;
+    }
+
+    /// <summary>World position of the arc center (for spark effect origin).</summary>
+    public Vector3 GetWorldCenter()
+    {
+        if (mGameObject == null) return Vector3.zero;
+        float a = mCrossCenterDeg * Mathf.Deg2Rad;
+        Vector3 local = new Vector3(0f, -10f - Mathf.Sin(a), -Mathf.Cos(a));
+        return mGameObject.transform.TransformPoint(local);
     }
 
     Mesh GenerateArcMesh(float centerDeg, float obstacleStepInv)
