@@ -780,25 +780,30 @@ public class ScoreSync : MonoBehaviour
 
         ApplyDropShadow(playingScoreText);
 
-        // Streak dots — fill up on each gate, flash and reset at STREAK_COUNT
-        streakDots = new Image[STREAK_COUNT];
-        float dotSize = 10f;
-        float dotSpacing = 20f;
-        float totalWidth = (STREAK_COUNT - 1) * dotSpacing;
-        float startX = -totalWidth * 0.5f;
-
-        for (int i = 0; i < STREAK_COUNT; i++)
+        // Streak dots — fill up on each gate, flash and reset at STREAK_COUNT.
+        // Pure Hell only: pairs with the swing/no-tap multiplier; in BLITZ
+        // they'd just track kills without driving any reward.
+        if (!GameConfig.IsBlitz())
         {
-            Image dot = CreateImage(playingGroup.transform, "Dot" + i,
-                new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.15f));
-            if (circleSprite != null) dot.sprite = circleSprite;
-            RectTransform drt = dot.rectTransform;
-            drt.anchorMin = new Vector2(0.5f, 0.895f);
-            drt.anchorMax = new Vector2(0.5f, 0.895f);
-            drt.pivot = new Vector2(0.5f, 0.5f);
-            drt.sizeDelta = new Vector2(dotSize, dotSize);
-            drt.anchoredPosition = new Vector2(startX + i * dotSpacing, 0);
-            streakDots[i] = dot;
+            streakDots = new Image[STREAK_COUNT];
+            float dotSize = 10f;
+            float dotSpacing = 20f;
+            float totalWidth = (STREAK_COUNT - 1) * dotSpacing;
+            float startX = -totalWidth * 0.5f;
+
+            for (int i = 0; i < STREAK_COUNT; i++)
+            {
+                Image dot = CreateImage(playingGroup.transform, "Dot" + i,
+                    new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.15f));
+                if (circleSprite != null) dot.sprite = circleSprite;
+                RectTransform drt = dot.rectTransform;
+                drt.anchorMin = new Vector2(0.5f, 0.895f);
+                drt.anchorMax = new Vector2(0.5f, 0.895f);
+                drt.pivot = new Vector2(0.5f, 0.5f);
+                drt.sizeDelta = new Vector2(dotSize, dotSize);
+                drt.anchoredPosition = new Vector2(startX + i * dotSpacing, 0);
+                streakDots[i] = dot;
+            }
         }
 
         if (GameConfig.IsBlitz())
@@ -1658,18 +1663,6 @@ public class ScoreSync : MonoBehaviour
         {
             float alpha = i < filledCount ? 1f : 0.15f;
             slots[i].color = new Color(color.r, color.g, color.b, alpha);
-
-            // Decay pop scale back to 1
-            Vector3 s = slots[i].rectTransform.localScale;
-            if (s.x > 1.01f)
-            {
-                float ns = Mathf.Lerp(s.x, 1f, Time.deltaTime * 8f);
-                slots[i].rectTransform.localScale = Vector3.one * ns;
-            }
-            else if (s.x != 1f)
-            {
-                slots[i].rectTransform.localScale = Vector3.one;
-            }
         }
     }
 
@@ -1745,15 +1738,7 @@ public class ScoreSync : MonoBehaviour
                 sparkImages[i].gameObject.SetActive(false);
                 sparkTimers[i] = -1f;
 
-                Image[] slots = sparkOrbType[i] == BlitzOrb.OrbType.Gun ? blitzGunSlots
-                              : sparkOrbType[i] == BlitzOrb.OrbType.Cadency ? blitzCadencySlots
-                              : blitzShieldSlots;
-                int idx = sparkSlotIndex[i];
-                if (slots != null && idx >= 0 && idx < slots.Length)
-                {
-                    // Pop effect on arrival — scale up briefly
-                    slots[idx].rectTransform.localScale = Vector3.one * 1.6f;
-                }
+                // Slot lights up via UpdateSlotRow (alpha change) — no scale pop.
                 continue;
             }
 

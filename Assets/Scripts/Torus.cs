@@ -489,6 +489,16 @@ public class Torus : MonoBehaviour
         }
     }
 
+    // Formation weights per phase. Column order matches BlitzFormation.All():
+    //              A      B     AAA    ABA    AA    PYR
+    static readonly float[][] sFormationWeights = new float[][]
+    {
+        new[] { 1.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f }, // Phase 0: intro, 1HP only
+        new[] { 0.40f, 0.10f, 0.25f, 0.00f, 0.25f, 0.00f }, // Phase 1: clusters + streams, B peeks in
+        new[] { 0.15f, 0.15f, 0.20f, 0.15f, 0.15f, 0.20f }, // Phase 2: all formations unlocked
+        new[] { 0.10f, 0.20f, 0.15f, 0.20f, 0.10f, 0.25f }, // Phase 3: sentinels + pyramids dominate
+    };
+
     void SpawnNextBlitzObstacle()
     {
         float r = Random.value;
@@ -500,7 +510,7 @@ public class Torus : MonoBehaviour
             if (r < 0.25f) SpawnFullGateWithButton(sp);
             else if (r < 0.50f) SpawnGateWithGap(sp);
             else if (r < 0.70f) SpawnGateWithButton(sp);
-            else SpawnBlitzBox(sp, Random.value < 0.5f ? 3 : 1);
+            else SpawnFormation(PickFormation(), sp);
         }
         else if (mBlitzTimer > 45f)
         {
@@ -509,19 +519,19 @@ public class Torus : MonoBehaviour
             if (r < 0.15f) SpawnFullGateWithButton(sp);
             else if (r < 0.35f) SpawnGateWithGap(sp);
             else if (r < 0.50f) SpawnGateWithButton(sp);
-            else SpawnBlitzBox(sp, Random.value < 0.35f ? 3 : 1);
+            else SpawnFormation(PickFormation(), sp);
         }
         else if (mBlitzTimer > 15f)
         {
             // Phase 2: first gates, more variety
             float sp = Random.Range(7f, 12f);
             if (r < 0.20f) SpawnGateWithGap(sp);
-            else SpawnBlitzBox(sp, Random.value < 0.2f ? 3 : 1);
+            else SpawnFormation(PickFormation(), sp);
         }
         else
         {
             // Phase 1: easy intro, boxes only
-            SpawnBlitzBox(Random.Range(10f, 14f), 1);
+            SpawnFormation(PickFormation(), Random.Range(10f, 14f));
         }
 
         // Chance to spawn an upgrade orb after each obstacle
@@ -529,15 +539,52 @@ public class Torus : MonoBehaviour
             SpawnBlitzOrb(mLastBlitzAngle);
     }
 
-    void SpawnBlitzBox(float spacing, int hp)
+    int GetBlitzPhase()
     {
-        float cross = Random.Range(30f, 150f);
-        BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, hp);
-        mLastBlitzAngle += spacing;
-        box.mAngle = mLastBlitzAngle;
-        box.mGameObject.transform.parent = transform;
-        box.mGameObject.transform.Rotate(0f, 0f, box.mAngle - mAngle);
-        mBlitzBoxes.Add(box);
+        if (mBlitzTimer > 90f) return 3;
+        if (mBlitzTimer > 45f) return 2;
+        if (mBlitzTimer > 15f) return 1;
+        return 0;
+    }
+
+    BlitzFormation PickFormation()
+    {
+        BlitzFormation[] all = BlitzFormation.All();
+        float[] w = sFormationWeights[GetBlitzPhase()];
+
+        float total = 0f;
+        for (int i = 0; i < w.Length; i++) total += w[i];
+
+        float r = Random.value * total;
+        float acc = 0f;
+        for (int i = 0; i < w.Length; i++)
+        {
+            acc += w[i];
+            if (r <= acc) return all[i];
+        }
+        return all[0];
+    }
+
+    void SpawnFormation(BlitzFormation f, float leadSpacing)
+    {
+        mLastBlitzAngle += leadSpacing;
+        float anchorAngle = mLastBlitzAngle;
+        float crossAnchor = Random.Range(f.crossAnchorMin, f.crossAnchorMax);
+
+        for (int i = 0; i < f.elements.Length; i++)
+        {
+            BlitzElement e = f.elements[i];
+            float cross = Mathf.Clamp(crossAnchor + e.crossOffset, 30f, 150f);
+            float angle = anchorAngle + e.angleOffset;
+
+            BlitzBox box = new BlitzBox(cross, mBlitzBoxMat, e.hp);
+            box.mAngle = angle;
+            box.mGameObject.transform.parent = transform;
+            box.mGameObject.transform.Rotate(0f, 0f, box.mAngle - mAngle);
+            mBlitzBoxes.Add(box);
+        }
+
+        mLastBlitzAngle = anchorAngle + f.longitudinalDepth;
     }
 
     void SpawnGateWithGap(float spacing)
@@ -708,7 +755,22 @@ public class Torus : MonoBehaviour
         orb.mAngle = baseAngle + Random.Range(2f, 5f);
         orb.mGameObject.transform.parent = transform;
         orb.mGameObject.transform.Rotate(0f, 0f, orb.mAngle - mAngle);
+        if (orb.mTrigger != null) orb.mTrigger.onCollected = HandleOrbCollected;
         mBlitzOrbs.Add(orb);
+    }
+
+    void HandleOrbCollected(BlitzOrb orb)
+    {
+        if (orb.mDismissed) return;
+        Vector3 orbCenter = orb.GetWorldCenter();
+        orb.StartCollectedFade();
+        OnOrbCollected(orb.mType);
+        LightHaptic();
+        if (mScoreSync != null)
+        {
+            int slotIndex = GetOrbSlotIndex(orb.mType);
+            mScoreSync.TriggerOrbSpark(orbCenter, orb.mType, slotIndex);
+        }
     }
 
     BlitzOrb.OrbType PickOrbType(bool gunMaxed, bool cadencyMaxed, bool shieldMaxed)
@@ -725,46 +787,19 @@ public class Torus : MonoBehaviour
         return BlitzOrb.OrbType.Shield;
     }
 
-    const float ORB_COLLECT_RADIUS = 0.7f;
-
     void CheckBlitzOrbPickups()
     {
-        if (mBlitzOrbs == null || mBallTransform == null) return;
-
-        Vector3 ballPos = mBallTransform.position;
+        // Actual pickup runs through BlitzOrbTrigger.OnTriggerEnter → HandleOrbCollected.
+        // This loop only handles the "ball passed the orb without grabbing it" case.
+        if (mBlitzOrbs == null) return;
 
         foreach (BlitzOrb orb in mBlitzOrbs)
         {
             if (orb.mDismissed) continue;
             if (orb.mGameObject == null || !orb.mGameObject.activeSelf) continue;
 
-            float ringDist = mAngle - orb.mAngle;
-
-            // Collection window: check proximity while orb is near the ball
-            if (ringDist >= -2f && ringDist <= 5f)
-            {
-                Vector3 orbCenter = orb.GetWorldCenter();
-                float dist = Vector3.Distance(ballPos, orbCenter);
-                if (dist < ORB_COLLECT_RADIUS)
-                {
-                    // Collected — flash + spark to HUD
-                    orb.StartCollectedFade();
-                    OnOrbCollected(orb.mType);
-                    LightHaptic();
-
-                    if (mScoreSync != null)
-                    {
-                        int slotIndex = GetOrbSlotIndex(orb.mType);
-                        mScoreSync.TriggerOrbSpark(orbCenter, orb.mType, slotIndex);
-                    }
-                }
-            }
-
-            // Past collection window — missed
-            if (ringDist > 5f)
-            {
+            if (mAngle - orb.mAngle > 5f)
                 orb.StartMissedFade();
-            }
         }
     }
 

@@ -2,6 +2,24 @@ using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
+/// Trigger relay so the physics engine can drive pickup detection without each
+/// orb needing a full MonoBehaviour. Attached to the orb's mesh; Torus wires
+/// onCollected to its HandleOrbCollected handler at spawn time.
+/// </summary>
+public class BlitzOrbTrigger : MonoBehaviour
+{
+    public BlitzOrb orb;
+    public System.Action<BlitzOrb> onCollected;
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (orb == null || orb.mDismissed) return;
+        if (other.gameObject.name != "Ball") return;
+        onCollected?.Invoke(orb);
+    }
+}
+
+/// <summary>
 /// Collectible upgrade pickup for Blitz mode.
 /// Floating 3D objects above the torus surface — player steers to collect.
 /// Three types: Gun (yellow octahedron), Cadency (blue ring), Shield (green sphere).
@@ -34,10 +52,13 @@ public class BlitzOrb
     GameObject mHaloObj;
     Material mHaloMat;
 
+    // Physics trigger attached to mMeshObj — ball's SphereCollider fires OnTriggerEnter
+    public BlitzOrbTrigger mTrigger;
+
     const float COLLECTED_FADE_DURATION = 0.5f;
     const float MISSED_FADE_DURATION = 1.0f;
     const float OBJ_SCALE = 0.1f;
-    const float SURFACE_OFFSET = 0.28f;  // keeps halo ring clear of torus surface, body stays centered in ring
+    const float SURFACE_OFFSET = 0.22f;  // body overlaps ball silhouette (ball top ~0.2) while halo stays above surface
     const float HALO_BASE_INTENSITY = 3.0f;
 
     static Mesh sRingMesh;
@@ -77,13 +98,22 @@ public class BlitzOrb
             case OrbType.Shield:
                 mMeshObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 mMeshObj.name = "OrbShield";
-                Object.Destroy(mMeshObj.GetComponent<Collider>());
+                // Remove the default collider immediately so we can attach our pickup trigger cleanly.
+                Object.DestroyImmediate(mMeshObj.GetComponent<Collider>());
                 break;
         }
 
         mMeshObj.transform.SetParent(mGameObject.transform, false);
         mMeshObj.transform.localPosition = mBasePosition;
         mMeshObj.transform.localScale = Vector3.one * mBaseScale;
+
+        // Pickup trigger — local radius 2.0 * lossyScale (0.1) = 0.20 world units,
+        // so the ball (radius 0.1) grabs the orb when its center comes within 0.30.
+        SphereCollider pickupTrigger = mMeshObj.AddComponent<SphereCollider>();
+        pickupTrigger.isTrigger = true;
+        pickupTrigger.radius = 2.0f;
+        mTrigger = mMeshObj.AddComponent<BlitzOrbTrigger>();
+        mTrigger.orb = this;
 
         MeshRenderer mr = mMeshObj.GetComponent<MeshRenderer>();
         mMat = new Material(material);

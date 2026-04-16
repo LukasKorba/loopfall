@@ -279,13 +279,15 @@ public class BlitzBeam : MonoBehaviour
         int boxMask = 1 << BlitzBox.LAYER;
         int envMask = ~boxMask;
 
-        // SphereCast on box layer — wider radius catches boxes the thin ray would miss
+        // SphereCast on box layer — wider radius catches boxes the thin ray would miss.
+        // Ignore triggers so orb pickup colliders don't register as obstacles.
         RaycastHit boxHit;
-        bool hitBox = Physics.SphereCast(rayStart, 0.12f, dir, out boxHit, MAX_RANGE, boxMask);
+        bool hitBox = Physics.SphereCast(rayStart, 0.12f, dir, out boxHit, MAX_RANGE, boxMask, QueryTriggerInteraction.Ignore);
 
-        // Raycast on everything else — visual endpoint (torus surface)
+        // Raycast on everything else — visual endpoint (torus surface). Also skip triggers
+        // so the beam passes through orbs instead of stopping short on their pickup zone.
         RaycastHit surfHit;
-        bool hitSurf = Physics.Raycast(rayStart, dir, out surfHit, MAX_RANGE, envMask);
+        bool hitSurf = Physics.Raycast(rayStart, dir, out surfHit, MAX_RANGE, envMask, QueryTriggerInteraction.Ignore);
 
         Vector3 target;
         float dist;
