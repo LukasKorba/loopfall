@@ -91,6 +91,7 @@ public class SceneSetup : MonoBehaviour
     Material blitzOrbCadencyMaterial;
     Material blitzOrbShieldMaterial;
     Material blitzShieldVisualMaterial;
+    Material blitzRingMaterial;
     Shader depthHueShiftShader;
 
     public static ThemeData activeTheme;
@@ -280,6 +281,12 @@ public class SceneSetup : MonoBehaviour
         blitzConnectionMaterial.SetColor("_Color", new Color(0.5f, 0.2f, 1.0f));
         blitzConnectionMaterial.SetFloat("_Intensity", 2.0f);
         blitzConnectionMaterial.renderQueue = 3000;
+
+        // Blitz shield ring material — cyan-white glow around 3HP sentinels
+        blitzRingMaterial = new Material(connectionShader);
+        blitzRingMaterial.SetColor("_Color", new Color(0.6f, 0.9f, 1.0f));
+        blitzRingMaterial.SetFloat("_Intensity", 3.5f);
+        blitzRingMaterial.renderQueue = 3000;
 
         // Blitz orb materials — additive glow (TrailGlow) for semi-transparent look
         Shader orbShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
@@ -526,6 +533,7 @@ public class SceneSetup : MonoBehaviour
             torusScript.mBlitzGateMat = blitzGateMaterial;
             torusScript.mBlitzButtonMat = blitzButtonMaterial;
             torusScript.mBlitzConnectionMat = blitzConnectionMaterial;
+            torusScript.mBlitzRingMat = blitzRingMaterial;
             torusScript.mBlitzOrbGunMat = blitzOrbGunMaterial;
             torusScript.mBlitzOrbCadencyMat = blitzOrbCadencyMaterial;
             torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;

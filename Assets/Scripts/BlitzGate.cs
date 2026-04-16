@@ -26,6 +26,7 @@ public class BlitzGate
 
     List<ArcSegment> mArcs;
     List<GameObject> mColliders;
+    List<MeshRenderer> mEndpoints;
     Material mArcMainMat;
     Material mArcHaloMat;
     Material mConnectionMat;
@@ -39,31 +40,17 @@ public class BlitzGate
     const float ARC_STEP = 3f;
     const float ARC_RADIUS = 0.04f;
     const float COL_SPACING = 12f;
-    const float COL_LENGTH = 0.15f;
-    const float COL_HEIGHT = 0.12f;
-    const float COL_WIDTH = 0.15f;
+    const float COL_LENGTH = 0.08f;
+    const float COL_HEIGHT = 0.06f;
+    const float COL_WIDTH = 0.06f;
+    const float ENDPOINT_SIZE = 0.07f;
     const float CROSS_MIN = 25f;
     const float CROSS_MAX = 155f;
 
+    /// <summary>Gap-based gate: arc covers full cross-section minus the gap.</summary>
     public BlitzGate(float gapCenterDeg, float gapSizeDeg, Material gateMat, Material connectionMat)
     {
-        mActive = true;
-        mDestroyed = false;
-        mPulsePhase = Random.value * Mathf.PI * 2f;
-        mConnectionMat = connectionMat;
-
-        mGameObject = new GameObject("BlitzGateRoot");
-        mColliders = new List<GameObject>();
-        mArcs = new List<ArcSegment>();
-
-        // Arc materials — additive glow
-        mArcMainMat = new Material(connectionMat);
-        mArcMainMat.SetColor("_Color", new Color(0.7f, 0.4f, 1.0f));
-        mArcMainMat.SetFloat("_Intensity", 4.0f);
-
-        mArcHaloMat = new Material(connectionMat);
-        mArcHaloMat.SetColor("_Color", new Color(0.3f, 0.1f, 0.6f));
-        mArcHaloMat.SetFloat("_Intensity", 1.5f);
+        InitMaterials(connectionMat);
 
         // Build arc ranges (split by gap)
         float gapMin = gapCenterDeg - gapSizeDeg * 0.5f;
@@ -83,12 +70,43 @@ public class BlitzGate
         foreach (var range in ranges)
             CreateArcSegment(range.x, range.y);
 
-        // Invisible collision cubes along the arc
         for (float a = CROSS_MIN; a <= CROSS_MAX; a += COL_SPACING)
         {
             if (gapSizeDeg > 0f && a >= gapMin && a <= gapMax) continue;
             CreateCollider(a);
         }
+    }
+
+    /// <summary>Half-gate: arc covers only fromDeg–toDeg range.</summary>
+    public BlitzGate(float fromDeg, float toDeg, bool halfGate, Material gateMat, Material connectionMat)
+    {
+        InitMaterials(connectionMat);
+
+        CreateArcSegment(fromDeg, toDeg);
+
+        for (float a = fromDeg; a <= toDeg; a += COL_SPACING)
+            CreateCollider(a);
+    }
+
+    void InitMaterials(Material connectionMat)
+    {
+        mActive = true;
+        mDestroyed = false;
+        mPulsePhase = Random.value * Mathf.PI * 2f;
+        mConnectionMat = connectionMat;
+
+        mGameObject = new GameObject("BlitzGateRoot");
+        mColliders = new List<GameObject>();
+        mArcs = new List<ArcSegment>();
+        mEndpoints = new List<MeshRenderer>();
+
+        mArcMainMat = new Material(connectionMat);
+        mArcMainMat.SetColor("_Color", new Color(0.7f, 0.4f, 1.0f));
+        mArcMainMat.SetFloat("_Intensity", 4.0f);
+
+        mArcHaloMat = new Material(connectionMat);
+        mArcHaloMat.SetColor("_Color", new Color(0.3f, 0.1f, 0.6f));
+        mArcHaloMat.SetFloat("_Intensity", 1.5f);
     }
 
     void CreateArcSegment(float startDeg, float endDeg)
@@ -119,6 +137,10 @@ public class BlitzGate
             main.SetPosition(i, pos);
             halo.SetPosition(i, pos);
         }
+
+        // Endpoint cubes at arc start and end
+        CreateEndpoint(surfaces[0], normals[0]);
+        CreateEndpoint(surfaces[count - 1], normals[count - 1]);
 
         ArcSegment seg;
         seg.main = main;
@@ -167,6 +189,24 @@ public class BlitzGate
         col.AddComponent<BoxCollider>();
 
         mColliders.Add(col);
+    }
+
+    void CreateEndpoint(Vector3 surface, Vector3 normal)
+    {
+        GameObject ep = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        ep.name = "BlitzGateEnd";
+        Object.Destroy(ep.GetComponent<Collider>());
+        ep.transform.parent = mGameObject.transform;
+        ep.transform.localPosition = surface + normal * ARC_RADIUS;
+        ep.transform.localScale = Vector3.one * ENDPOINT_SIZE;
+        ep.transform.localRotation = Quaternion.LookRotation(Vector3.right, normal);
+
+        MeshRenderer mr = ep.GetComponent<MeshRenderer>();
+        Material mat = new Material(mArcMainMat);
+        mr.material = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        mEndpoints.Add(mr);
     }
 
     /// <summary>Link a button — destroying it deactivates this gate.</summary>
@@ -229,6 +269,9 @@ public class BlitzGate
                     seg.halo.startWidth = 0.08f * fade;
                     seg.halo.endWidth = 0.08f * fade;
                 }
+                float epScale = ENDPOINT_SIZE * fade;
+                foreach (var mr in mEndpoints)
+                    mr.transform.localScale = Vector3.one * epScale;
             }
             return;
         }
@@ -239,6 +282,10 @@ public class BlitzGate
         mArcMainMat.SetFloat("_Intensity", pulse);
         float haloPulse = 1.2f + Mathf.Sin(time * 6f + mPulsePhase) * 0.4f;
         mArcHaloMat.SetFloat("_Intensity", haloPulse);
+
+        // Endpoint cubes pulse with the arc
+        foreach (var mr in mEndpoints)
+            mr.material.SetFloat("_Intensity", pulse);
 
         // Width shimmer on main arc
         float mainW = 0.035f + Mathf.Sin(time * 10f + mPulsePhase) * 0.008f;
