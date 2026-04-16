@@ -13,10 +13,11 @@ public class BlitzBeam : MonoBehaviour
     const int POOL_SIZE = 12;
     const float DEFAULT_FIRE_INTERVAL = 0.8f;
     const float BEAM_SPEED = 20f;
-    const float BEAM_LENGTH = 0.35f;
-    const float BEAM_WIDTH = 0.018f;
+    const float BEAM_LENGTH = 0.45f;
+    const float BEAM_WIDTH = 0.035f;
+    const float HALO_WIDTH = 0.09f;
     const float IMPACT_DURATION = 0.5f;
-    const float IMPACT_MAX_SCALE = 0.12f;
+    const float IMPACT_MAX_SCALE = 0.18f;
     const float MAX_RANGE = 8f;
     const float BALL_OFFSET = 0.12f;
     const float FIRE_ANGLE = 8f; // degrees upward from horizontal — clears torus curvature
@@ -32,6 +33,7 @@ public class BlitzBeam : MonoBehaviour
 
     // Pool — parallel arrays
     LineRenderer[] mLines;
+    LineRenderer[] mHalos;
     GameObject[] mHits;
     Collider[] mHitCols;
     Vector3[] mOrigins, mTargets;
@@ -46,6 +48,7 @@ public class BlitzBeam : MonoBehaviour
         mTorus = torusScript;
 
         mLines = new LineRenderer[POOL_SIZE];
+        mHalos = new LineRenderer[POOL_SIZE];
         mHitCols = new Collider[POOL_SIZE];
         mHits = new GameObject[POOL_SIZE];
         mOrigins = new Vector3[POOL_SIZE];
@@ -58,7 +61,35 @@ public class BlitzBeam : MonoBehaviour
 
         for (int i = 0; i < POOL_SIZE; i++)
         {
-            // ── Beam projectile (LineRenderer in world space) ──
+            // ── Halo glow (wider, dimmer LR behind the core) ──
+            GameObject ho = new GameObject("BlitzHalo_" + i);
+            LineRenderer hlr = ho.AddComponent<LineRenderer>();
+            hlr.material = beamMat;
+            hlr.startWidth = HALO_WIDTH;
+            hlr.endWidth = HALO_WIDTH * 0.4f;
+            hlr.positionCount = 2;
+            hlr.useWorldSpace = true;
+            hlr.receiveShadows = false;
+            hlr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            Gradient hg = new Gradient();
+            hg.SetKeys(
+                new GradientColorKey[]
+                {
+                    new GradientColorKey(color * 0.15f, 0f),
+                    new GradientColorKey(color * 0.5f, 1f)
+                },
+                new GradientAlphaKey[]
+                {
+                    new GradientAlphaKey(0.05f, 0f),
+                    new GradientAlphaKey(0.35f, 1f)
+                }
+            );
+            hlr.colorGradient = hg;
+            hlr.enabled = false;
+            mHalos[i] = hlr;
+
+            // ── Core beam (bright solid bolt) ──
             GameObject lo = new GameObject("BlitzBeam_" + i);
             LineRenderer lr = lo.AddComponent<LineRenderer>();
             lr.material = beamMat;
@@ -73,12 +104,14 @@ public class BlitzBeam : MonoBehaviour
             g.SetKeys(
                 new GradientColorKey[]
                 {
-                    new GradientColorKey(color * 0.4f, 0f),
+                    new GradientColorKey(color * 0.6f, 0f),
+                    new GradientColorKey(Color.white, 0.3f),
                     new GradientColorKey(color, 1f)
                 },
                 new GradientAlphaKey[]
                 {
-                    new GradientAlphaKey(0.15f, 0f),
+                    new GradientAlphaKey(0.3f, 0f),
+                    new GradientAlphaKey(1f, 0.2f),
                     new GradientAlphaKey(1f, 1f)
                 }
             );
@@ -119,6 +152,7 @@ public class BlitzBeam : MonoBehaviour
             for (int i = 0; i < POOL_SIZE; i++)
             {
                 mLines[i].enabled = false;
+                mHalos[i].enabled = false;
                 mHits[i].SetActive(false);
                 mFlying[i] = false;
                 mGlowing[i] = false;
@@ -152,6 +186,7 @@ public class BlitzBeam : MonoBehaviour
                 {
                     // Reached target — beam off, impact on
                     mLines[i].enabled = false;
+                    mHalos[i].enabled = false;
                     mFlying[i] = false;
 
                     // Check if we hit a BlitzBox
@@ -174,8 +209,12 @@ public class BlitzBeam : MonoBehaviour
                     float head = mTrav[i];
                     float tail = Mathf.Max(0f, head - BEAM_LENGTH);
 
-                    mLines[i].SetPosition(0, mOrigins[i] + dir * tail);
-                    mLines[i].SetPosition(1, mOrigins[i] + dir * head);
+                    Vector3 tailPos = mOrigins[i] + dir * tail;
+                    Vector3 headPos = mOrigins[i] + dir * head;
+                    mLines[i].SetPosition(0, tailPos);
+                    mLines[i].SetPosition(1, headPos);
+                    mHalos[i].SetPosition(0, tailPos);
+                    mHalos[i].SetPosition(1, headPos);
                 }
             }
 
@@ -275,6 +314,7 @@ public class BlitzBeam : MonoBehaviour
 
         // Kill any previous state in this slot
         mLines[s].enabled = true;
+        mHalos[s].enabled = true;
         mHits[s].SetActive(false);
         mGlowing[s] = false;
         mHitCols[s] = hitCol;
@@ -288,5 +328,7 @@ public class BlitzBeam : MonoBehaviour
         // Start at origin (will animate forward in Update)
         mLines[s].SetPosition(0, origin);
         mLines[s].SetPosition(1, origin);
+        mHalos[s].SetPosition(0, origin);
+        mHalos[s].SetPosition(1, origin);
     }
 }
