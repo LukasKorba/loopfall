@@ -462,7 +462,11 @@ public class Sphere : MonoBehaviour
         if (GameConfig.IsBlitz() && mBlitzBeam != null)
             mBlitzBeam.SetActive(false);
 
-        if (mAudio != null) mAudio.PlayGameOver();
+        if (mAudio != null)
+        {
+            if (GameConfig.IsBlitz()) mAudio.PlayBlitzDeath();
+            else mAudio.PlayGameOver();
+        }
     }
 
     public bool IsWaiting() { return mWaitingToStart; }
@@ -505,6 +509,7 @@ public class Sphere : MonoBehaviour
             // Blitz shield absorbs one lethal hit
             if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())
             {
+                if (mAudio != null) mAudio.PlayShieldAbsorb();
                 // Visual feedback — camera death flash
                 DeathEffect death = mCamera.GetComponent<DeathEffect>();
                 if (death != null) death.TriggerDeath(transform.position);

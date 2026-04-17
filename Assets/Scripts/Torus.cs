@@ -107,6 +107,7 @@ public class Torus : MonoBehaviour
     private int mShieldLevel;
     private bool mShieldActive;
     private ScoreSync mScoreSync;
+    private GameAudio mAudio;
     private const int ORBS_PER_UPGRADE = 5;
 
     void Awake()
@@ -125,6 +126,7 @@ public class Torus : MonoBehaviour
         {
             mAngleStep = BLITZ_BASE_SPEED;
             mScoreSync = FindAnyObjectByType<ScoreSync>();
+            mAudio = FindAnyObjectByType<GameAudio>();
             mBlitzBoxes = new List<BlitzBox>();
             mBlitzGates = new List<BlitzGate>();
             mBlitzDividers = new List<BlitzDivider>();
@@ -503,6 +505,19 @@ public class Torus : MonoBehaviour
         }
         foreach (BlitzGate gate in mBlitzGates)
         {
+            // Gate-pass sound — fires once when ball crosses the gate line. We only
+            // reach this branch if the ball survived (collisions halt the ball before
+            // UpdateBlitzObstacles runs), so any pass here = successful pass.
+            if (!gate.mPassedSoundFired && gate.mAngle <= mAngle)
+            {
+                gate.mPassedSoundFired = true;
+                if (mAudio != null)
+                {
+                    if (gate.IsFullGate) mAudio.PlayBlitzGatePassFull();
+                    else mAudio.PlayBlitzGatePassHalf();
+                }
+            }
+
             if (gate.mAngle > mAngle - 240f) break;
             if (gate.mGameObject != null && gate.mGameObject.activeSelf)
                 gate.mGameObject.SetActive(false);
@@ -696,12 +711,27 @@ public class Torus : MonoBehaviour
         float from = blockLeft ? 25f : 90f;
         float to = blockLeft ? 90f : 155f;
 
-        BlitzGate gate = new BlitzGate(from, to, true, mBlitzGateMat, mBlitzConnectionMat);
-        gate.mAngle = mLastBlitzAngle;
-        gate.mGameObject.transform.parent = transform;
-        gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
-        mBlitzGates.Add(gate);
-        // Half-gate forces player to opposite side — next spawn needs recovery room.
+        // Gate-train: 1 gate early, up to 3 mid-game, up to 5 late. All on the
+        // SAME side so the player's lane commitment lasts longer — extends the
+        // avoidance volume from a single dodge into a sustained hold.
+        float c = Mathf.Clamp01(GetBlitzIntensity());
+        int maxCount;
+        if (c >= 0.6f) maxCount = 5;
+        else if (c >= 0.3f) maxCount = 3;
+        else maxCount = 1;
+        int count = Random.Range(1, maxCount + 1);
+
+        for (int i = 0; i < count; i++)
+        {
+            if (i > 0) mLastBlitzAngle += 5f; // tight inter-gate spacing
+            BlitzGate gate = new BlitzGate(from, to, true, mBlitzGateMat, mBlitzConnectionMat);
+            gate.mAngle = mLastBlitzAngle;
+            gate.mGameObject.transform.parent = transform;
+            gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
+            mBlitzGates.Add(gate);
+        }
+
+        // Half-gate train forces player to opposite side — next spawn needs recovery room.
         MarkSpawn(BlitzSpawnKind.GateGap, commitsSide: true);
     }
 
@@ -735,7 +765,28 @@ public class Torus : MonoBehaviour
     {
         mLastBlitzAngle += spacing;
         float startAngle = mLastBlitzAngle;
+        float c = Mathf.Clamp01(GetBlitzIntensity());
 
+        // Late game: 50% chance of triple-lane variant. Two dividers slice the
+        // playable arc [30°,150°] into three 40° lanes. Each lane is locked-in
+        // once entered, and each gets a mandatory box — two 1HP + one 3HP in
+        // random order. Player must read which lane is survivable and commit.
+        if (c > 0.6f && Random.value < 0.5f)
+        {
+            SpawnTripleDivider(startAngle);
+        }
+        else
+        {
+            SpawnSingleDivider(startAngle, c);
+        }
+
+        // Divider commits player to a lane — planner uses this to forbid
+        // full-gates / half-gates immediately after.
+        MarkSpawn(BlitzSpawnKind.Divider, commitsSide: true);
+    }
+
+    void SpawnSingleDivider(float startAngle, float c)
+    {
         // Sit at bottom cross-angle (90° = where ball rests untapped).
         // Shorter than the first-pass 25–45° — that span was long enough to trap the
         // player against a gate behind it. 15–22° lets the commit resolve in time.
@@ -754,7 +805,6 @@ public class Torus : MonoBehaviour
         // Asymmetric: one random side gets a 3HP sentinel as its first escort. Both
         // sides remain passable, but the "hard side" demands sustained fire to clear
         // — player reads the shapes on approach and picks their route.
-        float c = Mathf.Clamp01(GetBlitzIntensity());
         int perSide = (c > 0.5f) ? 2 : 1;
         int total = perSide * 2;
         bool hardLeft = Random.value < 0.5f;
@@ -775,9 +825,46 @@ public class Torus : MonoBehaviour
         }
 
         mLastBlitzAngle = startAngle + span;
-        // Divider commits player to left or right of center — planner uses this to
-        // forbid full-gates / half-gates immediately after.
-        MarkSpawn(BlitzSpawnKind.Divider, commitsSide: true);
+    }
+
+    void SpawnTripleDivider(float startAngle)
+    {
+        // Half-length span so the triple-lane commitment doesn't last too long.
+        float span = Random.Range(7.5f, 11f);
+
+        // Two dividers at cross 70° and 110° cut the [30°,150°] playable arc into
+        // three 40° lanes. Lane centers: 50° (left), 90° (center), 130° (right).
+        BlitzDivider d1 = new BlitzDivider(70f, span, mBlitzConnectionMat);
+        d1.mAngle = startAngle;
+        d1.mGameObject.transform.parent = transform;
+        d1.mGameObject.transform.Rotate(0f, 0f, d1.mAngle - mAngle);
+        mBlitzDividers.Add(d1);
+
+        BlitzDivider d2 = new BlitzDivider(110f, span, mBlitzConnectionMat);
+        d2.mAngle = startAngle;
+        d2.mGameObject.transform.parent = transform;
+        d2.mGameObject.transform.Rotate(0f, 0f, d2.mAngle - mAngle);
+        mBlitzDividers.Add(d2);
+
+        // Random shuffle of [1, 1, 3] across the three lane centers.
+        int[] hps = { 1, 1, 3 };
+        for (int i = hps.Length - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            int tmp = hps[i]; hps[i] = hps[j]; hps[j] = tmp;
+        }
+        float[] laneCrosses = { 50f, 90f, 130f };
+        float midAngle = startAngle + span * 0.5f;
+        for (int i = 0; i < 3; i++)
+        {
+            BlitzBox b = new BlitzBox(laneCrosses[i], mBlitzBoxMat, hps[i]);
+            b.mAngle = midAngle;
+            b.mGameObject.transform.parent = transform;
+            b.mGameObject.transform.Rotate(0f, 0f, b.mAngle - mAngle);
+            mBlitzBoxes.Add(b);
+        }
+
+        mLastBlitzAngle = startAngle + span;
     }
 
     void SpawnFullGateWithButton(float spacing)
@@ -880,9 +967,22 @@ public class Torus : MonoBehaviour
                     // Gate deactivation bonus
                     if (box.mLinkedGate != null)
                     {
+                        if (mAudio != null)
+                        {
+                            mAudio.PlayStrandPeel(2); // final peel (descends to v3)
+                            mAudio.PlayButtonDestroyed();
+                        }
                         box.mLinkedGate.Deactivate();
                         mScore += 50;
                         HeavyHaptic();
+                    }
+                    else if (box.mMaxHitPoints >= 3)
+                    {
+                        if (mAudio != null) mAudio.PlaySentinelKill();
+                    }
+                    else
+                    {
+                        if (mAudio != null) mAudio.PlayBoxHit();
                     }
 
                     mScoreLbl.text = mScore.ToString();
@@ -897,7 +997,15 @@ public class Torus : MonoBehaviour
                 else if (box.mLinkedGate != null)
                 {
                     // Button survived this hit — peel one strand off the linked gate's connection.
+                    // peelIndex = hits taken so far − 1 (0 on first hit, 1 on second).
+                    int peelIndex = box.mMaxHitPoints - box.mHitPoints - 1;
+                    if (mAudio != null) mAudio.PlayStrandPeel(peelIndex);
                     box.mLinkedGate.RemoveStrand();
+                }
+                else if (box.mMaxHitPoints >= 3)
+                {
+                    // Standalone sentinel took a non-lethal hit.
+                    if (mAudio != null) mAudio.PlaySentinelHit();
                 }
                 break;
             }
@@ -988,18 +1096,41 @@ public class Torus : MonoBehaviour
         switch (type)
         {
             case BlitzOrb.OrbType.Gun:
+                if (mAudio != null) mAudio.PlayOrbGun();
                 mGunOrbCount++;
-                if (mGunOrbCount == ORBS_PER_UPGRADE) ApplyGunUpgrade(1);
-                else if (mGunOrbCount == ORBS_PER_UPGRADE * 2) ApplyGunUpgrade(2);
+                if (mGunOrbCount == ORBS_PER_UPGRADE)
+                {
+                    ApplyGunUpgrade(1);
+                    if (mAudio != null) mAudio.PlayVoiceCannonUp();
+                }
+                else if (mGunOrbCount == ORBS_PER_UPGRADE * 2)
+                {
+                    ApplyGunUpgrade(2);
+                    if (mAudio != null) mAudio.PlayVoiceCannonFull();
+                }
                 break;
             case BlitzOrb.OrbType.Cadency:
+                if (mAudio != null) mAudio.PlayOrbCadency();
                 mCadencyOrbCount++;
-                if (mCadencyOrbCount == ORBS_PER_UPGRADE) ApplyCadencyUpgrade(1);
-                else if (mCadencyOrbCount == ORBS_PER_UPGRADE * 2) ApplyCadencyUpgrade(2);
+                if (mCadencyOrbCount == ORBS_PER_UPGRADE)
+                {
+                    ApplyCadencyUpgrade(1);
+                    if (mAudio != null) mAudio.PlayVoiceCadenceUp();
+                }
+                else if (mCadencyOrbCount == ORBS_PER_UPGRADE * 2)
+                {
+                    ApplyCadencyUpgrade(2);
+                    if (mAudio != null) mAudio.PlayVoiceCadenceFull();
+                }
                 break;
             case BlitzOrb.OrbType.Shield:
+                if (mAudio != null) mAudio.PlayOrbShield();
                 mShieldOrbCount++;
-                if (mShieldOrbCount == ORBS_PER_UPGRADE) ApplyShieldUpgrade();
+                if (mShieldOrbCount == ORBS_PER_UPGRADE)
+                {
+                    ApplyShieldUpgrade();
+                    if (mAudio != null) mAudio.PlayVoiceShieldOn();
+                }
                 break;
         }
     }

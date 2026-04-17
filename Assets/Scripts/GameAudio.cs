@@ -83,6 +83,29 @@ public class GameAudio : MonoBehaviour
     private int lastTier1Index = -1;
     private int lastTier2Index = -1;
 
+    // ── BLITZ SFX ────────────────────────────────────────────
+    private AudioClip[] beamFireClips;
+    private AudioClip beamFireHotClip;
+    private AudioClip blitzDeathClip;
+    private AudioClip boxHitClip;
+    private AudioClip buttonDestroyedClip;
+    private AudioClip gatePassFullClip;
+    private AudioClip gatePassHalfClip;
+    private AudioClip orbPickupCadencyClip;
+    private AudioClip orbPickupGunClip;
+    private AudioClip orbPickupShieldClip;
+    private AudioClip sentinelHitClip;
+    private AudioClip sentinelKillClip;
+    private AudioClip shieldAbsorbClip;
+    private AudioClip[] strandPeelClips; // indexed by peel order (0=first, 1=second, 2=destroy)
+
+    // Blitz upgrade voice lines
+    private AudioClip voiceCannonUpClip;
+    private AudioClip voiceCannonFullClip;
+    private AudioClip voiceCadenceUpClip;
+    private AudioClip voiceCadenceFullClip;
+    private AudioClip voiceShieldOnClip;
+
     void Awake()
     {
         // Music sources — double-buffered for lag-free crossfade
@@ -132,6 +155,7 @@ public class GameAudio : MonoBehaviour
 
         LoadSwingClips();
         LoadSfx();
+        LoadBlitzSfx();
         LoadMusic();
     }
 
@@ -184,6 +208,30 @@ public class GameAudio : MonoBehaviour
         gateDissolveClip = Resources.Load<AudioClip>("Audio/sfx_gate_dissolve");
         gateSpawnClip = Resources.Load<AudioClip>("Audio/sfx_gate_spawn");
         Debug.Log($"[GameAudio] Loaded: gameOver={gameOverClips.Length} roll={rollClips.Length} rewind={rewindClips.Length} tap={tapClips.Length} tier1={swingTier1Clips.Length} tier2={swingTier2Clips.Length}");
+    }
+
+    void LoadBlitzSfx()
+    {
+        beamFireClips = LoadVariants("Audio/Blitz/sfx_beam_fire1", "Audio/Blitz/sfx_beam_fire2", "Audio/Blitz/sfx_beam_fire3");
+        beamFireHotClip      = Resources.Load<AudioClip>("Audio/Blitz/sfx_beam_fire_hot");
+        blitzDeathClip       = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_death");
+        boxHitClip           = Resources.Load<AudioClip>("Audio/Blitz/sfx_box_hit");
+        buttonDestroyedClip  = Resources.Load<AudioClip>("Audio/Blitz/sfx_button_destroyed");
+        gatePassFullClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_gate_pass_full");
+        gatePassHalfClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_gate_pass_half");
+        orbPickupCadencyClip = Resources.Load<AudioClip>("Audio/Blitz/sfx_orb_pickup_cadency");
+        orbPickupGunClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_orb_pickup_gun");
+        orbPickupShieldClip  = Resources.Load<AudioClip>("Audio/Blitz/sfx_orb_pickup_shield");
+        sentinelHitClip      = Resources.Load<AudioClip>("Audio/Blitz/sfx_sentinel_hit");
+        sentinelKillClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_sentinel_kill");
+        shieldAbsorbClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_shield_absorb");
+        strandPeelClips      = LoadVariants("Audio/Blitz/sfx_strand_peel_v1", "Audio/Blitz/sfx_strand_peel_v2", "Audio/Blitz/sfx_strand_peel_v3");
+
+        voiceCannonUpClip    = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_up_0");
+        voiceCannonFullClip  = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_full_0");
+        voiceCadenceUpClip   = Resources.Load<AudioClip>("Audio/Blitz/voice_cadence_up_0");
+        voiceCadenceFullClip = Resources.Load<AudioClip>("Audio/Blitz/voice_cadence_full_0");
+        voiceShieldOnClip    = Resources.Load<AudioClip>("Audio/Blitz/voice_shield_on_0");
     }
 
     AudioClip[] LoadVariants(params string[] paths)
@@ -498,6 +546,83 @@ public class GameAudio : MonoBehaviour
             lastTier2Index = index;
         else
             lastTier1Index = index;
+    }
+
+    // ── BLITZ PLAYBACK ───────────────────────────────────────
+
+    public void PlayBeamFire(int gunLevel)
+    {
+        // L2 swaps to the hot variant; L0/L1 rotate through beam_fire1/2/3.
+        AudioClip clip = (gunLevel >= 2 && beamFireHotClip != null)
+            ? beamFireHotClip
+            : PickRandom(beamFireClips);
+        if (clip != null) sfxSource.PlayOneShot(clip, 0.55f);
+    }
+
+    public void PlayBoxHit()
+    {
+        if (boxHitClip != null) sfxSource.PlayOneShot(boxHitClip);
+    }
+
+    public void PlaySentinelHit()
+    {
+        if (sentinelHitClip != null) sfxSource.PlayOneShot(sentinelHitClip);
+    }
+
+    public void PlaySentinelKill()
+    {
+        if (sentinelKillClip != null) sfxSource.PlayOneShot(sentinelKillClip);
+    }
+
+    public void PlayStrandPeel(int peelIndex)
+    {
+        if (strandPeelClips == null || strandPeelClips.Length == 0) return;
+        int idx = Mathf.Clamp(peelIndex, 0, strandPeelClips.Length - 1);
+        sfxSource.PlayOneShot(strandPeelClips[idx]);
+    }
+
+    public void PlayButtonDestroyed()
+    {
+        if (buttonDestroyedClip != null) sfxSource.PlayOneShot(buttonDestroyedClip);
+    }
+
+    public void PlayBlitzGatePassHalf()
+    {
+        if (gatePassHalfClip != null) sfxSource.PlayOneShot(gatePassHalfClip);
+    }
+
+    public void PlayBlitzGatePassFull()
+    {
+        if (gatePassFullClip != null) sfxSource.PlayOneShot(gatePassFullClip);
+    }
+
+    public void PlayOrbGun()     { if (orbPickupGunClip != null)     sfxSource.PlayOneShot(orbPickupGunClip); }
+    public void PlayOrbCadency() { if (orbPickupCadencyClip != null) sfxSource.PlayOneShot(orbPickupCadencyClip); }
+    public void PlayOrbShield()  { if (orbPickupShieldClip != null)  sfxSource.PlayOneShot(orbPickupShieldClip); }
+
+    public void PlayShieldAbsorb()
+    {
+        if (shieldAbsorbClip != null) sfxSource.PlayOneShot(shieldAbsorbClip);
+    }
+
+    public void PlayBlitzDeath()
+    {
+        if (blitzDeathClip != null) sfxSource.PlayOneShot(blitzDeathClip);
+    }
+
+    public void PlayVoiceCannonUp()    { PlayBlitzVoice(voiceCannonUpClip); }
+    public void PlayVoiceCannonFull()  { PlayBlitzVoice(voiceCannonFullClip); }
+    public void PlayVoiceCadenceUp()   { PlayBlitzVoice(voiceCadenceUpClip); }
+    public void PlayVoiceCadenceFull() { PlayBlitzVoice(voiceCadenceFullClip); }
+    public void PlayVoiceShieldOn()    { PlayBlitzVoice(voiceShieldOnClip); }
+
+    void PlayBlitzVoice(AudioClip clip)
+    {
+        if (clip == null) return;
+        if (voiceSource.isPlaying) return; // mirror swing-voice policy: no overlaps
+        voiceSource.clip = clip;
+        voiceSource.pitch = 1f;
+        voiceSource.Play();
     }
 
     // ── PERSISTENT SETTINGS ─────────────────────────────────

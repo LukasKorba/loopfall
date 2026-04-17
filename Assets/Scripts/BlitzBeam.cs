@@ -39,6 +39,7 @@ public class BlitzBeam : MonoBehaviour
     Material mBeamMat;
     Transform mTorusTrans;
     Torus mTorus;
+    GameAudio mAudio;
 
     // Pool — parallel arrays
     LineRenderer[] mLines;
@@ -236,6 +237,12 @@ public class BlitzBeam : MonoBehaviour
         }
     }
 
+    void Start()
+    {
+        // GameAudio is created after BlitzBeam in SceneSetup — cache on first frame when it exists.
+        mAudio = Object.FindAnyObjectByType<GameAudio>();
+    }
+
     void Update()
     {
         if (!mActive) return;
@@ -343,6 +350,8 @@ public class BlitzBeam : MonoBehaviour
 
     void Fire()
     {
+        if (mAudio != null) mAudio.PlayBeamFire(mGunLevel);
+
         if (mBeamCount >= 3)
         {
             FireSingleBeam(-8f);

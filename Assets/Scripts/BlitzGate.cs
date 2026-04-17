@@ -14,7 +14,10 @@ public class BlitzGate
     public float mAngle;
     public bool mActive;
     public bool mDestroyed;
+    public bool mPassedSoundFired;
     public BlitzBox mButton;
+
+    public bool IsFullGate { get { return mIsFullGate; } }
 
     struct ArcSegment
     {
@@ -77,10 +80,23 @@ public class BlitzGate
         foreach (var range in ranges)
             CreateArcSegment(range.x, range.y);
 
-        for (float a = CROSS_MIN; a <= CROSS_MAX; a += COL_SPACING)
+        if (mIsFullGate)
         {
-            if (gapSizeDeg > 0f && a >= gapMin && a <= gapMax) continue;
-            CreateCollider(a);
+            // Manually-placed colliders with a widened trailing safe-harbor gap. Last
+            // collider at 144° leaves ~11° of clear arc up to CROSS_MAX (155°) — 10%
+            // wider than the natural 12°-spacing gap so a high-swing skill pass is
+            // attainable (~1 in 8 attempts) when the button's 3 hits get missed.
+            float[] positions = { 25f, 37f, 49f, 61f, 73f, 85f, 97f, 109f, 121f, 133f, 144f };
+            foreach (float p in positions)
+                CreateCollider(p);
+        }
+        else
+        {
+            for (float a = CROSS_MIN; a <= CROSS_MAX; a += COL_SPACING)
+            {
+                if (gapSizeDeg > 0f && a >= gapMin && a <= gapMax) continue;
+                CreateCollider(a);
+            }
         }
     }
 
