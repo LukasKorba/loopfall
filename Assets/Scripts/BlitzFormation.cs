@@ -5,8 +5,8 @@ using UnityEngine;
 /// placement is a (crossOffset, angleOffset, hp) triple relative to a chosen
 /// anchor. The spawner picks a formation each cycle and stamps it into the tube.
 ///
-/// To add a formation: append to All() and extend Torus.sFormationWeights with
-/// a weight in each phase row.
+/// To add a formation: append to All() and add a weight entry in Torus.PickFormation
+/// (one lerp line covering the full intensity range).
 /// </summary>
 public struct BlitzElement
 {

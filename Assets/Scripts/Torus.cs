@@ -81,10 +81,18 @@ public class Torus : MonoBehaviour
     private float mBlitzTimer;
     private float mLastBlitzAngle;
 
-    // Blitz speed ramp
+    // Blitz intensity ramp — everything (speed, fire rate, spacing, kind mix) scales off
+    // a single curve: intensity = mBlitzTimer / BLITZ_RAMP_SECONDS. Past 1.0 it keeps
+    // climbing so the game self-terminates via a density/speed wall (no hard endpoint).
     private const float BLITZ_BASE_SPEED = 0.12f;
-    private const float BLITZ_MAX_SPEED = 0.22f;
-    private const float BLITZ_SPEED_RAMP = 0.001f; // per second
+    private const float BLITZ_PEAK_SPEED = 0.34f;   // reached at intensity 1.0
+    private const float BLITZ_RAMP_SECONDS = 120f;  // time to reach intensity 1.0
+
+    // Content-aware spawn planner state
+    enum BlitzSpawnKind { None, Formation, GateGap, GateButton, FullGate, Divider }
+    private BlitzSpawnKind mLastSpawnKind = BlitzSpawnKind.None;
+    private BlitzSpawnKind mPrevSpawnKind = BlitzSpawnKind.None;
+    private bool mLastSpawnCommitsSide = false;
 
     // Blitz orbs (upgrade pickups)
     public Material mBlitzOrbGunMat;
@@ -362,6 +370,9 @@ public class Torus : MonoBehaviour
             mShieldActive = false;
             if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(0);
             mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
+            mLastSpawnKind = BlitzSpawnKind.None;
+            mPrevSpawnKind = BlitzSpawnKind.None;
+            mLastSpawnCommitsSide = false;
             UpdateBlitzObstacles();
         }
         else
@@ -464,9 +475,15 @@ public class Torus : MonoBehaviour
 
     // ── BLITZ MODE ──────────────────────────────────────────
 
+    float GetBlitzIntensity() { return mBlitzTimer / BLITZ_RAMP_SECONDS; }
+
     void UpdateBlitzSpeed()
     {
-        mAngleStep = Mathf.Min(BLITZ_BASE_SPEED + mBlitzTimer * BLITZ_SPEED_RAMP, BLITZ_MAX_SPEED);
+        float intensity = GetBlitzIntensity();
+        float baseRamp = Mathf.Lerp(BLITZ_BASE_SPEED, BLITZ_PEAK_SPEED, Mathf.Clamp01(intensity));
+        // Past peak: keep pushing so spacing × speed eventually outruns reaction — game self-terminates.
+        float endgameBoost = intensity > 1f ? (intensity - 1f) * 0.10f : 0f;
+        mAngleStep = baseRamp + endgameBoost;
     }
 
     void UpdateBlitzObstacles()
@@ -504,72 +521,103 @@ public class Torus : MonoBehaviour
         }
     }
 
-    // Formation weights per phase. Column order matches BlitzFormation.All():
-    //              A      B     AAA    ABA    AA    PYR
-    static readonly float[][] sFormationWeights = new float[][]
-    {
-        new[] { 1.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f }, // Phase 0: intro, 1HP only
-        new[] { 0.40f, 0.10f, 0.25f, 0.00f, 0.25f, 0.00f }, // Phase 1: clusters + streams, B peeks in
-        new[] { 0.15f, 0.15f, 0.20f, 0.15f, 0.15f, 0.20f }, // Phase 2: all formations unlocked
-        new[] { 0.10f, 0.20f, 0.15f, 0.20f, 0.10f, 0.25f }, // Phase 3: sentinels + pyramids dominate
-    };
-
     void SpawnNextBlitzObstacle()
     {
-        float r = Random.value;
+        float intensity = GetBlitzIntensity();
 
-        if (mBlitzTimer > 90f)
+        // Onboarding: first 4 seconds are gentle so the player sees the auto-beam work.
+        if (mBlitzTimer < 4f)
         {
-            // Phase 4: dense, full gates required
-            float sp = Random.Range(5f, 8f);
-            if (r < 0.20f) SpawnFullGateWithButton(sp);
-            else if (r < 0.40f) SpawnGateWithGap(sp);
-            else if (r < 0.55f) SpawnGateWithButton(sp);
-            else if (r < 0.70f) SpawnDivider(sp);
-            else SpawnFormation(PickFormation(), sp);
-        }
-        else if (mBlitzTimer > 45f)
-        {
-            // Phase 3: gates appear, some with buttons
-            float sp = Random.Range(6f, 10f);
-            if (r < 0.15f) SpawnFullGateWithButton(sp);
-            else if (r < 0.30f) SpawnGateWithGap(sp);
-            else if (r < 0.45f) SpawnGateWithButton(sp);
-            else if (r < 0.60f) SpawnDivider(sp);
-            else SpawnFormation(PickFormation(), sp);
-        }
-        else if (mBlitzTimer > 15f)
-        {
-            // Phase 2: first gates, more variety
-            float sp = Random.Range(7f, 12f);
-            if (r < 0.15f) SpawnGateWithGap(sp);
-            else if (r < 0.30f) SpawnDivider(sp);
-            else SpawnFormation(PickFormation(), sp);
-        }
-        else
-        {
-            // Phase 1: easy intro, boxes only
-            SpawnFormation(PickFormation(), Random.Range(10f, 14f));
+            SpawnFormation(PickFormation(0f), Random.Range(9f, 12f));
+            TryOrb(intensity);
+            return;
         }
 
-        // Chance to spawn an upgrade orb after each obstacle
-        if (Random.value < 0.3f)
+        BlitzSpawnKind kind = PickKind(intensity);
+
+        // ── Impossible-combo guard ──────────────────────────────────
+        // After a divider the player is committed to left or right of the tube.
+        // If we drop a must-clear gate (full or gap) right behind it, one side is
+        // instant death with no counterplay. Bounce the choice to a formation —
+        // which dodges around rather than filtering by side.
+        if (mLastSpawnKind == BlitzSpawnKind.Divider &&
+            (kind == BlitzSpawnKind.FullGate || kind == BlitzSpawnKind.GateGap))
+        {
+            kind = BlitzSpawnKind.Formation;
+        }
+
+        float spacing = ComputeSpacing(intensity, kind);
+
+        switch (kind)
+        {
+            case BlitzSpawnKind.GateGap:    SpawnGateWithGap(spacing); break;
+            case BlitzSpawnKind.GateButton: SpawnGateWithButton(spacing); break;
+            case BlitzSpawnKind.FullGate:   SpawnFullGateWithButton(spacing); break;
+            case BlitzSpawnKind.Divider:    SpawnDivider(spacing); break;
+            default:                        SpawnFormation(PickFormation(intensity), spacing); break;
+        }
+
+        TryOrb(intensity);
+    }
+
+    void TryOrb(float intensity)
+    {
+        // Orb rain is more generous early (upgrade acquisition) and tapers off late
+        // (player is already maxed, fewer distractions from the wall of obstacles).
+        float orbChance = Mathf.Lerp(0.35f, 0.15f, Mathf.Clamp01(intensity));
+        if (Random.value < orbChance)
             SpawnBlitzOrb(mLastBlitzAngle);
     }
 
-    int GetBlitzPhase()
+    BlitzSpawnKind PickKind(float intensity)
     {
-        if (mBlitzTimer > 90f) return 3;
-        if (mBlitzTimer > 45f) return 2;
-        if (mBlitzTimer > 15f) return 1;
-        return 0;
+        float c = Mathf.Clamp01(intensity);
+        // Weights evolve continuously. Formations shrink as share (not absolute presence),
+        // gates and dividers grow, full-gates unlock past ~30s of play.
+        float[] w = new float[6];
+        w[(int)BlitzSpawnKind.Formation]  = Mathf.Lerp(0.75f, 0.35f, c);
+        w[(int)BlitzSpawnKind.GateGap]    = Mathf.Lerp(0.08f, 0.18f, c);
+        w[(int)BlitzSpawnKind.GateButton] = Mathf.Lerp(0.05f, 0.18f, c);
+        w[(int)BlitzSpawnKind.FullGate]   = Mathf.Lerp(0.00f, 0.15f, c);
+        w[(int)BlitzSpawnKind.Divider]    = Mathf.Lerp(0.12f, 0.14f, c);
+
+        // Variety enforcement — crushes the 10s-of-just-buttons and 10s-of-just-dividers
+        // stretches the user called out. Formations are exempt: they have internal variety
+        // (6 sub-formations rotate via PickFormation), so back-to-back formations feel fresh.
+        if (mLastSpawnKind != BlitzSpawnKind.None && mLastSpawnKind != BlitzSpawnKind.Formation)
+            w[(int)mLastSpawnKind] *= 0.15f;
+        if (mPrevSpawnKind != BlitzSpawnKind.None && mPrevSpawnKind != BlitzSpawnKind.Formation)
+            w[(int)mPrevSpawnKind] *= 0.50f;
+
+        float total = 0f;
+        for (int i = 1; i < w.Length; i++) total += w[i];
+        if (total <= 0f) return BlitzSpawnKind.Formation;
+
+        float r = Random.value * total;
+        float acc = 0f;
+        for (int i = 1; i < w.Length; i++)
+        {
+            acc += w[i];
+            if (r <= acc) return (BlitzSpawnKind)i;
+        }
+        return BlitzSpawnKind.Formation;
     }
 
-    BlitzFormation PickFormation()
+    BlitzFormation PickFormation(float intensity)
     {
-        BlitzFormation[] all = BlitzFormation.All();
-        float[] w = sFormationWeights[GetBlitzPhase()];
+        float c = Mathf.Clamp01(intensity);
+        // Order matches BlitzFormation.All():  0 A, 1 B, 2 AAA, 3 ABA, 4 AA_stream, 5 Pyramid.
+        // All composed formations are present from t=0 — early game just biases toward
+        // simpler ones. No more "15s of nothing but single A" tedium.
+        float[] w = new float[6];
+        w[0] = Mathf.Lerp(0.28f, 0.08f, c); // A
+        w[1] = Mathf.Lerp(0.05f, 0.20f, c); // B (3HP sentinel)
+        w[2] = Mathf.Lerp(0.24f, 0.20f, c); // AAA
+        w[3] = Mathf.Lerp(0.14f, 0.22f, c); // ABA
+        w[4] = Mathf.Lerp(0.18f, 0.12f, c); // AA_stream
+        w[5] = Mathf.Lerp(0.11f, 0.18f, c); // Pyramid A_AAA
 
+        BlitzFormation[] all = BlitzFormation.All();
         float total = 0f;
         for (int i = 0; i < w.Length; i++) total += w[i];
 
@@ -581,6 +629,31 @@ public class Torus : MonoBehaviour
             if (r <= acc) return all[i];
         }
         return all[0];
+    }
+
+    float ComputeSpacing(float intensity, BlitzSpawnKind kind)
+    {
+        float c = Mathf.Clamp01(intensity);
+        // Base spacing collapses 12° → 3° over the ramp. Past 1.0 it keeps shrinking
+        // toward a 1.5° floor — past that point the player can't react, by design.
+        float sp = Mathf.Lerp(12f, 3f, c);
+        if (intensity > 1f) sp = Mathf.Max(1.5f, sp - (intensity - 1f) * 1.5f);
+
+        // Per-kind floors — below these, an obstacle becomes literally unreadable.
+        if (kind == BlitzSpawnKind.Divider)  sp = Mathf.Max(sp, 4f); // time to pick a side
+        if (kind == BlitzSpawnKind.FullGate) sp = Mathf.Max(sp, 5f); // time to aim at button
+
+        // Recovery spacing after side-committing spawns (half-gate, full-gate, divider)
+        if (mLastSpawnCommitsSide) sp = Mathf.Max(sp, 3f);
+
+        return sp;
+    }
+
+    void MarkSpawn(BlitzSpawnKind kind, bool commitsSide)
+    {
+        mPrevSpawnKind = mLastSpawnKind;
+        mLastSpawnKind = kind;
+        mLastSpawnCommitsSide = commitsSide;
     }
 
     void SpawnFormation(BlitzFormation f, float leadSpacing)
@@ -603,6 +676,8 @@ public class Torus : MonoBehaviour
         }
 
         mLastBlitzAngle = anchorAngle + f.longitudinalDepth;
+        // Formations have small cross footprint — player can dodge on either side.
+        MarkSpawn(BlitzSpawnKind.Formation, commitsSide: false);
     }
 
     void SpawnGateWithGap(float spacing)
@@ -619,6 +694,8 @@ public class Torus : MonoBehaviour
         gate.mGameObject.transform.parent = transform;
         gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
         mBlitzGates.Add(gate);
+        // Half-gate forces player to opposite side — next spawn needs recovery room.
+        MarkSpawn(BlitzSpawnKind.GateGap, commitsSide: true);
     }
 
     void SpawnGateWithButton(float spacing)
@@ -643,6 +720,8 @@ public class Torus : MonoBehaviour
         gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
         gate.LinkButton(button);
         mBlitzGates.Add(gate);
+        // Button aim commits player to the button's cross-section side.
+        MarkSpawn(BlitzSpawnKind.GateButton, commitsSide: true);
     }
 
     void SpawnDivider(float spacing)
@@ -650,16 +729,19 @@ public class Torus : MonoBehaviour
         mLastBlitzAngle += spacing;
 
         // Sit at bottom cross-angle (90° = where ball rests untapped).
-        // Span ~25–45° longitudinal — long enough to threaten, short enough to dodge around.
-        float span = Random.Range(25f, 45f);
+        // Shorter than the first-pass 25–45° — that span was long enough to trap the
+        // player against a gate behind it. 15–22° lets the commit resolve in time.
+        float span = Random.Range(15f, 22f);
         BlitzDivider div = new BlitzDivider(90f, span, mBlitzConnectionMat);
         div.mAngle = mLastBlitzAngle;
         div.mGameObject.transform.parent = transform;
         div.mGameObject.transform.Rotate(0f, 0f, div.mAngle - mAngle);
         mBlitzDividers.Add(div);
 
-        // Advance past the divider so the next obstacle doesn't overlap it.
         mLastBlitzAngle += span;
+        // Divider commits player to left or right of center — planner uses this to
+        // forbid full-gates / half-gates immediately after.
+        MarkSpawn(BlitzSpawnKind.Divider, commitsSide: true);
     }
 
     void SpawnFullGateWithButton(float spacing)
@@ -682,6 +764,8 @@ public class Torus : MonoBehaviour
         gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
         gate.LinkButton(button);
         mBlitzGates.Add(gate);
+        // Must-destroy button — player must commit to the button's side to get a clean shot.
+        MarkSpawn(BlitzSpawnKind.FullGate, commitsSide: true);
     }
 
     void AnimateBlitzGates()
@@ -727,12 +811,8 @@ public class Torus : MonoBehaviour
     void UpdateBlitzFireRate()
     {
         if (mBlitzBeam == null) return;
-        float interval = mBlitzTimer > 90f ? 0.4f
-                       : mBlitzTimer > 45f ? 0.5f
-                       : mBlitzTimer > 15f ? 0.65f
-                       : 0.8f;
-
-        // Cadency upgrade reduces fire interval
+        // Continuous curve mirrors the intensity ramp — no step changes.
+        float interval = Mathf.Lerp(0.80f, 0.35f, Mathf.Clamp01(GetBlitzIntensity()));
         float multiplier = mCadencyLevel >= 2 ? 0.5f
                          : mCadencyLevel >= 1 ? 0.7f
                          : 1.0f;
