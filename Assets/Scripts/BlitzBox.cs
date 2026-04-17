@@ -204,6 +204,14 @@ public class BlitzBox
         mMat.SetFloat("_EmissionIntensity", intensity);
     }
 
+    /// <summary>Re-tint after construction (e.g., red button for full-gate variant).</summary>
+    public void SetTint(Color baseColor, Color emissionColor)
+    {
+        if (mMat == null) return;
+        mMat.SetColor("_Color", baseColor);
+        mMat.SetColor("_EmissionColor", emissionColor);
+    }
+
     /// <summary>Hit once. Returns true if destroyed.</summary>
     public bool Hit()
     {

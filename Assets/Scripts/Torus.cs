@@ -77,6 +77,7 @@ public class Torus : MonoBehaviour
     public BlitzBeam mBlitzBeam;
     private List<BlitzBox> mBlitzBoxes;
     private List<BlitzGate> mBlitzGates;
+    private List<BlitzDivider> mBlitzDividers;
     private float mBlitzTimer;
     private float mLastBlitzAngle;
 
@@ -118,6 +119,7 @@ public class Torus : MonoBehaviour
             mScoreSync = FindAnyObjectByType<ScoreSync>();
             mBlitzBoxes = new List<BlitzBox>();
             mBlitzGates = new List<BlitzGate>();
+            mBlitzDividers = new List<BlitzDivider>();
             mBlitzOrbs = new List<BlitzOrb>();
             mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
             UpdateBlitzObstacles();
@@ -156,6 +158,7 @@ public class Torus : MonoBehaviour
             CheckBlitzOrbPickups();
             AnimateBlitzOrbs();
             AnimateBlitzGates();
+            AnimateBlitzDividers();
             AnimateBlitzBoxes();
             UpdateBlitzFireRate();
             return;
@@ -338,6 +341,12 @@ public class Torus : MonoBehaviour
                     Destroy(gate.mGameObject);
                 mBlitzGates.Clear();
             }
+            if (mBlitzDividers != null)
+            {
+                foreach (BlitzDivider div in mBlitzDividers)
+                    Destroy(div.mGameObject);
+                mBlitzDividers.Clear();
+            }
             if (mBlitzOrbs != null)
             {
                 foreach (BlitzOrb orb in mBlitzOrbs)
@@ -481,6 +490,12 @@ public class Torus : MonoBehaviour
             if (gate.mGameObject != null && gate.mGameObject.activeSelf)
                 gate.mGameObject.SetActive(false);
         }
+        foreach (BlitzDivider div in mBlitzDividers)
+        {
+            if (div.mAngle > mAngle - 240f) break;
+            if (div.mGameObject != null && div.mGameObject.activeSelf)
+                div.mGameObject.SetActive(false);
+        }
         foreach (BlitzOrb orb in mBlitzOrbs)
         {
             if (orb.mAngle > mAngle - 240f) break;
@@ -507,9 +522,10 @@ public class Torus : MonoBehaviour
         {
             // Phase 4: dense, full gates required
             float sp = Random.Range(5f, 8f);
-            if (r < 0.25f) SpawnFullGateWithButton(sp);
-            else if (r < 0.50f) SpawnGateWithGap(sp);
-            else if (r < 0.70f) SpawnGateWithButton(sp);
+            if (r < 0.20f) SpawnFullGateWithButton(sp);
+            else if (r < 0.40f) SpawnGateWithGap(sp);
+            else if (r < 0.55f) SpawnGateWithButton(sp);
+            else if (r < 0.70f) SpawnDivider(sp);
             else SpawnFormation(PickFormation(), sp);
         }
         else if (mBlitzTimer > 45f)
@@ -517,15 +533,17 @@ public class Torus : MonoBehaviour
             // Phase 3: gates appear, some with buttons
             float sp = Random.Range(6f, 10f);
             if (r < 0.15f) SpawnFullGateWithButton(sp);
-            else if (r < 0.35f) SpawnGateWithGap(sp);
-            else if (r < 0.50f) SpawnGateWithButton(sp);
+            else if (r < 0.30f) SpawnGateWithGap(sp);
+            else if (r < 0.45f) SpawnGateWithButton(sp);
+            else if (r < 0.60f) SpawnDivider(sp);
             else SpawnFormation(PickFormation(), sp);
         }
         else if (mBlitzTimer > 15f)
         {
             // Phase 2: first gates, more variety
             float sp = Random.Range(7f, 12f);
-            if (r < 0.20f) SpawnGateWithGap(sp);
+            if (r < 0.15f) SpawnGateWithGap(sp);
+            else if (r < 0.30f) SpawnDivider(sp);
             else SpawnFormation(PickFormation(), sp);
         }
         else
@@ -627,6 +645,23 @@ public class Torus : MonoBehaviour
         mBlitzGates.Add(gate);
     }
 
+    void SpawnDivider(float spacing)
+    {
+        mLastBlitzAngle += spacing;
+
+        // Sit at bottom cross-angle (90° = where ball rests untapped).
+        // Span ~25–45° longitudinal — long enough to threaten, short enough to dodge around.
+        float span = Random.Range(25f, 45f);
+        BlitzDivider div = new BlitzDivider(90f, span, mBlitzConnectionMat);
+        div.mAngle = mLastBlitzAngle;
+        div.mGameObject.transform.parent = transform;
+        div.mGameObject.transform.Rotate(0f, 0f, div.mAngle - mAngle);
+        mBlitzDividers.Add(div);
+
+        // Advance past the divider so the next obstacle doesn't overlap it.
+        mLastBlitzAngle += span;
+    }
+
     void SpawnFullGateWithButton(float spacing)
     {
         float buttonCross = Random.Range(50f, 130f);
@@ -639,9 +674,9 @@ public class Torus : MonoBehaviour
         button.mGameObject.transform.Rotate(0f, 0f, button.mAngle - mAngle);
         mBlitzBoxes.Add(button);
 
-        // Full gate (no gap) — must destroy button or die
+        // Full gate (no gap) — must destroy button or die. Red palette flags the threat.
         mLastBlitzAngle += 30f;
-        BlitzGate gate = new BlitzGate(90f, 0f, mBlitzGateMat, mBlitzConnectionMat);
+        BlitzGate gate = new BlitzGate(90f, 0f, mBlitzGateMat, mBlitzConnectionMat, isFullGate: true);
         gate.mAngle = mLastBlitzAngle;
         gate.mGameObject.transform.parent = transform;
         gate.mGameObject.transform.Rotate(0f, 0f, gate.mAngle - mAngle);
@@ -656,6 +691,16 @@ public class Torus : MonoBehaviour
         {
             if (gate.mGameObject.activeSelf)
                 gate.Animate(time);
+        }
+    }
+
+    void AnimateBlitzDividers()
+    {
+        float time = Time.time;
+        foreach (BlitzDivider div in mBlitzDividers)
+        {
+            if (div.mGameObject.activeSelf)
+                div.Animate(time);
         }
     }
 
@@ -731,6 +776,11 @@ public class Torus : MonoBehaviour
                         Shader.SetGlobalFloat("_ScorePulseTime", Time.time);
                         Shader.SetGlobalVector("_ScorePulsePos", cubeObj.transform.position);
                     }
+                }
+                else if (box.mLinkedGate != null)
+                {
+                    // Button survived this hit — peel one strand off the linked gate's connection.
+                    box.mLinkedGate.RemoveStrand();
                 }
                 break;
             }

@@ -33,9 +33,14 @@ public class BlitzGate
     float mPulsePhase;
     float mDeactivateTimer;
 
-    // Connection line (button → gate)
-    LineRenderer mConnectionLine;
-    GameObject mConnectionObj;
+    // Connection strands (button → gate). One strand per button HP — each hit peels one.
+    // Strands fan out from the button and attach at different points along the gate arc.
+    LineRenderer[] mConnectionLines;
+    GameObject[] mConnectionObjs;
+    Vector3[] mStrandLocalEnds;
+    int mStrandsRemaining;
+    bool mIsFullGate;
+    const int CONNECTION_STRANDS = 3;
 
     const float ARC_STEP = 3f;
     const float ARC_RADIUS = 0.04f;
@@ -47,9 +52,11 @@ public class BlitzGate
     const float CROSS_MIN = 25f;
     const float CROSS_MAX = 155f;
 
-    /// <summary>Gap-based gate: arc covers full cross-section minus the gap.</summary>
-    public BlitzGate(float gapCenterDeg, float gapSizeDeg, Material gateMat, Material connectionMat)
+    /// <summary>Gap-based gate: arc covers full cross-section minus the gap.
+    /// Pass isFullGate=true for the red must-destroy variant (gapSizeDeg == 0).</summary>
+    public BlitzGate(float gapCenterDeg, float gapSizeDeg, Material gateMat, Material connectionMat, bool isFullGate = false)
     {
+        mIsFullGate = isFullGate;
         InitMaterials(connectionMat);
 
         // Build arc ranges (split by gap)
@@ -100,12 +107,16 @@ public class BlitzGate
         mArcs = new List<ArcSegment>();
         mEndpoints = new List<MeshRenderer>();
 
+        // Red palette for full (must-destroy) gates so the player can tell them apart at distance.
+        Color mainColor = mIsFullGate ? new Color(1.0f, 0.12f, 0.18f) : new Color(0.7f, 0.4f, 1.0f);
+        Color haloColor = mIsFullGate ? new Color(0.7f, 0.03f, 0.08f) : new Color(0.3f, 0.1f, 0.6f);
+
         mArcMainMat = new Material(connectionMat);
-        mArcMainMat.SetColor("_Color", new Color(0.7f, 0.4f, 1.0f));
+        mArcMainMat.SetColor("_Color", mainColor);
         mArcMainMat.SetFloat("_Intensity", 4.0f);
 
         mArcHaloMat = new Material(connectionMat);
-        mArcHaloMat.SetColor("_Color", new Color(0.3f, 0.1f, 0.6f));
+        mArcHaloMat.SetColor("_Color", haloColor);
         mArcHaloMat.SetFloat("_Intensity", 1.5f);
     }
 
@@ -209,27 +220,72 @@ public class BlitzGate
         mEndpoints.Add(mr);
     }
 
-    /// <summary>Link a button — destroying it deactivates this gate.</summary>
+    /// <summary>Link a button — destroying it deactivates this gate.
+    /// For full gates, tints the button red and creates 3 separate strands (one peels per button hit).</summary>
     public void LinkButton(BlitzBox button)
     {
         mButton = button;
         button.mLinkedGate = this;
 
-        // Thick visible connection line
-        mConnectionObj = new GameObject("BlitzConnection");
-        mConnectionObj.transform.parent = mGameObject.transform;
-        mConnectionLine = mConnectionObj.AddComponent<LineRenderer>();
-        Material cMat = new Material(mConnectionMat);
-        cMat.SetColor("_Color", new Color(0.7f, 0.35f, 1.0f));
-        cMat.SetFloat("_Intensity", 3.5f);
-        mConnectionLine.material = cMat;
-        mConnectionLine.startWidth = 0.035f;
-        mConnectionLine.endWidth = 0.02f;
-        mConnectionLine.positionCount = 8;
-        mConnectionLine.useWorldSpace = true;
-        mConnectionLine.receiveShadows = false;
-        mConnectionLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mConnectionLine.numCapVertices = 3;
+        // Red-flag the button so the player knows it gates a must-destroy barrier.
+        if (mIsFullGate)
+            button.SetTint(new Color(1.0f, 0.15f, 0.22f), new Color(0.9f, 0.1f, 0.18f));
+
+        mStrandsRemaining = CONNECTION_STRANDS;
+        mConnectionLines = new LineRenderer[CONNECTION_STRANDS];
+        mConnectionObjs = new GameObject[CONNECTION_STRANDS];
+        mStrandLocalEnds = new Vector3[CONNECTION_STRANDS];
+
+        // Cache one attachment point per strand along the primary arc segment (local space).
+        // For 3 strands this lands them at ~25%, 50%, 75% of the arc — a visible fan.
+        if (mArcs.Count > 0 && mArcs[0].surfaces.Length > 0)
+        {
+            var seg = mArcs[0];
+            int count = seg.surfaces.Length;
+            for (int s = 0; s < CONNECTION_STRANDS; s++)
+            {
+                float t = (s + 1f) / (CONNECTION_STRANDS + 1f);
+                int idx = Mathf.Clamp(Mathf.RoundToInt(t * (count - 1)), 0, count - 1);
+                mStrandLocalEnds[s] = seg.surfaces[idx] + seg.normals[idx] * ARC_RADIUS;
+            }
+        }
+
+        Color strandColor = mIsFullGate ? new Color(1.0f, 0.15f, 0.22f) : new Color(0.7f, 0.35f, 1.0f);
+
+        for (int s = 0; s < CONNECTION_STRANDS; s++)
+        {
+            GameObject obj = new GameObject("BlitzConnection_" + s);
+            obj.transform.parent = mGameObject.transform;
+            LineRenderer lr = obj.AddComponent<LineRenderer>();
+            Material cMat = new Material(mConnectionMat);
+            cMat.SetColor("_Color", strandColor);
+            cMat.SetFloat("_Intensity", 3.5f);
+            lr.material = cMat;
+            lr.startWidth = 0.028f;
+            lr.endWidth = 0.018f;
+            lr.positionCount = 8;
+            lr.useWorldSpace = true;
+            lr.receiveShadows = false;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.numCapVertices = 3;
+
+            mConnectionObjs[s] = obj;
+            mConnectionLines[s] = lr;
+        }
+    }
+
+    /// <summary>Peel one connection strand — called each time the linked button is hit but not destroyed.
+    /// Removal order is outer-in (0, 2, 1) so the final remaining strand sits dead-center.</summary>
+    public void RemoveStrand()
+    {
+        if (mConnectionObjs == null || mStrandsRemaining <= 0) return;
+
+        int[] order = { 0, 2, 1 };
+        int idx = order[CONNECTION_STRANDS - mStrandsRemaining];
+        if (idx < mConnectionObjs.Length && mConnectionObjs[idx] != null)
+            mConnectionObjs[idx].SetActive(false);
+
+        mStrandsRemaining--;
     }
 
     /// <summary>Disable gate: colliders off, start fade-out.</summary>
@@ -241,7 +297,11 @@ public class BlitzGate
             BoxCollider bc = col.GetComponent<BoxCollider>();
             if (bc != null) bc.enabled = false;
         }
-        if (mConnectionObj != null) mConnectionObj.SetActive(false);
+        if (mConnectionObjs != null)
+        {
+            for (int s = 0; s < mConnectionObjs.Length; s++)
+                if (mConnectionObjs[s] != null) mConnectionObjs[s].SetActive(false);
+        }
     }
 
     /// <summary>Call each frame for shimmer animation and fade-out.</summary>
@@ -310,37 +370,36 @@ public class BlitzGate
             }
         }
 
-        // Animate connection line with electric jitter
-        if (mConnectionLine != null && mButton != null && !mButton.mDestroyed
+        // Animate each surviving strand — shared start at the button, different end per strand.
+        if (mConnectionLines != null && mButton != null && !mButton.mDestroyed
             && mButton.mCube != null && mButton.mCube.activeInHierarchy)
         {
             Vector3 start = mButton.mCube.transform.position;
-            // Find arc midpoint as target
-            Vector3 end = start;
-            if (mArcs.Count > 0 && mArcs[0].surfaces.Length > 0)
+
+            for (int s = 0; s < mConnectionLines.Length; s++)
             {
-                var seg = mArcs[0];
-                int mid = seg.surfaces.Length / 2;
-                end = mGameObject.transform.TransformPoint(
-                    seg.surfaces[mid] + seg.normals[mid] * ARC_RADIUS);
+                LineRenderer lr = mConnectionLines[s];
+                GameObject obj = mConnectionObjs[s];
+                if (lr == null || obj == null || !obj.activeSelf) continue;
+
+                Vector3 end = mGameObject.transform.TransformPoint(mStrandLocalEnds[s]);
+
+                int pts = lr.positionCount;
+                lr.SetPosition(0, start);
+                lr.SetPosition(pts - 1, end);
+
+                for (int i = 1; i < pts - 1; i++)
+                {
+                    float t = (float)i / (pts - 1);
+                    Vector3 mid = Vector3.Lerp(start, end, t);
+                    mid += Random.insideUnitSphere * 0.035f;
+                    lr.SetPosition(i, mid);
+                }
+
+                float w = 0.024f + Mathf.Sin(time * 15f + s * 1.3f) * 0.008f;
+                lr.startWidth = w;
+                lr.endWidth = w * 0.7f;
             }
-
-            int pts = mConnectionLine.positionCount;
-            mConnectionLine.SetPosition(0, start);
-            mConnectionLine.SetPosition(pts - 1, end);
-
-            for (int i = 1; i < pts - 1; i++)
-            {
-                float t = (float)i / (pts - 1);
-                Vector3 mid = Vector3.Lerp(start, end, t);
-                mid += Random.insideUnitSphere * 0.06f;
-                mConnectionLine.SetPosition(i, mid);
-            }
-
-            // Pulse width
-            float w = 0.03f + Mathf.Sin(time * 15f) * 0.01f;
-            mConnectionLine.startWidth = w;
-            mConnectionLine.endWidth = w * 0.6f;
         }
     }
 }

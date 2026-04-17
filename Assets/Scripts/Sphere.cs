@@ -500,7 +500,7 @@ public class Sphere : MonoBehaviour
             mNormal = collision.contacts[0].normal;
         }
 
-        if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar"))
+        if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar" || collision.gameObject.name == "BlitzDividerBar"))
         {
             // Blitz shield absorbs one lethal hit
             if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())
