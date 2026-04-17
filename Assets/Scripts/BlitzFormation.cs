@@ -44,12 +44,16 @@ public class BlitzFormation
         crossAnchorMax = 150f - maxAbs;
     }
 
-    // ── Seed set (v1) ─────────────────────────────────────────────
+    // ── Seed set (v2) ─────────────────────────────────────────────
     // A = 1HP cube (~8° of cross-arc wide), B = 3HP sentinel (~10°).
-    // Tight clusters sit ~9–12° center-to-center = one cube-width gap or less,
-    // so the player routes around the group, not through it.
+    // Tight clusters sit ~9–10° center-to-center = ~1° gap, so the player
+    // routes around the group or fires to clear a lane. Wide rows use the
+    // same 9° cadence extended to 5 across (-18..18).
     //
-    // Index → name: 0 A, 1 B, 2 AAA, 3 ABA, 4 AA_stream, 5 Pyramid_A_AAA
+    // Index → name:
+    //    0 A, 1 B, 2 AAA, 3 ABA, 4 AA_stream, 5 Pyramid_A_AAA,
+    //    6 Diamond_A_AAA_A, 7 Expand_A_AAA_AAAAA, 8 Shrink_AAAAA_AAA_A,
+    //    9 Wall_AAAAA, 10 Zigzag_A_A_A, 11 Column_BB
     static BlitzFormation[] sFormations;
 
     public static BlitzFormation[] All()
@@ -96,11 +100,86 @@ public class BlitzFormation
                 new[]
                 {
                     new BlitzElement( 0f, 0f, 1),
-                    new BlitzElement(-9f, 6f, 1),
+                    new BlitzElement(-9f, 3f, 1),
+                    new BlitzElement( 0f, 3f, 1),
+                    new BlitzElement( 9f, 3f, 1),
+                },
+                3f),
+
+            // Front single, wide middle, back single — tight cluster, reads as one shape
+            new BlitzFormation("Diamond_A_AAA_A",
+                new[]
+                {
+                    new BlitzElement( 0f, 0f, 1),
+                    new BlitzElement(-9f, 3f, 1),
+                    new BlitzElement( 0f, 3f, 1),
+                    new BlitzElement( 9f, 3f, 1),
                     new BlitzElement( 0f, 6f, 1),
-                    new BlitzElement( 9f, 6f, 1),
                 },
                 6f),
+
+            // Expanding wall — last row demands firing, rows packed so it reads as one wedge
+            new BlitzFormation("Expand_A_AAA_AAAAA",
+                new[]
+                {
+                    new BlitzElement(  0f, 0f, 1),
+                    new BlitzElement( -9f, 3f, 1),
+                    new BlitzElement(  0f, 3f, 1),
+                    new BlitzElement(  9f, 3f, 1),
+                    new BlitzElement(-18f, 6f, 1),
+                    new BlitzElement( -9f, 6f, 1),
+                    new BlitzElement(  0f, 6f, 1),
+                    new BlitzElement(  9f, 6f, 1),
+                    new BlitzElement( 18f, 6f, 1),
+                },
+                6f),
+
+            // Opens with a wall (must fire) then narrows into a spear — relief through effort
+            new BlitzFormation("Shrink_AAAAA_AAA_A",
+                new[]
+                {
+                    new BlitzElement(-18f, 0f, 1),
+                    new BlitzElement( -9f, 0f, 1),
+                    new BlitzElement(  0f, 0f, 1),
+                    new BlitzElement(  9f, 0f, 1),
+                    new BlitzElement( 18f, 0f, 1),
+                    new BlitzElement( -9f, 3f, 1),
+                    new BlitzElement(  0f, 3f, 1),
+                    new BlitzElement(  9f, 3f, 1),
+                    new BlitzElement(  0f, 6f, 1),
+                },
+                6f),
+
+            // Single row, 5 wide — pure "must fire" moment with no forgiveness layer
+            new BlitzFormation("Wall_AAAAA",
+                new[]
+                {
+                    new BlitzElement(-18f, 0f, 1),
+                    new BlitzElement( -9f, 0f, 1),
+                    new BlitzElement(  0f, 0f, 1),
+                    new BlitzElement(  9f, 0f, 1),
+                    new BlitzElement( 18f, 0f, 1),
+                },
+                0f),
+
+            // Side-to-side weave — forces active swing even from the bottom
+            new BlitzFormation("Zigzag_A_A_A",
+                new[]
+                {
+                    new BlitzElement(-10f, 0f, 1),
+                    new BlitzElement( 10f, 4f, 1),
+                    new BlitzElement(-10f, 8f, 1),
+                },
+                8f),
+
+            // Twin sentinels in line — forces sustained fire from gun/cadency upgrades
+            new BlitzFormation("Column_BB",
+                new[]
+                {
+                    new BlitzElement(0f, 0f, 3),
+                    new BlitzElement(0f, 7f, 3),
+                },
+                7f),
         };
         return sFormations;
     }

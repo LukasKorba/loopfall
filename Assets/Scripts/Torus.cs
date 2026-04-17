@@ -583,7 +583,7 @@ public class Torus : MonoBehaviour
 
         // Variety enforcement — crushes the 10s-of-just-buttons and 10s-of-just-dividers
         // stretches the user called out. Formations are exempt: they have internal variety
-        // (6 sub-formations rotate via PickFormation), so back-to-back formations feel fresh.
+        // (12 sub-formations rotate via PickFormation), so back-to-back formations feel fresh.
         if (mLastSpawnKind != BlitzSpawnKind.None && mLastSpawnKind != BlitzSpawnKind.Formation)
             w[(int)mLastSpawnKind] *= 0.15f;
         if (mPrevSpawnKind != BlitzSpawnKind.None && mPrevSpawnKind != BlitzSpawnKind.Formation)
@@ -606,16 +606,23 @@ public class Torus : MonoBehaviour
     BlitzFormation PickFormation(float intensity)
     {
         float c = Mathf.Clamp01(intensity);
-        // Order matches BlitzFormation.All():  0 A, 1 B, 2 AAA, 3 ABA, 4 AA_stream, 5 Pyramid.
-        // All composed formations are present from t=0 — early game just biases toward
-        // simpler ones. No more "15s of nothing but single A" tedium.
-        float[] w = new float[6];
-        w[0] = Mathf.Lerp(0.28f, 0.08f, c); // A
-        w[1] = Mathf.Lerp(0.05f, 0.20f, c); // B (3HP sentinel)
-        w[2] = Mathf.Lerp(0.24f, 0.20f, c); // AAA
-        w[3] = Mathf.Lerp(0.14f, 0.22f, c); // ABA
-        w[4] = Mathf.Lerp(0.18f, 0.12f, c); // AA_stream
-        w[5] = Mathf.Lerp(0.11f, 0.18f, c); // Pyramid A_AAA
+        // Order matches BlitzFormation.All(): 0 A, 1 B, 2 AAA, 3 ABA, 4 AA_stream,
+        // 5 Pyramid, 6 Diamond, 7 Expand, 8 Shrink, 9 Wall, 10 Zigzag, 11 Column_BB.
+        // Simple shapes dominate early; composed/multi-row shapes take over late so the
+        // player actually meets the variety before the density wall ends the run.
+        float[] w = new float[12];
+        w[0]  = Mathf.Lerp(0.22f, 0.04f, c); // A
+        w[1]  = Mathf.Lerp(0.05f, 0.12f, c); // B (3HP sentinel)
+        w[2]  = Mathf.Lerp(0.20f, 0.10f, c); // AAA
+        w[3]  = Mathf.Lerp(0.12f, 0.12f, c); // ABA
+        w[4]  = Mathf.Lerp(0.15f, 0.08f, c); // AA_stream
+        w[5]  = Mathf.Lerp(0.10f, 0.10f, c); // Pyramid_A_AAA
+        w[6]  = Mathf.Lerp(0.06f, 0.12f, c); // Diamond_A_AAA_A
+        w[7]  = Mathf.Lerp(0.03f, 0.10f, c); // Expand_A_AAA_AAAAA
+        w[8]  = Mathf.Lerp(0.03f, 0.10f, c); // Shrink_AAAAA_AAA_A
+        w[9]  = Mathf.Lerp(0.02f, 0.06f, c); // Wall_AAAAA
+        w[10] = Mathf.Lerp(0.01f, 0.04f, c); // Zigzag_A_A_A
+        w[11] = Mathf.Lerp(0.01f, 0.02f, c); // Column_BB
 
         BlitzFormation[] all = BlitzFormation.All();
         float total = 0f;
@@ -727,18 +734,47 @@ public class Torus : MonoBehaviour
     void SpawnDivider(float spacing)
     {
         mLastBlitzAngle += spacing;
+        float startAngle = mLastBlitzAngle;
 
         // Sit at bottom cross-angle (90° = where ball rests untapped).
         // Shorter than the first-pass 25–45° — that span was long enough to trap the
         // player against a gate behind it. 15–22° lets the commit resolve in time.
         float span = Random.Range(15f, 22f);
         BlitzDivider div = new BlitzDivider(90f, span, mBlitzConnectionMat);
-        div.mAngle = mLastBlitzAngle;
+        div.mAngle = startAngle;
         div.mGameObject.transform.parent = transform;
         div.mGameObject.transform.Rotate(0f, 0f, div.mAngle - mAngle);
         mBlitzDividers.Add(div);
 
-        mLastBlitzAngle += span;
+        // Escort cubes inside the span. Cross 60° (left lane) and 120° (right lane)
+        // sit in the ball's natural swing paths, so whichever side the player commits
+        // to, the beam picks targets off on the way through. Turns the coast-through
+        // dead air into a scoring corridor.
+        //
+        // Asymmetric: one random side gets a 3HP sentinel as its first escort. Both
+        // sides remain passable, but the "hard side" demands sustained fire to clear
+        // — player reads the shapes on approach and picks their route.
+        float c = Mathf.Clamp01(GetBlitzIntensity());
+        int perSide = (c > 0.5f) ? 2 : 1;
+        int total = perSide * 2;
+        bool hardLeft = Random.value < 0.5f;
+        float hardCross = hardLeft ? 60f : 120f;
+        float easyCross = hardLeft ? 120f : 60f;
+        for (int i = 0; i < total; i++)
+        {
+            float t = (i + 1) / (float)(total + 1);
+            float a = startAngle + span * t;
+            bool onHardSide = (i % 2 == 0);
+            float cross = onHardSide ? hardCross : easyCross;
+            int hp = (onHardSide && i == 0) ? 3 : 1;
+            BlitzBox esc = new BlitzBox(cross, mBlitzBoxMat, hp);
+            esc.mAngle = a;
+            esc.mGameObject.transform.parent = transform;
+            esc.mGameObject.transform.Rotate(0f, 0f, esc.mAngle - mAngle);
+            mBlitzBoxes.Add(esc);
+        }
+
+        mLastBlitzAngle = startAngle + span;
         // Divider commits player to left or right of center — planner uses this to
         // forbid full-gates / half-gates immediately after.
         MarkSpawn(BlitzSpawnKind.Divider, commitsSide: true);
@@ -803,8 +839,9 @@ public class Torus : MonoBehaviour
         float time = Time.time;
         foreach (BlitzBox box in mBlitzBoxes)
         {
-            if (box.mGameObject.activeSelf)
-                box.Animate(time);
+            if (!box.mGameObject.activeSelf) continue;
+            box.UpdateDrift(mAngle);
+            box.Animate(time);
         }
     }
 

@@ -33,6 +33,14 @@ public class BlitzBox
     GameObject[] mSpikes;
     Vector3[] mSpikeDirs;
 
+    // Button drift toward linked gate — see UpdateDrift().
+    float mDriftOriginalAngle;
+    float mDriftOriginalOffset;
+    float mDriftApplied;
+    bool mDriftInit;
+    const float DRIFT_RANGE = 15f;        // ball angular distance at which drift kicks in
+    const float DRIFT_FRACTION = 0.5f;    // button ends up half the original offset from the gate
+
     const float SIZE_1HP = 0.14f;
     const float SIZE_BUTTON = 0.24f;
     const float CORE_RADIUS = 0.055f;
@@ -324,6 +332,42 @@ public class BlitzBox
     }
 
     // ── Per-frame animation ──
+
+    /// <summary>
+    /// Linked-button drift: as the ball closes in, the button slides forward toward
+    /// the gate (from original offset down to half). Reduces relative speed between
+    /// ball and button, giving the player extra firing time on the 3rd HP. Inactive
+    /// for unlinked boxes. Called each frame from Torus.AnimateBlitzBoxes.
+    /// </summary>
+    public void UpdateDrift(float torusAngle)
+    {
+        if (mDestroyed || mLinkedGate == null) return;
+
+        if (!mDriftInit)
+        {
+            mDriftOriginalAngle = mAngle;
+            mDriftOriginalOffset = mLinkedGate.mAngle - mAngle;
+            mDriftApplied = 0f;
+            mDriftInit = true;
+        }
+
+        float distToBall = mDriftOriginalAngle - torusAngle;
+        float targetDrift;
+        if (distToBall >= DRIFT_RANGE)
+            targetDrift = 0f;
+        else if (distToBall <= 0f)
+            targetDrift = mDriftOriginalOffset * DRIFT_FRACTION; // hold at final once passed
+        else
+            targetDrift = mDriftOriginalOffset * DRIFT_FRACTION * (1f - distToBall / DRIFT_RANGE);
+
+        float delta = targetDrift - mDriftApplied;
+        if (Mathf.Abs(delta) > 0.001f)
+        {
+            mGameObject.transform.Rotate(0f, 0f, delta);
+            mAngle = mDriftOriginalAngle + targetDrift;
+            mDriftApplied = targetDrift;
+        }
+    }
 
     public void Animate(float time)
     {
