@@ -167,6 +167,7 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text statsBestLabel;
     private TMP_Text statsAvgLabel;
     private TMP_Text statsGatesLabel;
+    private TMP_Text statsObstaclesLabel;
 
     // ── TITLE FADE ───────────────────────────────────────────
     private CanvasGroup titleCanvasGroup;
@@ -2770,8 +2771,13 @@ public class ScoreSync : MonoBehaviour
 
     void OnStatsTap()
     {
-        if (statsPanel == null)
-            BuildStatsPanel(canvas.transform);
+        // Rebuild every open so mode switches (Pure Hell ↔ Blitz) show the right rows
+        if (statsPanel != null)
+        {
+            Destroy(statsPanel.gameObject);
+            statsPanel = null;
+        }
+        BuildStatsPanel(canvas.transform);
         RefreshStatsLabels();
         statsPanel.gameObject.SetActive(true);
     }
@@ -2827,12 +2833,21 @@ public class ScoreSync : MonoBehaviour
 
         CreateSettingsDivider(cardRT, 0.84f, NEON_CYAN, 0.25f);
 
-        // Stat rows — label left, value right
+        // Stat rows — label left, value right. Blitz swaps GATES for OBSTACLES.
         statsRunsLabel = CreateStatsRow(cardRT, "Runs", "TOTAL RUNS", 0.72f);
         statsTapsLabel = CreateStatsRow(cardRT, "Taps", "TOTAL TAPS", 0.60f);
         statsBestLabel = CreateStatsRow(cardRT, "Best", "BEST SCORE", 0.48f);
         statsAvgLabel = CreateStatsRow(cardRT, "Avg", "AVG SCORE", 0.36f);
-        statsGatesLabel = CreateStatsRow(cardRT, "Gates", "TOTAL GATES", 0.24f);
+        if (GameConfig.IsBlitz())
+        {
+            statsObstaclesLabel = CreateStatsRow(cardRT, "Obstacles", "OBSTACLES", 0.24f);
+            statsGatesLabel = null;
+        }
+        else
+        {
+            statsGatesLabel = CreateStatsRow(cardRT, "Gates", "TOTAL GATES", 0.24f);
+            statsObstaclesLabel = null;
+        }
 
         // Close hint
         string closeHint = "TAP OUTSIDE TO CLOSE";
@@ -2881,22 +2896,30 @@ public class ScoreSync : MonoBehaviour
 
     void RefreshStatsLabels()
     {
-        int runs = Sphere.GetTotalRuns();
-        int taps = Sphere.GetTotalTaps();
+        bool blitz = GameConfig.IsBlitz();
+        int runs = blitz ? Sphere.GetBlitzRuns() : Sphere.GetTotalRuns();
+        int taps = blitz ? Sphere.GetBlitzTaps() : Sphere.GetTotalTaps();
         int best = topScores.Count > 0 ? topScores[0] : 0;
         int totalScore = 0;
         for (int i = 0; i < topScores.Count; i++)
             totalScore += topScores[i];
         int avg = topScores.Count > 0 ? totalScore / topScores.Count : 0;
 
-        // Total gates = sum of all scores (each gate = 1 point in Pure Hell)
-        int gates = totalScore;
-
         if (statsRunsLabel != null) statsRunsLabel.text = runs.ToString("N0");
         if (statsTapsLabel != null) statsTapsLabel.text = taps.ToString("N0");
         if (statsBestLabel != null) statsBestLabel.text = best.ToString("N0");
         if (statsAvgLabel != null) statsAvgLabel.text = avg.ToString("N0");
-        if (statsGatesLabel != null) statsGatesLabel.text = gates.ToString("N0");
+
+        if (blitz)
+        {
+            if (statsObstaclesLabel != null)
+                statsObstaclesLabel.text = Sphere.GetBlitzObstacles().ToString("N0");
+        }
+        else
+        {
+            // Pure Hell: each gate = 1 point, so sum of Top-N scores approximates gates cleared.
+            if (statsGatesLabel != null) statsGatesLabel.text = totalScore.ToString("N0");
+        }
     }
 
     void PauseGame()

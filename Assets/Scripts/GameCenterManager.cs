@@ -15,8 +15,9 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
 {
     public static GameCenterManager Instance { get; private set; }
 
-    // Apple leaderboard IDs — set in App Store Connect
-    private const string LB_PURE_HELL = "com.lukaskorba.loopfall.purehell";
+    // Apple leaderboard IDs — set in App Store Connect.
+    // Per-mode score leaderboards are resolved via GameConfig.GetLeaderboardID() so
+    // Pure Hell and Blitz submissions can't cross-contaminate.
     private const string LB_TAP_MASTER = "com.lukaskorba.loopfall.tapmaster";
     private const string LB_RUNS = "com.lukaskorba.loopfall.runs";
 
@@ -56,7 +57,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
     public void ReportScore(int score)
     {
         if (score <= 0) return;
-        Report(score, LB_PURE_HELL);
+        Report(score, GameConfig.GetLeaderboardID());
     }
 
     public void ReportTaps(int totalTaps)
@@ -97,7 +98,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
             return;
         }
 
-        GameCenterPlatform.ShowLeaderboardUI(LB_PURE_HELL, UnityEngine.SocialPlatforms.TimeScope.AllTime);
+        GameCenterPlatform.ShowLeaderboardUI(GameConfig.GetLeaderboardID(), UnityEngine.SocialPlatforms.TimeScope.AllTime);
 #else
         Debug.Log("[GameCenter] (Editor) Would show leaderboard");
 #endif

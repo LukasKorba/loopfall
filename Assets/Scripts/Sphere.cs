@@ -47,9 +47,15 @@ public class Sphere : MonoBehaviour
     private ScoreSync mScoreSync;
     private GameAudio mAudio;
 
-    // Persistent stats
+    // Persistent stats. Cross-mode counters (STAT_TAPS / STAT_RUNS) stay authoritative
+    // for career leaderboards (TapMaster_Total, Runs_Total) and cross-mode achievements
+    // (ACH_DEDICATED etc.). Mode-specific counters were added when Blitz got its own
+    // stats panel — they increment alongside the career totals so history is not lost.
     private const string STAT_TAPS = "TotalTaps";
     private const string STAT_RUNS = "TotalRuns";
+    private const string STAT_TAPS_BLITZ = "TotalTaps_Blitz";
+    private const string STAT_RUNS_BLITZ = "TotalRuns_Blitz";
+    private const string STAT_OBSTACLES_BLITZ = "TotalObstacles_Blitz";
     private int mSessionTaps = 0;
 
     void Awake()
@@ -521,15 +527,17 @@ public class Sphere : MonoBehaviour
 
     void IncrementRuns()
     {
-        int runs = PlayerPrefs.GetInt(STAT_RUNS, 0) + 1;
-        PlayerPrefs.SetInt(STAT_RUNS, runs);
+        PlayerPrefs.SetInt(STAT_RUNS, PlayerPrefs.GetInt(STAT_RUNS, 0) + 1);
+        if (GameConfig.IsBlitz())
+            PlayerPrefs.SetInt(STAT_RUNS_BLITZ, PlayerPrefs.GetInt(STAT_RUNS_BLITZ, 0) + 1);
         PlayerPrefs.Save();
     }
 
     void SaveTaps()
     {
-        int total = PlayerPrefs.GetInt(STAT_TAPS, 0) + mSessionTaps;
-        PlayerPrefs.SetInt(STAT_TAPS, total);
+        PlayerPrefs.SetInt(STAT_TAPS, PlayerPrefs.GetInt(STAT_TAPS, 0) + mSessionTaps);
+        if (GameConfig.IsBlitz())
+            PlayerPrefs.SetInt(STAT_TAPS_BLITZ, PlayerPrefs.GetInt(STAT_TAPS_BLITZ, 0) + mSessionTaps);
         PlayerPrefs.Save();
         mSessionTaps = 0;
     }
@@ -546,4 +554,13 @@ public class Sphere : MonoBehaviour
 
     public static int GetTotalTaps() { return PlayerPrefs.GetInt(STAT_TAPS, 0); }
     public static int GetTotalRuns() { return PlayerPrefs.GetInt(STAT_RUNS, 0); }
+
+    public static int GetBlitzTaps() { return PlayerPrefs.GetInt(STAT_TAPS_BLITZ, 0); }
+    public static int GetBlitzRuns() { return PlayerPrefs.GetInt(STAT_RUNS_BLITZ, 0); }
+    public static int GetBlitzObstacles() { return PlayerPrefs.GetInt(STAT_OBSTACLES_BLITZ, 0); }
+
+    public static void IncrementBlitzObstacles()
+    {
+        PlayerPrefs.SetInt(STAT_OBSTACLES_BLITZ, PlayerPrefs.GetInt(STAT_OBSTACLES_BLITZ, 0) + 1);
+    }
 }

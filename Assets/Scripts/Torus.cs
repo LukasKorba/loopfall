@@ -709,6 +709,8 @@ public class Torus : MonoBehaviour
 
                 if (destroyed)
                 {
+                    Sphere.IncrementBlitzObstacles();
+
                     // Points: 1HP = 10, 3HP = 20
                     int points = box.mMaxHitPoints >= 3 ? 20 : 10;
                     mScore += points;

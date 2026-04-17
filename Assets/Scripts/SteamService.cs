@@ -19,10 +19,12 @@ public class SteamService : MonoBehaviour, IPlatformService
     // ── LEADERBOARD HANDLES ──────────────────────────────────
 
     private SteamLeaderboard_t mLBPureHell;
+    private SteamLeaderboard_t mLBBlitz;
     private SteamLeaderboard_t mLBTapMaster;
     private SteamLeaderboard_t mLBRuns;
 
     private bool mLBPureHellReady = false;
+    private bool mLBBlitzReady = false;
     private bool mLBTapMasterReady = false;
     private bool mLBRunsReady = false;
 
@@ -31,6 +33,7 @@ public class SteamService : MonoBehaviour, IPlatformService
 
     // Callbacks
     private CallResult<LeaderboardFindResult_t> mFindPureHell;
+    private CallResult<LeaderboardFindResult_t> mFindBlitz;
     private CallResult<LeaderboardFindResult_t> mFindTapMaster;
     private CallResult<LeaderboardFindResult_t> mFindRuns;
     private CallResult<LeaderboardScoreUploaded_t> mUploadResult;
@@ -58,6 +61,7 @@ public class SteamService : MonoBehaviour, IPlatformService
         // Find leaderboards — Steam creates them if they don't exist
         // (must also be created in Steamworks partner site for production)
         mFindPureHell = CallResult<LeaderboardFindResult_t>.Create(OnFindPureHell);
+        mFindBlitz = CallResult<LeaderboardFindResult_t>.Create(OnFindBlitz);
         mFindTapMaster = CallResult<LeaderboardFindResult_t>.Create(OnFindTapMaster);
         mFindRuns = CallResult<LeaderboardFindResult_t>.Create(OnFindRuns);
         mUploadResult = CallResult<LeaderboardScoreUploaded_t>.Create(OnScoreUploaded);
@@ -66,6 +70,11 @@ public class SteamService : MonoBehaviour, IPlatformService
             ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
             ELeaderboardDisplayType.k_ELeaderboardDisplayTypeNumeric);
         mFindPureHell.Set(call1);
+
+        var call2 = SteamUserStats.FindOrCreateLeaderboard("Blitz_HighScore",
+            ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
+            ELeaderboardDisplayType.k_ELeaderboardDisplayTypeNumeric);
+        mFindBlitz.Set(call2);
 
         var call3 = SteamUserStats.FindOrCreateLeaderboard("TapMaster_Total",
             ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
@@ -97,6 +106,17 @@ public class SteamService : MonoBehaviour, IPlatformService
             mLBPureHell = result.m_hSteamLeaderboard;
             mLBPureHellReady = true;
             Debug.Log("[Steam] Pure Hell leaderboard found");
+            FlushPending();
+        }
+    }
+
+    void OnFindBlitz(LeaderboardFindResult_t result, bool ioFailure)
+    {
+        if (!ioFailure && result.m_bLeaderboardFound == 1)
+        {
+            mLBBlitz = result.m_hSteamLeaderboard;
+            mLBBlitzReady = true;
+            Debug.Log("[Steam] Blitz leaderboard found");
             FlushPending();
         }
     }
@@ -175,8 +195,17 @@ public class SteamService : MonoBehaviour, IPlatformService
 #if STEAMWORKS
         if (score <= 0 || !SteamManager.Initialized) return;
 
-        UploadScore(mLBPureHell, mLBPureHellReady, score);
-        CheckPureHellAchievements(score);
+        if (GameConfig.IsBlitz())
+        {
+            UploadScore(mLBBlitz, mLBBlitzReady, score);
+            // Blitz achievements will be wired separately — gate-based Pure Hell
+            // milestones must NOT fire from Blitz points.
+        }
+        else
+        {
+            UploadScore(mLBPureHell, mLBPureHellReady, score);
+            CheckPureHellAchievements(score);
+        }
 #endif
     }
 
