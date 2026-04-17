@@ -47,6 +47,15 @@ public class Sphere : MonoBehaviour
     private ScoreSync mScoreSync;
     private GameAudio mAudio;
 
+    // Blitz smooth-restart: ball stays kinematic while Torus runs its dismiss→spawn
+    // animation. Update() polls Torus.IsBlitzTransitionActive() and restores physics
+    // once it flips back to None.
+    private bool mBlitzTransitionPending;
+    private Vector3 mBlitzCamLerpStartPos;
+    private Quaternion mBlitzCamLerpStartRot;
+    private float mBlitzCamLerpTimer;
+    private const float BLITZ_CAM_LERP_DURATION = 0.45f; // matches Torus dismiss phase
+
     // Persistent stats. Cross-mode counters (STAT_TAPS / STAT_RUNS) stay authoritative
     // for career leaderboards (TapMaster_Total, Runs_Total) and cross-mode achievements
     // (ACH_DEDICATED etc.). Mode-specific counters were added when Blitz got its own
@@ -122,6 +131,34 @@ public class Sphere : MonoBehaviour
         // Blitz shield visual toggle
         if (mShieldVisual != null)
             mShieldVisual.SetActive(mTorusScript.IsShieldActive());
+
+        // Blitz transition: un-lean the camera in parallel with Torus's dismiss animation.
+        if (mBlitzTransitionPending && mBlitzCamLerpTimer < BLITZ_CAM_LERP_DURATION)
+        {
+            mBlitzCamLerpTimer += Time.deltaTime;
+            float ct = Mathf.Clamp01(mBlitzCamLerpTimer / BLITZ_CAM_LERP_DURATION);
+            float ce = ct < 0.5f ? 4f * ct * ct * ct : 1f - Mathf.Pow(-2f * ct + 2f, 3f) * 0.5f;
+            mCamera.transform.position = Vector3.Lerp(mBlitzCamLerpStartPos, mCameraStartPos, ce);
+            mCamera.transform.rotation = Quaternion.Slerp(mBlitzCamLerpStartRot, mCameraStartRot, ce);
+        }
+
+        // Blitz transition finish-up — restore physics once the dismiss→spawn cycle ends.
+        if (mBlitzTransitionPending && !mTorusScript.IsBlitzTransitionActive())
+        {
+            mBlitzTransitionPending = false;
+            mRigid.isKinematic = false;
+            mRigid.linearDamping = mOriginalDrag;
+            mRigid.angularDamping = mOriginalAngularDrag;
+            mRigid.linearVelocity = Vector3.zero;
+            mRigid.angularVelocity = Vector3.zero;
+            transform.position = mBeginPosition;
+            mPrevPosition = transform.position;
+            mCamera.transform.position = mCameraStartPos;
+            mCamera.transform.rotation = mCameraStartRot;
+        }
+
+        // Suppress input while Torus is mid-transition (ball is kinematic, world is animating).
+        if (mBlitzTransitionPending) return;
 
         // Title state — tap anywhere to start
         if (mWaitingToStart)
@@ -383,22 +420,43 @@ public class Sphere : MonoBehaviour
 
         if (GameConfig.IsBlitz())
         {
-            mTorusScript.Reset();
-            if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
-        }
-        else
-        {
-            bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
+            // Smooth transition — Torus animates obstacles out + slides the ball back
+            // to the tube bottom, then spawns fresh obstacles ahead. mAngle and torus
+            // rotation are preserved so there's no visual snap-back to the origin.
+            mGameOver = false;
+            mRigid.linearVelocity = Vector3.zero;
+            mRigid.angularVelocity = Vector3.zero;
+            mRigid.isKinematic = true;
+            mBlitzTransitionPending = true;
 
-            if (mRewindSystem != null)
+            mBlitzCamLerpStartPos = mCamera.transform.position;
+            mBlitzCamLerpStartRot = mCamera.transform.rotation;
+            mBlitzCamLerpTimer = 0f;
+
+            mTorusScript.StartBlitzTransition(transform.position, mBeginPosition);
+
+            DeathEffect death = mCamera.GetComponent<DeathEffect>();
+            if (death != null) death.ResetShake();
+
+            CameraSwing swing = mCamera.GetComponent<CameraSwing>();
+            if (swing != null)
             {
-                mRewindSystem.ResetSystem();
-                mRewindSystem.StartRecording();
+                swing.mDiff = Vector3.zero;
+                swing.ResetSpring();
             }
-
-            if (!rewindHandled)
-                mTorusScript.Reset();
+            return;
         }
+
+        bool rewindHandled = mRewindSystem != null && mRewindSystem.IsComplete();
+
+        if (mRewindSystem != null)
+        {
+            mRewindSystem.ResetSystem();
+            mRewindSystem.StartRecording();
+        }
+
+        if (!rewindHandled)
+            mTorusScript.Reset();
 
         if (mSplineController == null)
             mTorusScript.SetPaused(false);
@@ -423,15 +481,15 @@ public class Sphere : MonoBehaviour
             mCamera.transform.rotation = mCameraStartRot;
         }
 
-        DeathEffect death = mCamera.GetComponent<DeathEffect>();
-        if (death != null)
-            death.ResetShake();
+        DeathEffect death2 = mCamera.GetComponent<DeathEffect>();
+        if (death2 != null)
+            death2.ResetShake();
 
-        CameraSwing swing = mCamera.GetComponent<CameraSwing>();
-        if (swing != null)
+        CameraSwing swing2 = mCamera.GetComponent<CameraSwing>();
+        if (swing2 != null)
         {
-            swing.mDiff = Vector3.zero;
-            swing.ResetSpring();
+            swing2.mDiff = Vector3.zero;
+            swing2.ResetSpring();
         }
 
         SplineCameraFollow splineCam = mCamera.GetComponent<SplineCameraFollow>();
@@ -504,7 +562,7 @@ public class Sphere : MonoBehaviour
             mNormal = collision.contacts[0].normal;
         }
 
-        if (!mGameOver && !mDebugGodMode && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar" || collision.gameObject.name == "BlitzDividerBar"))
+        if (!mGameOver && !mDebugGodMode && !mBlitzTransitionPending && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar" || collision.gameObject.name == "BlitzDividerBar"))
         {
             // Blitz shield absorbs one lethal hit
             if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())

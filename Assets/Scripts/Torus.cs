@@ -94,6 +94,20 @@ public class Torus : MonoBehaviour
     private BlitzSpawnKind mPrevSpawnKind = BlitzSpawnKind.None;
     private bool mLastSpawnCommitsSide = false;
 
+    // Run-to-run smooth transition (replaces the old hard reset). Phase A scales out
+    // everything on screen + slides the ball to the tube bottom; Phase B destroys +
+    // respawns fresh obstacles ahead. mAngle and torus rotation are preserved so the
+    // world continues from wherever the previous run ended.
+    public enum BlitzTransition { None, Dismissing, Spawning }
+    private BlitzTransition mBlitzTransition = BlitzTransition.None;
+    private float mBlitzTransitionTimer;
+    private Vector3 mBlitzTransitionBallStart;
+    private Vector3 mBlitzTransitionBallEnd;
+    private List<Transform> mDismissTargets;
+    private List<Vector3> mDismissStartScales;
+    private const float BLITZ_DISMISS_DURATION = 0.45f;
+    private const float BLITZ_SPAWN_DURATION = 0.5f;
+
     // Blitz orbs (upgrade pickups)
     public Material mBlitzOrbGunMat;
     public Material mBlitzOrbCadencyMat;
@@ -142,6 +156,12 @@ public class Torus : MonoBehaviour
 
     void Update()
     {
+        if (mBlitzTransition != BlitzTransition.None)
+        {
+            UpdateBlitzTransition();
+            return;
+        }
+
         if (mGameOver || mPaused)
             return;
 
@@ -384,6 +404,143 @@ public class Torus : MonoBehaviour
 
         mScoreWithoutInteraction = 0;
         ResetSwing();
+    }
+
+    // ── BLITZ RUN-TO-RUN TRANSITION ──────────────────────────
+    // Called by Sphere.DoReset (Blitz mode only). The world doesn't reset to mAngle=0;
+    // instead we dismiss what's visible, slide the ball back to the tube bottom, and
+    // spawn fresh obstacles ahead at the current angle. Score and upgrades still reset.
+
+    public bool IsBlitzTransitionActive() { return mBlitzTransition != BlitzTransition.None; }
+
+    public void StartBlitzTransition(Vector3 ballStart, Vector3 ballEnd)
+    {
+        if (!GameConfig.IsBlitz()) return;
+
+        mBlitzTransition = BlitzTransition.Dismissing;
+        mBlitzTransitionTimer = 0f;
+        mBlitzTransitionBallStart = ballStart;
+        mBlitzTransitionBallEnd = ballEnd;
+
+        mPaused = true;
+        mGameOver = false;
+
+        if (mAudio != null) mAudio.PlayBlitzWipeOut();
+
+        // Snapshot every visible obstacle's transform + scale so we can lerp it to zero.
+        mDismissTargets = new List<Transform>();
+        mDismissStartScales = new List<Vector3>();
+        CollectDismissTarget(mBlitzBoxes);
+        CollectDismissTarget(mBlitzGates);
+        CollectDismissTarget(mBlitzDividers);
+        CollectDismissTarget(mBlitzOrbs);
+
+        // Kill the beam during the wipe so there's no stray plasma firing into emptiness.
+        if (mBlitzBeam != null) mBlitzBeam.SetActive(false);
+    }
+
+    void CollectDismissTarget<T>(List<T> items) where T : class
+    {
+        if (items == null) return;
+        foreach (T item in items)
+        {
+            GameObject go = null;
+            if (item is BlitzBox b) go = b.mGameObject;
+            else if (item is BlitzGate g) go = g.mGameObject;
+            else if (item is BlitzDivider d) go = d.mGameObject;
+            else if (item is BlitzOrb o) go = o.mGameObject;
+            if (go != null && go.activeSelf)
+            {
+                mDismissTargets.Add(go.transform);
+                mDismissStartScales.Add(go.transform.localScale);
+            }
+        }
+    }
+
+    void UpdateBlitzTransition()
+    {
+        mBlitzTransitionTimer += Time.deltaTime;
+
+        if (mBlitzTransition == BlitzTransition.Dismissing)
+        {
+            float t = Mathf.Clamp01(mBlitzTransitionTimer / BLITZ_DISMISS_DURATION);
+            float s = 1f - (t * t); // ease-in quadratic → snap shut at the end
+
+            for (int i = 0; i < mDismissTargets.Count; i++)
+            {
+                if (mDismissTargets[i] != null)
+                    mDismissTargets[i].localScale = mDismissStartScales[i] * s;
+            }
+
+            if (mBallTransform != null)
+            {
+                float bt = t < 0.5f ? 4f * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 3f) * 0.5f;
+                mBallTransform.position = Vector3.Lerp(mBlitzTransitionBallStart, mBlitzTransitionBallEnd, bt);
+            }
+
+            if (t >= 1f) EnterBlitzSpawnPhase();
+        }
+        else // Spawning — fresh obstacles already in; hold for audio/visual breathing room
+        {
+            if (mBlitzTransitionTimer >= BLITZ_SPAWN_DURATION)
+            {
+                mBlitzTransition = BlitzTransition.None;
+                mPaused = false;
+                if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+            }
+        }
+    }
+
+    void EnterBlitzSpawnPhase()
+    {
+        if (mBlitzBoxes != null)
+        {
+            foreach (BlitzBox box in mBlitzBoxes) Destroy(box.mGameObject);
+            mBlitzBoxes.Clear();
+        }
+        if (mBlitzGates != null)
+        {
+            foreach (BlitzGate gate in mBlitzGates) Destroy(gate.mGameObject);
+            mBlitzGates.Clear();
+        }
+        if (mBlitzDividers != null)
+        {
+            foreach (BlitzDivider div in mBlitzDividers) Destroy(div.mGameObject);
+            mBlitzDividers.Clear();
+        }
+        if (mBlitzOrbs != null)
+        {
+            foreach (BlitzOrb orb in mBlitzOrbs) Destroy(orb.mGameObject);
+            mBlitzOrbs.Clear();
+        }
+
+        // Run-local state resets. mAngle, transform.rotation, mRounds, mAngleScore are
+        // preserved — the world continues from wherever the ball died.
+        mBlitzTimer = 0f;
+        mAngleStep = BLITZ_BASE_SPEED;
+        mGunOrbCount = 0;
+        mCadencyOrbCount = 0;
+        mShieldOrbCount = 0;
+        mGunLevel = 0;
+        mCadencyLevel = 0;
+        mShieldLevel = 0;
+        mShieldActive = false;
+        if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(0);
+
+        mScore = 0;
+        mScoreLbl.text = mScore.ToString();
+
+        mLastBlitzAngle = mAngle + 10f;
+        mLastSpawnKind = BlitzSpawnKind.None;
+        mPrevSpawnKind = BlitzSpawnKind.None;
+        mLastSpawnCommitsSide = false;
+
+        UpdateBlitzObstacles();
+
+        mBlitzTransition = BlitzTransition.Spawning;
+        mBlitzTransitionTimer = 0f;
+
+        if (mAudio != null) mAudio.PlayBlitzWipeIn();
     }
 
     public void UserInteraction()
@@ -1096,7 +1253,6 @@ public class Torus : MonoBehaviour
         switch (type)
         {
             case BlitzOrb.OrbType.Gun:
-                if (mAudio != null) mAudio.PlayOrbGun();
                 mGunOrbCount++;
                 if (mGunOrbCount == ORBS_PER_UPGRADE)
                 {
@@ -1108,9 +1264,12 @@ public class Torus : MonoBehaviour
                     ApplyGunUpgrade(2);
                     if (mAudio != null) mAudio.PlayVoiceCannonFull();
                 }
+                else
+                {
+                    if (mAudio != null) mAudio.PlayOrbGun();
+                }
                 break;
             case BlitzOrb.OrbType.Cadency:
-                if (mAudio != null) mAudio.PlayOrbCadency();
                 mCadencyOrbCount++;
                 if (mCadencyOrbCount == ORBS_PER_UPGRADE)
                 {
@@ -1122,14 +1281,21 @@ public class Torus : MonoBehaviour
                     ApplyCadencyUpgrade(2);
                     if (mAudio != null) mAudio.PlayVoiceCadenceFull();
                 }
+                else
+                {
+                    if (mAudio != null) mAudio.PlayOrbCadency();
+                }
                 break;
             case BlitzOrb.OrbType.Shield:
-                if (mAudio != null) mAudio.PlayOrbShield();
                 mShieldOrbCount++;
                 if (mShieldOrbCount == ORBS_PER_UPGRADE)
                 {
                     ApplyShieldUpgrade();
                     if (mAudio != null) mAudio.PlayVoiceShieldOn();
+                }
+                else
+                {
+                    if (mAudio != null) mAudio.PlayOrbShield();
                 }
                 break;
         }

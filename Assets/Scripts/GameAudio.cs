@@ -98,6 +98,8 @@ public class GameAudio : MonoBehaviour
     private AudioClip sentinelKillClip;
     private AudioClip shieldAbsorbClip;
     private AudioClip[] strandPeelClips; // indexed by peel order (0=first, 1=second, 2=destroy)
+    private AudioClip wipeOutClip;
+    private AudioClip wipeInClip;
 
     // Blitz upgrade voice lines
     private AudioClip voiceCannonUpClip;
@@ -226,6 +228,8 @@ public class GameAudio : MonoBehaviour
         sentinelKillClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_sentinel_kill");
         shieldAbsorbClip     = Resources.Load<AudioClip>("Audio/Blitz/sfx_shield_absorb");
         strandPeelClips      = LoadVariants("Audio/Blitz/sfx_strand_peel_v1", "Audio/Blitz/sfx_strand_peel_v2", "Audio/Blitz/sfx_strand_peel_v3");
+        wipeOutClip          = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_wipe_out");
+        wipeInClip           = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_wipe_in");
 
         voiceCannonUpClip    = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_up_0");
         voiceCannonFullClip  = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_full_0");
@@ -608,6 +612,16 @@ public class GameAudio : MonoBehaviour
     public void PlayBlitzDeath()
     {
         if (blitzDeathClip != null) sfxSource.PlayOneShot(blitzDeathClip);
+    }
+
+    public void PlayBlitzWipeOut()
+    {
+        if (wipeOutClip != null) sfxSource.PlayOneShot(wipeOutClip);
+    }
+
+    public void PlayBlitzWipeIn()
+    {
+        if (wipeInClip != null) sfxSource.PlayOneShot(wipeInClip);
     }
 
     public void PlayVoiceCannonUp()    { PlayBlitzVoice(voiceCannonUpClip); }
