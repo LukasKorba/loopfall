@@ -47,6 +47,18 @@ public class Sphere : MonoBehaviour
     private ScoreSync mScoreSync;
     private GameAudio mAudio;
 
+    // Mode-commit startup sequence: tap a mode button → title dismisses → obstacles
+    // spawn → torus unpauses. Ball is held kinematic through Dismissing + Spawning so
+    // the player sees a clear three-beat opening instead of everything happening at
+    // once. tvOS remote taps buffer their direction into mPendingStartForce.
+    private enum StartPhase { Idle, Dismissing, Spawning, Running }
+    private StartPhase mStartPhase = StartPhase.Idle;
+    private float mStartPhaseTimer;
+    private Vector3 mPendingStartForce;
+    private bool mHasPendingStartForce;
+    private const float START_DISMISS_DURATION = 0.5f; // matches ScoreSync.TITLE_FADE_DURATION
+    private const float START_SPAWN_DURATION = 0.6f;
+
     // Blitz smooth-restart: ball stays kinematic while Torus runs its dismiss→spawn
     // animation. Update() polls Torus.IsBlitzTransitionActive() and restores physics
     // once it flips back to None.
@@ -165,7 +177,8 @@ public class Sphere : MonoBehaviour
 
         // Title state — the 2-mode picker owns input. Mode buttons call StartGame via
         // ScoreSync after setting GameConfig.ActiveMode. tvOS has no on-screen picker,
-        // so the remote/gamepad commits to the last-active mode directly.
+        // so the remote/gamepad commits to the last-active mode directly. The first
+        // force is buffered and applied at the end of the startup sequence.
         if (mWaitingToStart)
         {
 #if UNITY_TVOS
@@ -173,7 +186,8 @@ public class Sphere : MonoBehaviour
             if (remoteTap != 0)
             {
                 StartGame();
-                ApplyForceWithForwardVector(GetForwardVector(remoteTap < 0 ? 1f : -1f));
+                mPendingStartForce = GetForwardVector(remoteTap < 0 ? 1f : -1f);
+                mHasPendingStartForce = true;
             }
             else
             {
@@ -181,10 +195,19 @@ public class Sphere : MonoBehaviour
                 if (padTap != 0)
                 {
                     StartGame();
-                    ApplyForceWithForwardVector(GetForwardVector(padTap < 0 ? 1f : -1f));
+                    mPendingStartForce = GetForwardVector(padTap < 0 ? 1f : -1f);
+                    mHasPendingStartForce = true;
                 }
             }
 #endif
+            return;
+        }
+
+        // Startup sequence: hold gameplay input/physics while the title dismisses and
+        // obstacles materialize. TickStartSequence flips us to Running when done.
+        if (IsStartSequencing())
+        {
+            TickStartSequence();
             return;
         }
 
@@ -500,29 +523,65 @@ public class Sphere : MonoBehaviour
     public bool IsWaiting() { return mWaitingToStart; }
     public bool IsGameOver() { return mGameOver; }
 
-    /// <summary>Start game from UI button (mode selection). Spawns obstacles for the committed mode.</summary>
+    /// <summary>Commit to the selected mode and kick off the three-phase startup
+    /// sequence: title dismiss → obstacle spawn → torus rotate. Actual Reset and
+    /// SetPaused fire later from TickStartSequence as each phase completes.</summary>
     public void StartGame()
     {
         if (!mWaitingToStart) return;
-        mWaitingToStart = false;
+        if (mStartPhase != StartPhase.Idle) return; // already sequencing
+        mWaitingToStart = false; // ScoreSync will transition Title→Playing; title fade begins
+        mStartPhase = StartPhase.Dismissing;
+        mStartPhaseTimer = 0f;
+    }
 
-        // Torus was empty on title — spawn obstacles for the now-committed mode.
-        mTorusScript.Reset(true);
+    bool IsStartSequencing()
+    {
+        return mStartPhase == StartPhase.Dismissing || mStartPhase == StartPhase.Spawning;
+    }
 
-        if (mSplineController == null)
-            mTorusScript.SetPaused(false);
+    void TickStartSequence()
+    {
+        mStartPhaseTimer += Time.deltaTime;
 
-        if (GameConfig.IsBlitz())
+        if (mStartPhase == StartPhase.Dismissing && mStartPhaseTimer >= START_DISMISS_DURATION)
         {
-            if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+            // Phase 2 — spawn obstacles for the committed mode. Torus still paused.
+            // Spawn-in anim matches the post-death materialize (staggered _SpawnProgress 0→1).
+            mTorusScript.Reset(true);
+            mTorusScript.BeginInitialSpawnAnim();
+            mStartPhase = StartPhase.Spawning;
+            mStartPhaseTimer = 0f;
         }
-        else
+        else if (mStartPhase == StartPhase.Spawning && mStartPhaseTimer >= START_SPAWN_DURATION)
         {
-            if (mRewindSystem != null)
-                mRewindSystem.StartRecording();
-        }
+            // Phase 3 — world wakes up: torus rotates, mode systems arm, stats tick.
+            if (mSplineController == null)
+                mTorusScript.SetPaused(false);
 
-        IncrementRuns();
+            if (GameConfig.IsBlitz())
+            {
+                if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+                if (GameConfig.BlitzDebugMaxPower)
+                    mTorusScript.DebugApplyMaxBlitzPower();
+            }
+            else
+            {
+                if (mRewindSystem != null)
+                    mRewindSystem.StartRecording();
+            }
+
+            IncrementRuns();
+
+            if (mHasPendingStartForce)
+            {
+                ApplyForceWithForwardVector(mPendingStartForce);
+                mHasPendingStartForce = false;
+                mPendingStartForce = Vector3.zero;
+            }
+
+            mStartPhase = StartPhase.Running;
+        }
     }
 
     /// <summary>Return to title state — clears torus, parks ball, pauses. Called from back-to-modes button.</summary>
@@ -531,6 +590,9 @@ public class Sphere : MonoBehaviour
         mWaitingToStart = true;
         mGameOver = false;
         mBlitzTransitionPending = false;
+        mStartPhase = StartPhase.Idle;
+        mStartPhaseTimer = 0f;
+        mHasPendingStartForce = false;
 
         // Clear torus obstacles without respawning — stays empty until next mode commit.
         mTorusScript.Reset(false);

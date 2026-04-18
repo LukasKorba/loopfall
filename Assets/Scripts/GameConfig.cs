@@ -12,6 +12,11 @@ public static class GameConfig
 {
     public static GameModeType ActiveMode = GameModeType.PureHell;
 
+    // DEBUG: start Blitz runs at max gun (three beams) + max cadency.
+    // Shield is intentionally not granted so death is still possible.
+    // Wired from SceneSetup's inspector flag; leave false for ship builds.
+    public static bool BlitzDebugMaxPower = false;
+
     public static string GetScoresKey() { return GetScoresKey(ActiveMode); }
     public static string GetScoresKey(GameModeType mode)
     {

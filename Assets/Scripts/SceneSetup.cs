@@ -17,6 +17,9 @@ public class SceneSetup : MonoBehaviour
     public bool halfTubeOnly = true;
     // MANUAL PARAM: Use spline-extruded track instead of fixed torus
     public bool useSplineTrack = false;
+    // DEBUG: start Blitz runs at max gun + max cadency (shield excluded) for
+    // stress-testing late-game pacing. Applied at Phase 3 of the start sequence.
+    public bool blitzDebugMaxPower = false;
 
     // Direct references — ensures shaders are included in builds
     public Shader depthHueShiftRef;
@@ -30,6 +33,8 @@ public class SceneSetup : MonoBehaviour
 
     void Awake()
     {
+        GameConfig.BlitzDebugMaxPower = blitzDebugMaxPower;
+
         // Force highest graphics tier — Tier2 on iOS disables HDR, killing emission glow
         Graphics.activeTier = UnityEngine.Rendering.GraphicsTier.Tier3;
 

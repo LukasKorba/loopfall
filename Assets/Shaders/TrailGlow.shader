@@ -4,6 +4,7 @@ Shader "Loopfall/TrailGlow"
     {
         _Color ("Color", Color) = (1, 1, 1, 1)
         _Intensity ("Glow Intensity", Range(0, 5)) = 1.5
+        _SpawnProgress ("Spawn Progress", Range(0, 1)) = 1
     }
     SubShader
     {
@@ -35,6 +36,7 @@ Shader "Loopfall/TrailGlow"
 
             fixed4 _Color;
             float _Intensity;
+            float _SpawnProgress;
 
             v2f vert(appdata v)
             {
@@ -46,8 +48,8 @@ Shader "Loopfall/TrailGlow"
 
             fixed4 frag(v2f i) : SV_Target
             {
-                fixed4 c = i.color * _Color * _Intensity;
-                c.a = i.color.a * _Color.a;
+                fixed4 c = i.color * _Color * _Intensity * _SpawnProgress;
+                c.a = i.color.a * _Color.a * _SpawnProgress;
                 return c;
             }
             ENDCG
