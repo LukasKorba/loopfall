@@ -412,6 +412,33 @@ public class SceneSetup : MonoBehaviour
         // Torus script
         Torus torusScript = torusObj.AddComponent<Torus>();
 
+        // Full-tube overlay — the "other" half of the tube, invisible by default.
+        // Blitz mode drives _RevealProgress via MaterialPropertyBlock to fade it in
+        // for spectacle sections. No collider, no collisions — pure visual.
+        if (halfTubeOnly)
+        {
+            GameObject overlay = new GameObject("TorusFullTubeOverlay");
+            overlay.transform.parent = torusObj.transform;
+            overlay.transform.localPosition = Vector3.zero;
+            overlay.transform.localRotation = Quaternion.identity;
+
+            MeshFilter omf = overlay.AddComponent<MeshFilter>();
+            omf.mesh = GenerateTorusArcMesh(Mathf.PI * 0.5f, Mathf.PI);
+
+            MeshRenderer omr = overlay.AddComponent<MeshRenderer>();
+            omr.material = trackMaterial;
+            omr.receiveShadows = true;
+            omr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            // Start invisible — Torus drives the fade when a section triggers.
+            MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+            mpb.SetFloat("_RevealProgress", 0f);
+            omr.SetPropertyBlock(mpb);
+            omr.enabled = false;
+
+            torusScript.mFullTubeOverlayRenderer = omr;
+        }
+
         // Edge rails (deadly boundaries)
         CreateEdgeRails(torusObj);
 
@@ -867,6 +894,13 @@ public class SceneSetup : MonoBehaviour
 
     Mesh GenerateTorusMesh()
     {
+        float minStart = halfTubeOnly ? -Mathf.PI * 0.5f : 0;
+        float minRange = halfTubeOnly ? Mathf.PI : Mathf.PI * 2;
+        return GenerateTorusArcMesh(minStart, minRange);
+    }
+
+    Mesh GenerateTorusArcMesh(float minStart, float minRange)
+    {
         var verts = new System.Collections.Generic.List<Vector3>();
         var tris = new System.Collections.Generic.List<int>();
         var normals = new System.Collections.Generic.List<Vector3>();
@@ -884,9 +918,6 @@ public class SceneSetup : MonoBehaviour
 
             for (int j = 0; j < minorSegments; j++)
             {
-                float minStart = halfTubeOnly ? -Mathf.PI * 0.5f : 0;
-                float minRange = halfTubeOnly ? Mathf.PI : Mathf.PI * 2;
-
                 float mi0 = minStart + ((float)j / minorSegments) * minRange;
                 float mi1 = minStart + ((float)(j + 1) / minorSegments) * minRange;
 

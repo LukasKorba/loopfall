@@ -26,6 +26,7 @@ Shader "Loopfall/TrackGrid"
         _SparkColor1 ("Spark Color 1", Color) = (0.2, 0.8, 1.0, 1)
         _SparkColor2 ("Spark Color 2", Color) = (1.0, 0.4, 0.8, 1)
         _SparkColor3 ("Spark Color 3", Color) = (0.3, 1.0, 0.5, 1)
+        _RevealProgress ("Reveal Progress", Range(0, 1)) = 1
     }
     SubShader
     {
@@ -68,6 +69,7 @@ Shader "Loopfall/TrackGrid"
         fixed4 _SparkColor1;
         fixed4 _SparkColor2;
         fixed4 _SparkColor3;
+        float _RevealProgress;
 
         // Score pulse — set via Shader.SetGlobal from C#
         float _ScorePulseTime;
@@ -247,8 +249,12 @@ Shader "Loopfall/TrackGrid"
             // Base color with per-tile vertex color variation
             float3 base = _BaseColor.rgb * IN.vertColor.rgb;
 
-            o.Albedo = base;
-            o.Emission = gridCol * intensity * pulse * IN.vertColor.a;
+            // Reveal — per-renderer fade used by the Blitz full-tube overlay mesh.
+            // Default is 1.0 so the main torus is unaffected. At 0 the overlay is
+            // effectively invisible (albedo clipped to near-black, emission off).
+            float reveal = _RevealProgress;
+            o.Albedo = base * reveal;
+            o.Emission = gridCol * intensity * pulse * IN.vertColor.a * reveal;
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness + totalGrid * 0.2;
             o.Alpha = 1.0;

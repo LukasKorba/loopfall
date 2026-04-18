@@ -124,6 +124,21 @@ public class Torus : MonoBehaviour
     private GameAudio mAudio;
     private const int ORBS_PER_UPGRADE = 5;
 
+    // Full-tube spectacle — Blitz-only sections where the upper tube fades in as pure
+    // ambient decoration (ball physics stays bound to the half-tube, so the ceiling is
+    // purely visual). No gate markers — players read portal rings as deadly obstacles
+    // and that false threat cost more than it gave. The tube just appears and dissolves.
+    public MeshRenderer mFullTubeOverlayRenderer; // wired by SceneSetup
+    private float mFullTubeSectionStart = -9999f;
+    private float mFullTubeSectionEnd = -9999f;
+    private bool mFullTubeActive;
+    private MaterialPropertyBlock mFullTubeBlock;
+    private static readonly int RevealProgressID = Shader.PropertyToID("_RevealProgress");
+    private const float FULL_TUBE_FADE_LEAD = 20f;
+    private float mFullTubeCooldown;
+    private bool mFullTubeFirstFired;
+    private const float FULL_TUBE_FIRST_AT_SECONDS = 40f;
+
     // Initial spawn-in animation — fades obstacles up via the Gate shader's
     // _SpawnProgress property, staggered, matching the post-death materialize
     // effect. Runs while Torus stays paused (before the first frame of motion).
@@ -198,6 +213,7 @@ public class Torus : MonoBehaviour
             AnimateBlitzDividers();
             AnimateBlitzBoxes();
             UpdateBlitzFireRate();
+            TickFullTubeSection();
             return;
         }
 
@@ -375,6 +391,7 @@ public class Torus : MonoBehaviour
         mBlitzDividers.Clear();
         foreach (BlitzOrb orb in mBlitzOrbs) Destroy(orb.mGameObject);
         mBlitzOrbs.Clear();
+        ClearFullTubeSection();
 
         // Blitz run state — always reset so leftover upgrades/levels never carry across
         // a mode switch or back-to-menu cycle.
@@ -477,6 +494,16 @@ public class Torus : MonoBehaviour
                     mDismissTargets[i].localScale = mDismissStartScales[i] * s;
             }
 
+            // Fade the full-tube ceiling with everything else so it doesn't freeze in
+            // place while the world scales out on death.
+            if (mFullTubeOverlayRenderer != null && mFullTubeOverlayRenderer.enabled)
+            {
+                if (mFullTubeBlock == null) mFullTubeBlock = new MaterialPropertyBlock();
+                mFullTubeBlock.Clear();
+                mFullTubeBlock.SetFloat(RevealProgressID, s);
+                mFullTubeOverlayRenderer.SetPropertyBlock(mFullTubeBlock);
+            }
+
             if (mBallTransform != null)
             {
                 float bt = t < 0.5f ? 4f * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 3f) * 0.5f;
@@ -518,6 +545,7 @@ public class Torus : MonoBehaviour
             foreach (BlitzOrb orb in mBlitzOrbs) Destroy(orb.mGameObject);
             mBlitzOrbs.Clear();
         }
+        ClearFullTubeSection();
 
         // Run-local state resets. mAngle, transform.rotation, mRounds, mAngleScore are
         // preserved — the world continues from wherever the ball died.
@@ -706,6 +734,11 @@ public class Torus : MonoBehaviour
     void SpawnNextBlitzObstacle()
     {
         float intensity = GetBlitzIntensity();
+
+        // Rare late-game spectacle — full-tube section. Purely visual; obstacles still
+        // spawn normally inside the section. Gated by intensity + cooldown so the "wow"
+        // moment stays rare.
+        TryFullTubeSection(intensity);
 
         // Onboarding: first 4 seconds are gentle so the player sees the auto-beam work.
         if (mBlitzTimer < 4f)
@@ -1236,8 +1269,10 @@ public class Torus : MonoBehaviour
                 {
                     Sphere.IncrementBlitzObstacles();
 
-                    // Points: 1HP = 10, 3HP = 20
-                    int points = box.mMaxHitPoints >= 3 ? 20 : 10;
+                    // 1HP destroy: 10 (unchanged). 3HP destroy: 30 (was 20) — plus the two
+                    // prior +5 chips each 3HP box earns on the way down = 40 total for a
+                    // full clear. Rewards sustained fire on sentinels/buttons.
+                    int points = box.mMaxHitPoints >= 3 ? 30 : 10;
                     mScore += points;
 
                     // Gate deactivation bonus
@@ -1277,11 +1312,15 @@ public class Torus : MonoBehaviour
                     int peelIndex = box.mMaxHitPoints - box.mHitPoints - 1;
                     if (mAudio != null) mAudio.PlayStrandPeel(peelIndex);
                     box.mLinkedGate.RemoveStrand();
+                    mScore += 5;
+                    mScoreLbl.text = mScore.ToString();
                 }
                 else if (box.mMaxHitPoints >= 3)
                 {
                     // Standalone sentinel took a non-lethal hit.
                     if (mAudio != null) mAudio.PlaySentinelHit();
+                    mScore += 5;
+                    mScoreLbl.text = mScore.ToString();
                 }
                 break;
             }
@@ -1292,11 +1331,11 @@ public class Torus : MonoBehaviour
 
     void SpawnBlitzOrb(float baseAngle)
     {
-        // Don't spawn if all tracks maxed
+        // Orbs spawn throughout the run — once fully upgraded they become pure +5 point
+        // bonuses, so there's still a reason to chase them.
         bool gunMaxed = mGunOrbCount >= ORBS_PER_UPGRADE * 2;
         bool cadencyMaxed = mCadencyOrbCount >= ORBS_PER_UPGRADE * 2;
         bool shieldMaxed = mShieldOrbCount >= ORBS_PER_UPGRADE;
-        if (gunMaxed && cadencyMaxed && shieldMaxed) return;
 
         BlitzOrb.OrbType type = PickOrbType(gunMaxed, cadencyMaxed, shieldMaxed);
         Material mat = type == BlitzOrb.OrbType.Gun ? mBlitzOrbGunMat
@@ -1318,6 +1357,8 @@ public class Torus : MonoBehaviour
         Vector3 orbCenter = orb.GetWorldCenter();
         orb.StartCollectedFade();
         OnOrbCollected(orb.mType);
+        mScore += 5;
+        mScoreLbl.text = mScore.ToString();
         LightHaptic();
         if (mScoreSync != null)
         {
@@ -1328,7 +1369,17 @@ public class Torus : MonoBehaviour
 
     BlitzOrb.OrbType PickOrbType(bool gunMaxed, bool cadencyMaxed, bool shieldMaxed)
     {
-        // Weight toward incomplete tracks
+        // When all tracks are maxed the orb is a pure point bonus — pick uniformly so
+        // players still see color/type variety instead of an infinite shield stream.
+        if (gunMaxed && cadencyMaxed && shieldMaxed)
+        {
+            int pick = Random.Range(0, 3);
+            if (pick == 0) return BlitzOrb.OrbType.Gun;
+            if (pick == 1) return BlitzOrb.OrbType.Cadency;
+            return BlitzOrb.OrbType.Shield;
+        }
+
+        // Otherwise weight toward incomplete tracks.
         float gW = gunMaxed ? 0f : 1f;
         float cW = cadencyMaxed ? 0f : 1f;
         float sW = shieldMaxed ? 0f : 1f;
@@ -1372,6 +1423,11 @@ public class Torus : MonoBehaviour
         switch (type)
         {
             case BlitzOrb.OrbType.Gun:
+                if (mGunOrbCount >= ORBS_PER_UPGRADE * 2)
+                {
+                    if (mAudio != null) mAudio.PlayOrbGun();
+                    break;
+                }
                 mGunOrbCount++;
                 if (mGunOrbCount == ORBS_PER_UPGRADE)
                 {
@@ -1389,6 +1445,11 @@ public class Torus : MonoBehaviour
                 }
                 break;
             case BlitzOrb.OrbType.Cadency:
+                if (mCadencyOrbCount >= ORBS_PER_UPGRADE * 2)
+                {
+                    if (mAudio != null) mAudio.PlayOrbCadency();
+                    break;
+                }
                 mCadencyOrbCount++;
                 if (mCadencyOrbCount == ORBS_PER_UPGRADE)
                 {
@@ -1406,6 +1467,11 @@ public class Torus : MonoBehaviour
                 }
                 break;
             case BlitzOrb.OrbType.Shield:
+                if (mShieldOrbCount >= ORBS_PER_UPGRADE)
+                {
+                    if (mAudio != null) mAudio.PlayOrbShield();
+                    break;
+                }
                 mShieldOrbCount++;
                 if (mShieldOrbCount == ORBS_PER_UPGRADE)
                 {
@@ -1543,5 +1609,89 @@ public class Torus : MonoBehaviour
         mShieldLevel = 0;
         mShieldOrbCount = 0;
         return true;
+    }
+
+    // ── FULL-TUBE SPECTACLE ─────────────────────────────────
+    // Blitz only. A planner-scheduled "section" [start, end] closes the tube into a
+    // full ring for spectacle. No gameplay effect — obstacles still live in the
+    // playable half, ball still rides gravity. Fades in/out as the ball approaches
+    // each portal edge.
+
+    void TickFullTubeSection()
+    {
+        if (mFullTubeCooldown > 0f) mFullTubeCooldown -= Time.deltaTime;
+        if (mFullTubeBlock == null) mFullTubeBlock = new MaterialPropertyBlock();
+
+        float reveal = 0f;
+        if (mFullTubeActive)
+        {
+            float a = mAngle;
+            if (a < mFullTubeSectionStart - FULL_TUBE_FADE_LEAD)
+                reveal = 0f;
+            else if (a < mFullTubeSectionStart)
+                reveal = Mathf.InverseLerp(mFullTubeSectionStart - FULL_TUBE_FADE_LEAD, mFullTubeSectionStart, a);
+            else if (a < mFullTubeSectionEnd)
+                reveal = 1f;
+            else if (a < mFullTubeSectionEnd + FULL_TUBE_FADE_LEAD)
+                reveal = 1f - Mathf.InverseLerp(mFullTubeSectionEnd, mFullTubeSectionEnd + FULL_TUBE_FADE_LEAD, a);
+            else
+            {
+                reveal = 0f;
+                mFullTubeActive = false;
+            }
+        }
+
+        if (mFullTubeOverlayRenderer == null) return;
+        bool show = reveal > 0.001f;
+        if (show != mFullTubeOverlayRenderer.enabled)
+            mFullTubeOverlayRenderer.enabled = show;
+        if (show)
+        {
+            mFullTubeBlock.Clear();
+            mFullTubeBlock.SetFloat(RevealProgressID, reveal);
+            mFullTubeOverlayRenderer.SetPropertyBlock(mFullTubeBlock);
+        }
+    }
+
+    void TryFullTubeSection(float intensity)
+    {
+        if (mFullTubeActive || mFullTubeCooldown > 0f) return;
+
+        // Guaranteed first showcase — fires once per run at ~40s so every player sees
+        // the feature in the first minute, not buried behind late-game probability.
+        bool forceFirst = !mFullTubeFirstFired && mBlitzTimer >= FULL_TUBE_FIRST_AT_SECONDS;
+
+        if (!forceFirst)
+        {
+            if (intensity < 0.25f) return; // basic unlock after first ~30s of run
+            // Chance ramps quickly: at 0.25 → 0%, at 0.5 (1min) → 7.5%, at 1.0 (2min) → 22%.
+            float chance = Mathf.Clamp01((intensity - 0.25f) * 0.30f);
+            if (Random.value > chance) return;
+        }
+
+        float sectionLength = Random.Range(60f, 100f);
+        float start = mLastBlitzAngle + Random.Range(12f, 20f);
+        float end = start + sectionLength;
+        TriggerFullTubeSection(start, end);
+        mFullTubeFirstFired = true;
+        mFullTubeCooldown = forceFirst ? 25f : 30f;
+    }
+
+    public void TriggerFullTubeSection(float startAngle, float endAngle)
+    {
+        if (mFullTubeActive) return;
+        mFullTubeSectionStart = startAngle;
+        mFullTubeSectionEnd = endAngle;
+        mFullTubeActive = true;
+    }
+
+    void ClearFullTubeSection()
+    {
+        mFullTubeActive = false;
+        mFullTubeSectionStart = -9999f;
+        mFullTubeSectionEnd = -9999f;
+        mFullTubeCooldown = 0f;
+        mFullTubeFirstFired = false;
+        if (mFullTubeOverlayRenderer != null) mFullTubeOverlayRenderer.enabled = false;
     }
 }
