@@ -154,7 +154,7 @@ MonoBehaviour:
   minorSegments: 16
   halfTubeOnly: 1
   useSplineTrack: 0
-  useBlitzMode: 1
+  blitzDebugMaxPower: 0
   depthHueShiftRef: {fileID: 4800000, guid: 26ee0fcdd804f4978ab6d317fe988e75, type: 3}
   gateShaderRef: {fileID: 4800000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
   blackHoleWarpRef: {fileID: 4800000, guid: 9b20835293459464eb02f234fd3e3457, type: 3}

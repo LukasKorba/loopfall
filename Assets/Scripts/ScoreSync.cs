@@ -120,6 +120,16 @@ public class ScoreSync : MonoBehaviour
     private int blitzLastGunLevel = -1;
     private int blitzLastCadencyLevel = -1;
 
+    // ── BLITZ KILL-STREAK HUD ───────────────────────────────
+    private RectTransform blitzStreakGroup;
+    private TMP_Text blitzStreakTierLabel;
+    private Image blitzStreakBarTrack;
+    private Image blitzStreakBarFill;
+    private int blitzLastStreakTier = -1;
+    private float blitzLastStreakBar = -1f;
+    private float blitzStreakFlashTimer = -1f;
+    private const float BLITZ_STREAK_FLASH_DURATION = 0.35f;
+
     // ── BLITZ ORB SPARKS ────────────────────────────────────
     private const int MAX_SPARKS = 6;
     private const float SPARK_DURATION = 0.45f;
@@ -773,6 +783,9 @@ public class ScoreSync : MonoBehaviour
     void BuildPlayingGroup(Transform parent)
     {
         playingGroup = CreateGroup(parent, "PlayingGroup");
+#if UNITY_IOS && !UNITY_TVOS
+        ApplySafeAreaInsets(playingGroup);
+#endif
 
         playingScoreText = CreateText(playingGroup, "Score", "0",
             100, FontStyles.Bold, new Color(1f, 1f, 1f, 0.25f));
@@ -811,6 +824,7 @@ public class ScoreSync : MonoBehaviour
         }
 
         BuildBlitzUpgradeHUD(playingGroup);
+        BuildBlitzStreakHUD(playingGroup);
 
         UpdatePlayingHUDVisibility();
     }
@@ -826,6 +840,8 @@ public class ScoreSync : MonoBehaviour
         }
         if (blitzUpgradeGroup != null)
             blitzUpgradeGroup.gameObject.SetActive(blitz);
+        if (blitzStreakGroup != null)
+            blitzStreakGroup.gameObject.SetActive(blitz);
     }
 
     void BuildGameOverGroup(Transform parent)
@@ -1463,6 +1479,7 @@ public class ScoreSync : MonoBehaviour
         if (GameConfig.IsBlitz())
         {
             UpdateBlitzUpgradeHUD();
+            UpdateBlitzStreakHUD();
             AnimateOrbSparks();
         }
 
@@ -1586,6 +1603,120 @@ public class ScoreSync : MonoBehaviour
         blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 5, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
         blitzCadencySlots = CreateSlotRow(blitzUpgradeGroup, 1, 5, cadencyColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
         blitzShieldSlots = CreateSlotRow(blitzUpgradeGroup, 2, 5, shieldColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
+    }
+
+    // Top-right mirror of the upgrade HUD. "x1" tier label + thin fill bar underneath —
+    // bar shows progress to the next tier (or stays full at x4 max). Magenta palette
+    // differentiates it from the gold/cyan/green upgrade tracks.
+    void BuildBlitzStreakHUD(RectTransform parent)
+    {
+        const float MARGIN_X = 30f;
+        const float MARGIN_Y = 30f;
+        const float GROUP_W = 120f;
+        const float GROUP_H = 54f;
+        const float BAR_H = 6f;
+
+        GameObject grp = new GameObject("BlitzStreakHUD");
+        blitzStreakGroup = grp.AddComponent<RectTransform>();
+        blitzStreakGroup.SetParent(parent, false);
+        blitzStreakGroup.anchorMin = new Vector2(1f, 1f);
+        blitzStreakGroup.anchorMax = new Vector2(1f, 1f);
+        blitzStreakGroup.pivot = new Vector2(1f, 1f);
+        blitzStreakGroup.anchoredPosition = new Vector2(-MARGIN_X, -MARGIN_Y);
+        blitzStreakGroup.sizeDelta = new Vector2(GROUP_W, GROUP_H);
+
+        Color tierColor = NEON_MAGENTA;
+
+        // Tier readout — right-aligned hero label, same size as upgrade labels but bigger.
+        blitzStreakTierLabel = CreateText(blitzStreakGroup, "StreakTier", "x1",
+            26f, FontStyles.Bold, new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
+        blitzStreakTierLabel.alignment = TextAlignmentOptions.TopRight;
+        RectTransform lrt = blitzStreakTierLabel.rectTransform;
+        lrt.anchorMin = new Vector2(1f, 1f);
+        lrt.anchorMax = new Vector2(1f, 1f);
+        lrt.pivot = new Vector2(1f, 1f);
+        lrt.anchoredPosition = new Vector2(0f, 0f);
+        lrt.sizeDelta = new Vector2(GROUP_W, 32f);
+
+        // Bar track (dim)
+        blitzStreakBarTrack = CreateImage(blitzStreakGroup, "StreakBarTrack",
+            new Color(tierColor.r, tierColor.g, tierColor.b, 0.15f));
+        RectTransform trt = blitzStreakBarTrack.rectTransform;
+        trt.anchorMin = new Vector2(1f, 1f);
+        trt.anchorMax = new Vector2(1f, 1f);
+        trt.pivot = new Vector2(1f, 1f);
+        trt.anchoredPosition = new Vector2(0f, -36f);
+        trt.sizeDelta = new Vector2(GROUP_W, BAR_H);
+
+        // Bar fill (bright) — grows from the right side so it visually aligns with the label.
+        blitzStreakBarFill = CreateImage(blitzStreakGroup, "StreakBarFill",
+            new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
+        RectTransform frt = blitzStreakBarFill.rectTransform;
+        frt.anchorMin = new Vector2(1f, 1f);
+        frt.anchorMax = new Vector2(1f, 1f);
+        frt.pivot = new Vector2(1f, 1f);
+        frt.anchoredPosition = new Vector2(0f, -36f);
+        frt.sizeDelta = new Vector2(0f, BAR_H);
+
+        ApplyDropShadow(blitzStreakTierLabel);
+    }
+
+    void UpdateBlitzStreakHUD()
+    {
+        if (blitzStreakGroup == null) return;
+        Torus torus = FindAnyObjectByType<Torus>();
+        if (torus == null) return;
+
+        int tier = torus.GetStreakTier();
+        float barP = torus.GetStreakBarProgress();
+
+        // Magenta at tier 1, warming to gold/white at max — palette tells the story.
+        Color baseColor = tier >= 4 ? NEON_GOLD
+                        : tier == 3 ? new Color(1f, 0.55f, 0.3f)
+                        : tier == 2 ? new Color(1f, 0.35f, 0.55f)
+                        : NEON_MAGENTA;
+
+        if (tier != blitzLastStreakTier)
+        {
+            if (tier > blitzLastStreakTier && blitzLastStreakTier > 0)
+                blitzStreakFlashTimer = 0f;
+            blitzLastStreakTier = tier;
+            if (blitzStreakTierLabel != null) blitzStreakTierLabel.text = "x" + tier;
+        }
+
+        // Flash on tier-up: bump alpha/brightness briefly.
+        float flashBoost = 0f;
+        if (blitzStreakFlashTimer >= 0f && blitzStreakFlashTimer < BLITZ_STREAK_FLASH_DURATION)
+        {
+            blitzStreakFlashTimer += Time.deltaTime;
+            float p = Mathf.Clamp01(blitzStreakFlashTimer / BLITZ_STREAK_FLASH_DURATION);
+            flashBoost = (1f - p);
+            if (p >= 1f) blitzStreakFlashTimer = -1f;
+        }
+
+        Color labelColor = Color.Lerp(
+            new Color(baseColor.r, baseColor.g, baseColor.b, 0.9f),
+            Color.white, flashBoost);
+        if (blitzStreakTierLabel != null) blitzStreakTierLabel.color = labelColor;
+
+        if (blitzStreakBarTrack != null)
+            blitzStreakBarTrack.color = new Color(baseColor.r, baseColor.g, baseColor.b, 0.15f);
+
+        // Bar fill width — only animate on meaningful change so we avoid per-frame GC.
+        if (!Mathf.Approximately(barP, blitzLastStreakBar))
+        {
+            blitzLastStreakBar = barP;
+            if (blitzStreakBarFill != null)
+            {
+                RectTransform frt = blitzStreakBarFill.rectTransform;
+                frt.sizeDelta = new Vector2(120f * barP, frt.sizeDelta.y);
+            }
+        }
+        if (blitzStreakBarFill != null)
+        {
+            blitzStreakBarFill.color = new Color(baseColor.r, baseColor.g, baseColor.b,
+                0.9f + flashBoost * 0.1f);
+        }
     }
 
     TMP_Text CreateRowLabel(RectTransform parent, string name, string content, int rowIndex,
@@ -2304,6 +2435,23 @@ public class ScoreSync : MonoBehaviour
         StretchFull(rt);
         return rt;
     }
+
+#if UNITY_IOS && !UNITY_TVOS
+    // Inset a stretched group by Screen.safeArea so notch/rounded corners don't clip the
+    // HUD. Children remain anchored to the group, so they shift inward uniformly.
+    // Gameplay-only — title/game-over screens keep edge-to-edge by design.
+    void ApplySafeAreaInsets(RectTransform rt)
+    {
+        Rect safe = Screen.safeArea;
+        float w = Screen.width;
+        float h = Screen.height;
+        if (w <= 0f || h <= 0f) return;
+        rt.anchorMin = new Vector2(safe.xMin / w, safe.yMin / h);
+        rt.anchorMax = new Vector2(safe.xMax / w, safe.yMax / h);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+    }
+#endif
 
     void SetAnchored(RectTransform rt, Vector2 anchor, Vector2 size)
     {

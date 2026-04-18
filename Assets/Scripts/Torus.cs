@@ -124,6 +124,18 @@ public class Torus : MonoBehaviour
     private GameAudio mAudio;
     private const int ORBS_PER_UPGRADE = 5;
 
+    // Kill-streak multiplier — Blitz only. Fills a bar per destroy (1HP=+1, 3HP=+2).
+    // Bar full → tier up (x1→x2→x3→x4). After a 3s grace, bar drains; empty bar drops
+    // a tier. Taking damage (or burning the shield) drops a tier + wipes the bar.
+    // Multiplier applies to destroy points + gate bonus; chip/orb +5 awards stay flat.
+    private float mStreakBar;
+    private int mStreakTier = 1;
+    private float mStreakGraceTimer;
+    private const float STREAK_BAR_CAP = 5f;
+    private const int STREAK_MAX_TIER = 4;
+    private const float STREAK_GRACE = 3f;
+    private const float STREAK_DRAIN_RATE = 0.5f;
+
     // Full-tube spectacle — Blitz-only sections where the upper tube fades in as pure
     // ambient decoration (ball physics stays bound to the half-tube, so the ceiling is
     // purely visual). No gate markers — players read portal rings as deadly obstacles
@@ -214,6 +226,7 @@ public class Torus : MonoBehaviour
             AnimateBlitzBoxes();
             UpdateBlitzFireRate();
             TickFullTubeSection();
+            TickStreak();
             return;
         }
 
@@ -407,6 +420,7 @@ public class Torus : MonoBehaviour
         mLastSpawnKind = BlitzSpawnKind.None;
         mPrevSpawnKind = BlitzSpawnKind.None;
         mLastSpawnCommitsSide = false;
+        ResetStreak();
 
         if (spawnObstacles)
         {
@@ -567,6 +581,7 @@ public class Torus : MonoBehaviour
         mLastSpawnKind = BlitzSpawnKind.None;
         mPrevSpawnKind = BlitzSpawnKind.None;
         mLastSpawnCommitsSide = false;
+        ResetStreak();
 
         UpdateBlitzObstacles();
 
@@ -1272,8 +1287,10 @@ public class Torus : MonoBehaviour
                     // 1HP destroy: 10 (unchanged). 3HP destroy: 30 (was 20) — plus the two
                     // prior +5 chips each 3HP box earns on the way down = 40 total for a
                     // full clear. Rewards sustained fire on sentinels/buttons.
+                    // Kill-streak multiplier scales destroy + gate bonus (not chip/orb).
                     int points = box.mMaxHitPoints >= 3 ? 30 : 10;
-                    mScore += points;
+                    mScore += points * mStreakTier;
+                    AddStreak(box.mMaxHitPoints >= 3 ? 2f : 1f);
 
                     // Gate deactivation bonus
                     if (box.mLinkedGate != null)
@@ -1284,7 +1301,7 @@ public class Torus : MonoBehaviour
                             mAudio.PlayButtonDestroyed();
                         }
                         box.mLinkedGate.Deactivate();
-                        mScore += 50;
+                        mScore += 50 * mStreakTier;
                         HeavyHaptic();
                     }
                     else if (box.mMaxHitPoints >= 3)
@@ -1608,7 +1625,75 @@ public class Torus : MonoBehaviour
         mShieldActive = false;
         mShieldLevel = 0;
         mShieldOrbCount = 0;
+        DropStreakTier();
         return true;
+    }
+
+    // ── KILL-STREAK MULTIPLIER ──────────────────────────────
+    // Read by ScoreSync for the top-right HUD. Tier stays visible, bar shows the
+    // next-tier fill fraction (or the drain level at tier 1).
+    public int GetStreakTier() { return mStreakTier; }
+    public float GetStreakBarProgress() { return Mathf.Clamp01(mStreakBar / STREAK_BAR_CAP); }
+    public bool IsStreakAtMaxTier() { return mStreakTier >= STREAK_MAX_TIER; }
+
+    void TickStreak()
+    {
+        if (mStreakGraceTimer > 0f)
+        {
+            mStreakGraceTimer -= Time.deltaTime;
+            return;
+        }
+        if (mStreakBar <= 0f && mStreakTier == 1) return;
+
+        mStreakBar -= STREAK_DRAIN_RATE * Time.deltaTime;
+        if (mStreakBar <= 0f)
+        {
+            if (mStreakTier > 1)
+            {
+                mStreakTier--;
+                // Refill to full on drain-drop so each tier gets its own 10s drain cycle
+                // (5 units ÷ 0.5/s). Plus a fresh grace so the player gets a breather.
+                mStreakBar = STREAK_BAR_CAP;
+                mStreakGraceTimer = STREAK_GRACE;
+            }
+            else
+            {
+                mStreakBar = 0f;
+            }
+        }
+    }
+
+    void AddStreak(float amount)
+    {
+        mStreakGraceTimer = STREAK_GRACE;
+        if (mStreakTier >= STREAK_MAX_TIER)
+        {
+            // Already capped — keep the bar full so the readout shows "held at max".
+            mStreakBar = STREAK_BAR_CAP;
+            return;
+        }
+
+        mStreakBar += amount;
+        while (mStreakBar >= STREAK_BAR_CAP && mStreakTier < STREAK_MAX_TIER)
+        {
+            mStreakBar -= STREAK_BAR_CAP;
+            mStreakTier++;
+        }
+        if (mStreakTier >= STREAK_MAX_TIER) mStreakBar = STREAK_BAR_CAP;
+    }
+
+    void DropStreakTier()
+    {
+        if (mStreakTier > 1) mStreakTier--;
+        mStreakBar = 0f;
+        mStreakGraceTimer = 0f;
+    }
+
+    void ResetStreak()
+    {
+        mStreakBar = 0f;
+        mStreakTier = 1;
+        mStreakGraceTimer = 0f;
     }
 
     // ── FULL-TUBE SPECTACLE ─────────────────────────────────
