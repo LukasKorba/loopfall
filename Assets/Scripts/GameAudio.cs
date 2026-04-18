@@ -40,6 +40,12 @@ public class GameAudio : MonoBehaviour
     private bool crossfading = false;
     private float crossfadeTimer = 0f;
     private bool standbyReady = false;
+    // Post-swap, defer the next-track preload. The hitch we saw in capture was
+    // Unity kicking off lazy decompression on the same frame the swap completed,
+    // landing the cost inside active gameplay. 5s pushes it clear of the crossfade
+    // and the player's immediate reactions; next track is still ready minutes early.
+    private const float STANDBY_LOAD_DELAY = 5f;
+    private float standbyLoadTimer = -1f; // -1 = inactive; >=0 = counting down
 
     // ── SFX ──────────────────────────────────────────────────
     private AudioSource sfxSource;
@@ -337,15 +343,31 @@ public class GameAudio : MonoBehaviour
         if (musicClips == null || musicClips.Length <= 1) { standbyReady = false; return; }
 
         int nextIndex = PickNextMusicIndex();
-        // Assign clip now — Unity decompresses lazily over subsequent frames,
-        // so by the time we need it (minutes later) there's zero spike.
-        standbyMusicSource.clip = musicClips[nextIndex];
+        AudioClip clip = musicClips[nextIndex];
+        standbyMusicSource.clip = clip;
         standbyMusicSource.volume = 0f;
+
+        // Pre-warm: kick Unity's audio thread to decompress now rather than at
+        // the next Play(). LoadAudioData is async and returns immediately; work
+        // happens on the audio/IO thread, not the main thread — exactly the
+        // parallelism we want.
+        if (clip != null && clip.loadState != AudioDataLoadState.Loaded)
+            clip.LoadAudioData();
+
         standbyReady = true;
+        standbyLoadTimer = -1f;
     }
 
     void UpdateMusicCrossfade()
     {
+        // Deferred standby-load tick. Runs before the early-returns so the
+        // timer can't stall if the active source hiccups mid-play.
+        if (standbyLoadTimer >= 0f)
+        {
+            standbyLoadTimer -= Time.unscaledDeltaTime;
+            if (standbyLoadTimer <= 0f) PrepareStandby();
+        }
+
         if (externalMusicPlaying || activeMusicSource == null || !activeMusicSource.isPlaying) return;
         if (musicClips == null || musicClips.Length <= 1) return;
 
@@ -387,8 +409,8 @@ public class GameAudio : MonoBehaviour
                 crossfading = false;
                 standbyReady = false;
 
-                // Pre-load the next track onto the now-idle standby
-                PrepareStandby();
+                // Defer the next-track preload — tick runs below in Update().
+                standbyLoadTimer = STANDBY_LOAD_DELAY;
             }
         }
     }
