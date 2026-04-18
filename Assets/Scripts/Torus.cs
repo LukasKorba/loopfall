@@ -134,24 +134,14 @@ public class Torus : MonoBehaviour
         mObstacleStep *= Mathf.Deg2Rad;
         mObstacleStepInv = 1.0f / mObstacleStep;
 
+        // Both mode's containers exist from the first frame. Neither spawns content until
+        // the player picks a mode (Sphere.StartGame → Reset(true)). Until then the torus
+        // geometry is visible but empty — it hasn't committed to either mode yet.
         mObstacles = new List<Obstacle>();
-
-        if (GameConfig.IsBlitz())
-        {
-            mAngleStep = BLITZ_BASE_SPEED;
-            mScoreSync = FindAnyObjectByType<ScoreSync>();
-            mAudio = FindAnyObjectByType<GameAudio>();
-            mBlitzBoxes = new List<BlitzBox>();
-            mBlitzGates = new List<BlitzGate>();
-            mBlitzDividers = new List<BlitzDivider>();
-            mBlitzOrbs = new List<BlitzOrb>();
-            mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
-            UpdateBlitzObstacles();
-        }
-        else
-        {
-            UpdateObstacles();
-        }
+        mBlitzBoxes = new List<BlitzBox>();
+        mBlitzGates = new List<BlitzGate>();
+        mBlitzDividers = new List<BlitzDivider>();
+        mBlitzOrbs = new List<BlitzOrb>();
     }
 
     void Update()
@@ -335,7 +325,12 @@ public class Torus : MonoBehaviour
         mScoreLbl.text = mScore.ToString() + "\nGAME OVER";
     }
 
-    public void Reset()
+    public void Reset() { Reset(true); }
+
+    /// Clears the world and resets run state. Both mode's obstacle sets are cleared
+    /// unconditionally so switching modes never leaves stragglers. When spawnObstacles
+    /// is false (ReturnToTitle), the torus stays empty until a mode is committed.
+    public void Reset(bool spawnObstacles)
     {
         mAngle = 0.0f;
         mAngleScore = 0.0f;
@@ -347,59 +342,52 @@ public class Torus : MonoBehaviour
 
         mGameOver = false;
 
+        // Clear Pure Hell obstacles.
         foreach (Obstacle obstacle in mObstacles)
             Destroy(obstacle.mGameObject);
-
         mObstacles.Clear();
-
         mLastObstacle = null;
         mCurrentObstacle = null;
 
-        if (GameConfig.IsBlitz())
+        // Clear Blitz obstacles.
+        foreach (BlitzBox box in mBlitzBoxes) Destroy(box.mGameObject);
+        mBlitzBoxes.Clear();
+        foreach (BlitzGate gate in mBlitzGates) Destroy(gate.mGameObject);
+        mBlitzGates.Clear();
+        foreach (BlitzDivider div in mBlitzDividers) Destroy(div.mGameObject);
+        mBlitzDividers.Clear();
+        foreach (BlitzOrb orb in mBlitzOrbs) Destroy(orb.mGameObject);
+        mBlitzOrbs.Clear();
+
+        // Blitz run state — always reset so leftover upgrades/levels never carry across
+        // a mode switch or back-to-menu cycle.
+        mBlitzTimer = 0f;
+        mGunOrbCount = 0;
+        mCadencyOrbCount = 0;
+        mShieldOrbCount = 0;
+        mGunLevel = 0;
+        mCadencyLevel = 0;
+        mShieldLevel = 0;
+        mShieldActive = false;
+        if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(0);
+        mLastSpawnKind = BlitzSpawnKind.None;
+        mPrevSpawnKind = BlitzSpawnKind.None;
+        mLastSpawnCommitsSide = false;
+
+        if (spawnObstacles)
         {
-            mAngleStep = BLITZ_BASE_SPEED;
-            mBlitzTimer = 0f;
-            if (mBlitzBoxes != null)
+            if (GameConfig.IsBlitz())
             {
-                foreach (BlitzBox box in mBlitzBoxes)
-                    Destroy(box.mGameObject);
-                mBlitzBoxes.Clear();
+                mAngleStep = BLITZ_BASE_SPEED;
+                if (mScoreSync == null) mScoreSync = FindAnyObjectByType<ScoreSync>();
+                if (mAudio == null) mAudio = FindAnyObjectByType<GameAudio>();
+                mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
+                UpdateBlitzObstacles();
             }
-            if (mBlitzGates != null)
+            else
             {
-                foreach (BlitzGate gate in mBlitzGates)
-                    Destroy(gate.mGameObject);
-                mBlitzGates.Clear();
+                UpdateObstacles();
             }
-            if (mBlitzDividers != null)
-            {
-                foreach (BlitzDivider div in mBlitzDividers)
-                    Destroy(div.mGameObject);
-                mBlitzDividers.Clear();
-            }
-            if (mBlitzOrbs != null)
-            {
-                foreach (BlitzOrb orb in mBlitzOrbs)
-                    Destroy(orb.mGameObject);
-                mBlitzOrbs.Clear();
-            }
-            mGunOrbCount = 0;
-            mCadencyOrbCount = 0;
-            mShieldOrbCount = 0;
-            mGunLevel = 0;
-            mCadencyLevel = 0;
-            mShieldLevel = 0;
-            mShieldActive = false;
-            if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(0);
-            mLastBlitzAngle = mObstaclesAngleOrigin - 10f;
-            mLastSpawnKind = BlitzSpawnKind.None;
-            mPrevSpawnKind = BlitzSpawnKind.None;
-            mLastSpawnCommitsSide = false;
-            UpdateBlitzObstacles();
-        }
-        else
-        {
-            UpdateObstacles();
         }
 
         mScoreWithoutInteraction = 0;

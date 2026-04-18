@@ -17,8 +17,6 @@ public class SceneSetup : MonoBehaviour
     public bool halfTubeOnly = true;
     // MANUAL PARAM: Use spline-extruded track instead of fixed torus
     public bool useSplineTrack = false;
-    // MANUAL PARAM: Blitz mode — laser beam shooting, no gates
-    public bool useBlitzMode = false;
 
     // Direct references — ensures shaders are included in builds
     public Shader depthHueShiftRef;
@@ -32,10 +30,6 @@ public class SceneSetup : MonoBehaviour
 
     void Awake()
     {
-        // Set mode before anything else — other scripts read GameConfig on Start
-        if (useBlitzMode)
-            GameConfig.ActiveMode = GameModeType.Blitz;
-
         // Force highest graphics tier — Tier2 on iOS disables HDR, killing emission glow
         Graphics.activeTier = UnityEngine.Rendering.GraphicsTier.Tier3;
 
@@ -588,23 +582,21 @@ public class SceneSetup : MonoBehaviour
         torusScript.mObstacleShadow = obstacleShadowMaterial;
         torusScript.mBallTransform = ball.transform;
 
-        // Blitz mode — wire materials and beam system
-        if (GameConfig.IsBlitz())
-        {
-            torusScript.mBlitzBoxMat = blitzBoxMaterial;
-            torusScript.mBlitzGateMat = blitzGateMaterial;
-            torusScript.mBlitzButtonMat = blitzButtonMaterial;
-            torusScript.mBlitzConnectionMat = blitzConnectionMaterial;
-            torusScript.mBlitzOrbGunMat = blitzOrbGunMaterial;
-            torusScript.mBlitzOrbCadencyMat = blitzOrbCadencyMaterial;
-            torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;
+        // Wire Blitz materials + beam unconditionally — mode choice happens at runtime
+        // from the title screen, so every run needs both code paths ready.
+        torusScript.mBlitzBoxMat = blitzBoxMaterial;
+        torusScript.mBlitzGateMat = blitzGateMaterial;
+        torusScript.mBlitzButtonMat = blitzButtonMaterial;
+        torusScript.mBlitzConnectionMat = blitzConnectionMaterial;
+        torusScript.mBlitzOrbGunMat = blitzOrbGunMaterial;
+        torusScript.mBlitzOrbCadencyMat = blitzOrbCadencyMaterial;
+        torusScript.mBlitzOrbShieldMat = blitzOrbShieldMaterial;
 
-            BlitzBeam beam = ball.AddComponent<BlitzBeam>();
-            beam.Initialize(beamMaterial, new Color(0.4f, 0.95f, 1f), torusObj.transform, torusScript);
-            sphereScript.mBlitzBeam = beam;
-            sphereScript.mBlitzShieldMat = blitzShieldVisualMaterial;
-            torusScript.mBlitzBeam = beam;
-        }
+        BlitzBeam beam = ball.AddComponent<BlitzBeam>();
+        beam.Initialize(beamMaterial, new Color(0.4f, 0.95f, 1f), torusObj.transform, torusScript);
+        sphereScript.mBlitzBeam = beam;
+        sphereScript.mBlitzShieldMat = blitzShieldVisualMaterial;
+        torusScript.mBlitzBeam = beam;
     }
 
     void CreateCamera()
@@ -845,9 +837,7 @@ public class SceneSetup : MonoBehaviour
 
     void CreateRewindSystem()
     {
-        // Blitz has no rewind — no data to collect, no replay to show
-        if (GameConfig.IsBlitz()) return;
-
+        // Rewind exists for both modes — Sphere gates StartRecording() on mode choice.
         GameObject rewindObj = new GameObject("RewindSystem");
         RewindSystem rewind = rewindObj.AddComponent<RewindSystem>();
 

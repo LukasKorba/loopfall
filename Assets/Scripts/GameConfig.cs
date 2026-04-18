@@ -12,9 +12,10 @@ public static class GameConfig
 {
     public static GameModeType ActiveMode = GameModeType.PureHell;
 
-    public static string GetScoresKey()
+    public static string GetScoresKey() { return GetScoresKey(ActiveMode); }
+    public static string GetScoresKey(GameModeType mode)
     {
-        switch (ActiveMode)
+        switch (mode)
         {
             case GameModeType.Blitz: return "TopScores_Blitz";
             default:                 return "TopScores";
@@ -30,12 +31,13 @@ public static class GameConfig
         }
     }
 
-    public static string GetModeName()
+    public static string GetModeName() { return GetModeName(ActiveMode); }
+    public static string GetModeName(GameModeType mode)
     {
-        switch (ActiveMode)
+        switch (mode)
         {
-            case GameModeType.Blitz: return "BLITZ";
-            default:                 return "PURE HELL";
+            case GameModeType.Blitz: return "PATH TO REDEMPTION";
+            default:                 return "GATES TO HELL";
         }
     }
 

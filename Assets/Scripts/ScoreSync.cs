@@ -39,6 +39,8 @@ public class ScoreSync : MonoBehaviour
     private bool isFirstRun = false;
     private const string PREF_FIRST_RUN = "HasPlayed";
     private bool isPaused = false;
+    // Set by OnModesTap so the state machine shows the title instead of skipping to Playing.
+    private bool forceShowTitle = false;
 
     // ── CANVAS ───────────────────────────────────────────────
     private Canvas canvas;
@@ -81,6 +83,10 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text titleHintText;
     private Button titlePureHellBtn;
     private TMP_Text titlePureHellLabel;
+    private TMP_Text titlePureHellBestLabel;
+    private Button titleBlitzBtn;
+    private TMP_Text titleBlitzLabel;
+    private TMP_Text titleBlitzBestLabel;
 
     // ── PLAYING ──────────────────────────────────────────────
     private RectTransform playingGroup;
@@ -150,16 +156,15 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text settingsFullscreenLabel;
     private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
-    // ── QUIT BUTTON (macOS only) ────────────────────────────
+    // ── QUIT BUTTON (desktop only) + BACK BUTTON (game over, all platforms) ────
     private Button titleQuitBtn;
     private CanvasGroup titleQuitIcon;
-    private Button goQuitBtn;
-    private CanvasGroup goQuitIcon;
+    private Button goBackBtn;
+    private CanvasGroup goBackIcon;
 
     // ── STATS PANEL ─────────────────────────────────────────
+    // No title stats button — stats are per-mode and only reached from in-game/game-over.
     private RectTransform statsPanel;
-    private Button titleStatsBtn;
-    private CanvasGroup titleStatsIcon;
     private Button goStatsBtn;
     private CanvasGroup goStatsIcon;
     private TMP_Text statsRunsLabel;
@@ -319,6 +324,7 @@ public class ScoreSync : MonoBehaviour
             }
             if (state == State.Playing)
             {
+                UpdatePlayingHUDVisibility();
                 StopGlitter();
                 lastPlayingScore = "0";
                 if (playingScoreText != null) playingScoreText.text = "0";
@@ -343,8 +349,10 @@ public class ScoreSync : MonoBehaviour
                 }
             }
 
-            // Skip title screen on restart — fade game over overlay straight to gameplay
-            bool skipTitle = (state == State.Title && fromState == State.GameOver);
+            // Skip title screen on restart — fade game over overlay straight to gameplay.
+            // But if the player explicitly tapped Back-to-modes, honor it and show title.
+            bool skipTitle = (state == State.Title && fromState == State.GameOver && !forceShowTitle);
+            if (forceShowTitle && state == State.Title) forceShowTitle = false;
 
             if (skipTitle)
             {
@@ -494,10 +502,9 @@ public class ScoreSync : MonoBehaviour
 
         ShowGroup(state);
 
-        // Spark pool for orb collection effects
+        // Spark pool for orb collection effects — built unconditionally; only fires in Blitz.
         canvasRT = canvasObj.GetComponent<RectTransform>();
-        if (GameConfig.IsBlitz())
-            InitOrbSparks(canvasObj.transform);
+        InitOrbSparks(canvasObj.transform);
     }
 
     void InitOrbSparks(Transform parent)
@@ -694,55 +701,49 @@ public class ScoreSync : MonoBehaviour
         lineRT.sizeDelta = new Vector2(0f, 1.5f);
         lineRT.anchoredPosition = Vector2.zero;
 
-        // Mode buttons — hidden for now (tap anywhere starts Pure Hell)
-        titlePureHellBtn = CreateModeButton(titleGroup, "PureHellBtn",
-            new Vector2(0.5f, 0.28f), out titlePureHellLabel, "PURE HELL",
-            NEON_MAGENTA);
+        // Mode picker — both modes always available, side by side. Owns input on title.
+        // Squarish buttons carry both the mode name (top) and that mode's BEST (bottom),
+        // so the single centered BEST line is no longer needed above.
+        Vector2 modeBtnSize = new Vector2(372f, 150f);
+        titlePureHellBtn = CreatePrimaryButton(titleGroup, "GatesToHellBtn",
+            new Vector2(0.5f, 0.28f), modeBtnSize,
+            GameConfig.GetModeName(GameModeType.PureHell), NEON_MAGENTA, out titlePureHellLabel);
+        titlePureHellBtn.GetComponent<RectTransform>().anchoredPosition = new Vector2(-210f, 0f);
         titlePureHellBtn.onClick.AddListener(() => StartWithMode(GameModeType.PureHell));
-        titlePureHellBtn.gameObject.SetActive(false);
+        AddBestLineToButton(titlePureHellBtn, NEON_MAGENTA, out titlePureHellBestLabel);
+        SetButtonAlpha(titlePureHellBtn, 0f);
 
-        // Tap to play
-#if UNITY_TVOS
-        string tapPrompt = "SWIPE TO PLAY";
-#elif UNITY_STANDALONE
-        string tapPrompt = "PRESS ANY KEY TO PLAY";
-#else
-        string tapPrompt = "TAP TO PLAY";
-#endif
-        titleTapText = CreateText(titleGroup, "TitleTap", tapPrompt,
+        titleBlitzBtn = CreatePrimaryButton(titleGroup, "PathToRedemptionBtn",
+            new Vector2(0.5f, 0.28f), modeBtnSize,
+            GameConfig.GetModeName(GameModeType.Blitz), NEON_CYAN, out titleBlitzLabel);
+        titleBlitzBtn.GetComponent<RectTransform>().anchoredPosition = new Vector2(210f, 0f);
+        titleBlitzBtn.onClick.AddListener(() => StartWithMode(GameModeType.Blitz));
+        AddBestLineToButton(titleBlitzBtn, NEON_CYAN, out titleBlitzBestLabel);
+        SetButtonAlpha(titleBlitzBtn, 0f);
+
+        // Placeholder kept for animation hooks; mode buttons own the "tap to play" role.
+        titleTapText = CreateText(titleGroup, "TitleTap", "",
             36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(titleTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         titleTapText.characterSpacing = 8f;
 
-        // First-run tutorial hint
-#if UNITY_TVOS
-        string hintText = "SWIPE LEFT OR RIGHT\nTO DODGE THE GATES";
-#elif UNITY_STANDALONE
-        string hintText = "USE A/D, ARROWS, OR CONTROLLER\nTO DODGE THE GATES";
-#else
-        string hintText = "TAP LEFT OR RIGHT\nTO DODGE THE GATES";
-#endif
-        titleHintText = CreateText(titleGroup, "TutorialHint", hintText,
-            28, FontStyles.Normal, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
-        SetAnchored(titleHintText.rectTransform, new Vector2(0.5f, 0.22f), new Vector2(600, 80));
-        titleHintText.characterSpacing = 4f;
-        titleHintText.enableWordWrapping = true;
+        // Above the mode buttons — soft prompt.
+        titleHintText = CreateText(titleGroup, "TutorialHint", "SELECT MODE",
+            24, FontStyles.Normal, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
+        SetAnchored(titleHintText.rectTransform, new Vector2(0.5f, 0.37f), new Vector2(600, 40));
+        titleHintText.rectTransform.anchoredPosition = new Vector2(0f, 15f);
+        titleHintText.characterSpacing = 6f;
         titleHintText.alignment = TextAlignmentOptions.Center;
 
-        // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
+        // Icon dock — top-right: Leaderboards + Settings only (no stats on title).
 #if !UNITY_TVOS
         CreateDockStrip(titleGroup, "TitleDockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-270, -140), new Vector2(340, 100));
 
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
             "star", NEON_GOLD, out titleLBIcon);
         titleLBBtn.onClick.AddListener(OnLeaderboardTap);
-
-        titleStatsBtn = CreateIconButton(titleGroup, "TitleStatsBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
-            "bars", NEON_CYAN, out titleStatsIcon);
-        titleStatsBtn.onClick.AddListener(OnStatsTap);
 
         titleSettingsBtn = CreateIconButton(titleGroup, "TitleSettingsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
@@ -750,7 +751,8 @@ public class ScoreSync : MonoBehaviour
         titleSettingsBtn.onClick.AddListener(OnSettingsTap);
 #endif
 
-#if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
+#if UNITY_STANDALONE
+        // Desktop-only: iOS/tvOS/Android must never show Quit per platform HIG.
         CreateDockStrip(titleGroup, "TitleDockL",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
 
@@ -765,6 +767,7 @@ public class ScoreSync : MonoBehaviour
         ApplyDropShadow(subtitleText);
         ApplyDropShadow(bestScoreText);
         ApplyDropShadow(titlePureHellLabel);
+        ApplyDropShadow(titleBlitzLabel);
     }
 
     void BuildPlayingGroup(Transform parent)
@@ -781,12 +784,12 @@ public class ScoreSync : MonoBehaviour
 
         ApplyDropShadow(playingScoreText);
 
-        // Streak dots — fill up on each gate, flash and reset at STREAK_COUNT.
-        // Pure Hell only: pairs with the swing/no-tap multiplier; in BLITZ
-        // they'd just track kills without driving any reward.
-        if (!GameConfig.IsBlitz())
+        // Build BOTH mode HUDs unconditionally; visibility is toggled on Playing entry
+        // via UpdatePlayingHUDVisibility(). Mode isn't committed at BuildUI time.
+
+        // Pure Hell streak dots — pair with swing/no-tap multiplier.
+        streakDots = new Image[STREAK_COUNT];
         {
-            streakDots = new Image[STREAK_COUNT];
             float dotSize = 10f;
             float dotSpacing = 20f;
             float totalWidth = (STREAK_COUNT - 1) * dotSpacing;
@@ -807,8 +810,22 @@ public class ScoreSync : MonoBehaviour
             }
         }
 
-        if (GameConfig.IsBlitz())
-            BuildBlitzUpgradeHUD(playingGroup);
+        BuildBlitzUpgradeHUD(playingGroup);
+
+        UpdatePlayingHUDVisibility();
+    }
+
+    /// <summary>Show the HUD matching the committed mode; hide the other.</summary>
+    void UpdatePlayingHUDVisibility()
+    {
+        bool blitz = GameConfig.IsBlitz();
+        if (streakDots != null)
+        {
+            for (int i = 0; i < streakDots.Length; i++)
+                if (streakDots[i] != null) streakDots[i].gameObject.SetActive(!blitz);
+        }
+        if (blitzUpgradeGroup != null)
+            blitzUpgradeGroup.gameObject.SetActive(blitz);
     }
 
     void BuildGameOverGroup(Transform parent)
@@ -903,14 +920,15 @@ public class ScoreSync : MonoBehaviour
         goSettingsBtn.onClick.AddListener(OnSettingsTap);
 #endif
 
-#if (!UNITY_IOS && !UNITY_TVOS) || UNITY_EDITOR
+        // Back to modes — cross-platform (all platforms get this on game over).
+#if !UNITY_TVOS
         CreateDockStrip(gameOverGroup, "GODockL",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
 
-        goQuitBtn = CreateIconButton(gameOverGroup, "GOQuitBtn",
+        goBackBtn = CreateIconButton(gameOverGroup, "GOBackBtn",
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(120, 120),
-            "power", DIM_TEXT, out goQuitIcon);
-        goQuitBtn.onClick.AddListener(OnQuitTap);
+            "back", NEON_CYAN, out goBackIcon);
+        goBackBtn.onClick.AddListener(OnModesTap);
 #endif
 
         // Corner bracket accents framing the score
@@ -1133,6 +1151,7 @@ public class ScoreSync : MonoBehaviour
                 ApplyGlitchToText(subtitleText);
                 ApplyGlitchToText(bestScoreText);
                 ApplyGlitchToText(titlePureHellLabel);
+                ApplyGlitchToText(titleBlitzLabel);
             }
             else if (state == State.GameOver)
             {
@@ -1301,55 +1320,42 @@ public class ScoreSync : MonoBehaviour
             titleRuleRight.color = rc;
         }
 
-        // Best score with expanding gold line
-        if (topScores.Count > 0)
+        // Per-mode BEST is rendered inside each mode button now, so the single
+        // centered BEST line + gold underline stay hidden on title.
+        SetAlpha(bestScoreText, 0f);
+        if (bestScoreLine != null)
         {
-            float bestFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
-            string bestStr = FormatModeScore(topScores[0]);
-            bestScoreText.text = "BEST  " + bestStr;
-            SetAlpha(bestScoreText, bestFade);
-
-            float lineWidth = Mathf.Lerp(0f, 200f, EaseOutCubic(bestFade));
-            bestScoreLine.rectTransform.sizeDelta = new Vector2(lineWidth, 2.5f);
-            Color lc = bestScoreLine.color;
-            lc.a = bestFade * 0.8f;
-            bestScoreLine.color = lc;
-        }
-        else
-        {
-            SetAlpha(bestScoreText, 0f);
             Color lc = bestScoreLine.color;
             lc.a = 0f;
             bestScoreLine.color = lc;
         }
+        RefreshModeBestLabels();
 
-        // Tap to play — heartbeat flash
+        // Mode picker buttons — fade in the whole button (frame + brackets + label)
+        // via CanvasGroup, after title settles.
         if (stateTimer > 1.2f)
         {
             float fadeIn = Mathf.Clamp01((stateTimer - 1.2f) / 0.4f);
-            float pulse = HeartbeatPulse(Time.time);
-            SetAlpha(titleTapText, fadeIn * pulse);
+            SetButtonAlpha(titlePureHellBtn, fadeIn);
+            SetButtonAlpha(titleBlitzBtn, fadeIn);
         }
         else
         {
-            SetAlpha(titleTapText, 0f);
+            SetButtonAlpha(titlePureHellBtn, 0f);
+            SetButtonAlpha(titleBlitzBtn, 0f);
         }
+        SetAlpha(titleTapText, 0f);
 
-        // Tutorial hint — steady gold, only on first run
-        if (isFirstRun && titleHintText != null)
+        // "CHOOSE YOUR MODE" — always visible once title settles
+        if (titleHintText != null)
         {
-            float hintFade = Mathf.Clamp01((stateTimer - 1.5f) / 0.5f);
-            SetAlpha(titleHintText, hintFade * 0.85f);
-        }
-        else if (titleHintText != null)
-        {
-            SetAlpha(titleHintText, 0f);
+            float hintFade = Mathf.Clamp01((stateTimer - 1.0f) / 0.5f);
+            SetAlpha(titleHintText, hintFade * 0.75f);
         }
 
         // Icon buttons — fade in with best score
         float lbFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
         SetGlyphAlpha(titleLBIcon, lbFade * 0.75f);
-        SetGlyphAlpha(titleStatsIcon, lbFade * 0.75f);
         SetGlyphAlpha(titleSettingsIcon, lbFade * 0.75f);
         SetGlyphAlpha(titleQuitIcon, lbFade * 0.75f);
     }
@@ -2001,14 +2007,14 @@ public class ScoreSync : MonoBehaviour
             SetGlyphAlpha(goSettingsIcon, p * 0.65f);
             SetGlyphAlpha(goStatsIcon, p * 0.65f);
             SetGlyphAlpha(goLBIcon, p * 0.65f);
-            SetGlyphAlpha(goQuitIcon, p * 0.65f);
+            SetGlyphAlpha(goBackIcon, p * 0.65f);
         }
         else
         {
             SetGlyphAlpha(goSettingsIcon, 0f);
             SetGlyphAlpha(goStatsIcon, 0f);
             SetGlyphAlpha(goLBIcon, 0f);
-            SetGlyphAlpha(goQuitIcon, 0f);
+            SetGlyphAlpha(goBackIcon, 0f);
         }
 
         // Tap to play — heartbeat flash
@@ -2316,8 +2322,10 @@ public class ScoreSync : MonoBehaviour
         rt.offsetMax = Vector2.zero;
     }
 
-    Button CreateModeButton(RectTransform parent, string name, Vector2 anchor,
-        out TMP_Text label, string text, Color color)
+    // Primary mode-pick button: dark bg, 2px neon edge frame, 4 corner brackets,
+    // left accent bar, centered bold label. Port from navigation-prototype-backup.
+    Button CreatePrimaryButton(RectTransform parent, string name, Vector2 anchor,
+        Vector2 size, string text, Color neon, out TMP_Text label)
     {
         GameObject btnObj = new GameObject(name);
         RectTransform rt = btnObj.AddComponent<RectTransform>();
@@ -2326,18 +2334,172 @@ public class ScoreSync : MonoBehaviour
         rt.anchorMax = anchor;
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = new Vector2(280, 70);
+        rt.sizeDelta = size;
 
-        Image img = btnObj.AddComponent<Image>();
-        img.color = new Color(0, 0, 0, 0.01f); // Near-invisible hit area
+        // CanvasGroup lets callers fade the entire button as one unit.
+        btnObj.AddComponent<CanvasGroup>();
+
+        Image bg = btnObj.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.03f, 0.09f, 0.78f);
+
         Button btn = btnObj.AddComponent<Button>();
+        ColorBlock cb = btn.colors;
+        cb.normalColor = Color.white;
+        cb.highlightedColor = new Color(1.1f, 1.1f, 1.1f, 1f);
+        cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+        cb.fadeDuration = 0.08f;
+        btn.colors = cb;
 
-        label = CreateText(rt, "Label", text,
-            36, FontStyles.Bold, new Color(color.r, color.g, color.b, 0f));
-        StretchFull(label.rectTransform);
-        label.characterSpacing = 6f;
+        Color edgeCol = new Color(neon.r, neon.g, neon.b, 0.85f);
+        CreateButtonEdge(rt, "EdgeT", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 2f), edgeCol);
+        CreateButtonEdge(rt, "EdgeB", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 2f), edgeCol);
+        CreateButtonEdge(rt, "EdgeL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(2f, 0f), edgeCol);
+        CreateButtonEdge(rt, "EdgeR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f), edgeCol);
+
+        Color bracketCol = neon;
+        float bLen = 14f, bThick = 3f, bInset = 6f;
+        CreateButtonCornerBracket(rt, "CornerTL", new Vector2(0f, 1f), new Vector2(bInset, -bInset), bLen, bThick, bracketCol, +1, -1);
+        CreateButtonCornerBracket(rt, "CornerTR", new Vector2(1f, 1f), new Vector2(-bInset, -bInset), bLen, bThick, bracketCol, -1, -1);
+        CreateButtonCornerBracket(rt, "CornerBL", new Vector2(0f, 0f), new Vector2(bInset, bInset), bLen, bThick, bracketCol, +1, +1);
+        CreateButtonCornerBracket(rt, "CornerBR", new Vector2(1f, 0f), new Vector2(-bInset, bInset), bLen, bThick, bracketCol, -1, +1);
+
+        GameObject accent = new GameObject("Accent");
+        RectTransform accentRT = accent.AddComponent<RectTransform>();
+        accentRT.SetParent(rt, false);
+        accentRT.anchorMin = new Vector2(0f, 0.2f);
+        accentRT.anchorMax = new Vector2(0f, 0.8f);
+        accentRT.pivot = new Vector2(0f, 0.5f);
+        accentRT.anchoredPosition = new Vector2(10f, 0f);
+        accentRT.sizeDelta = new Vector2(4f, 0f);
+        Image accentImg = accent.AddComponent<Image>();
+        accentImg.color = neon;
+        accentImg.raycastTarget = false;
+
+        label = CreateText(rt, "Label", text, 24, FontStyles.Bold, neon);
+        RectTransform lblRT = label.rectTransform;
+        lblRT.anchorMin = Vector2.zero;
+        lblRT.anchorMax = Vector2.one;
+        lblRT.offsetMin = new Vector2(24f, 0f);
+        lblRT.offsetMax = new Vector2(-16f, 0f);
+        label.alignment = TextAlignmentOptions.Center;
+        label.characterSpacing = 4f;
+        label.raycastTarget = false;
 
         return btn;
+    }
+
+    // Lays the existing centered label into the button's top half and adds a
+    // dimmer "BEST nnn" sub-label in the bottom half. The label param (from
+    // CreatePrimaryButton) is repositioned in-place so no signature change.
+    void AddBestLineToButton(Button btn, Color neon, out TMP_Text bestLabel)
+    {
+        RectTransform btnRT = btn.GetComponent<RectTransform>();
+        TMP_Text nameLabel = btn.transform.Find("Label") != null
+            ? btn.transform.Find("Label").GetComponent<TMP_Text>()
+            : null;
+        if (nameLabel != null)
+        {
+            RectTransform nameRT = nameLabel.rectTransform;
+            nameRT.anchorMin = new Vector2(0f, 0.5f);
+            nameRT.anchorMax = new Vector2(1f, 1f);
+            nameRT.offsetMin = new Vector2(24f, 0f);
+            nameRT.offsetMax = new Vector2(-16f, -8f);
+        }
+
+        bestLabel = CreateText(btnRT, "BestSubLabel", "",
+            16, FontStyles.Bold, new Color(neon.r, neon.g, neon.b, 0.65f));
+        RectTransform bestRT = bestLabel.rectTransform;
+        bestRT.anchorMin = new Vector2(0f, 0f);
+        bestRT.anchorMax = new Vector2(1f, 0.5f);
+        bestRT.offsetMin = new Vector2(24f, 12f);
+        bestRT.offsetMax = new Vector2(-16f, 0f);
+        bestLabel.alignment = TextAlignmentOptions.Center;
+        bestLabel.characterSpacing = 6f;
+        bestLabel.raycastTarget = false;
+    }
+
+    int GetBestForMode(GameModeType mode)
+    {
+        string saved = PlayerPrefs.GetString(GameConfig.GetScoresKey(mode), "");
+        if (string.IsNullOrEmpty(saved)) return 0;
+        int best = 0;
+        foreach (string p in saved.Split(','))
+        {
+            string[] pair = p.Split(':');
+            int v;
+            if (int.TryParse(pair[0], out v) && v > best) best = v;
+        }
+        return best;
+    }
+
+    void RefreshModeBestLabels()
+    {
+        if (titlePureHellBestLabel != null)
+        {
+            int best = GetBestForMode(GameModeType.PureHell);
+            titlePureHellBestLabel.text = best > 0
+                ? "BEST  " + FormatModeScore(best)
+                : "NO RUNS YET";
+        }
+        if (titleBlitzBestLabel != null)
+        {
+            int best = GetBestForMode(GameModeType.Blitz);
+            titleBlitzBestLabel.text = best > 0
+                ? "BEST  " + FormatModeScore(best)
+                : "NO RUNS YET";
+        }
+    }
+
+    void CreateButtonEdge(RectTransform parent, string name,
+        Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 thickness, Color color)
+    {
+        GameObject obj = new GameObject(name);
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.pivot = pivot;
+        rt.sizeDelta = thickness;
+        Image img = obj.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+    }
+
+    void CreateButtonCornerBracket(RectTransform parent, string name,
+        Vector2 anchor, Vector2 inset, float len, float thick, Color color, int signX, int signY)
+    {
+        GameObject h = new GameObject(name + "H");
+        RectTransform hrt = h.AddComponent<RectTransform>();
+        hrt.SetParent(parent, false);
+        hrt.anchorMin = anchor;
+        hrt.anchorMax = anchor;
+        hrt.pivot = new Vector2(signX > 0 ? 0f : 1f, signY > 0 ? 0f : 1f);
+        hrt.anchoredPosition = inset;
+        hrt.sizeDelta = new Vector2(len, thick);
+        Image hi = h.AddComponent<Image>();
+        hi.color = color;
+        hi.raycastTarget = false;
+
+        GameObject v = new GameObject(name + "V");
+        RectTransform vrt = v.AddComponent<RectTransform>();
+        vrt.SetParent(parent, false);
+        vrt.anchorMin = anchor;
+        vrt.anchorMax = anchor;
+        vrt.pivot = new Vector2(signX > 0 ? 0f : 1f, signY > 0 ? 0f : 1f);
+        vrt.anchoredPosition = inset;
+        vrt.sizeDelta = new Vector2(thick, len);
+        Image vi = v.AddComponent<Image>();
+        vi.color = color;
+        vi.raycastTarget = false;
+    }
+
+    void SetButtonAlpha(Button btn, float alpha)
+    {
+        if (btn == null) return;
+        CanvasGroup cg = btn.GetComponent<CanvasGroup>();
+        if (cg == null) cg = btn.gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = alpha;
+        cg.blocksRaycasts = alpha > 0.05f;
     }
 
     void StartWithMode(GameModeType mode)
@@ -2424,6 +2586,7 @@ public class ScoreSync : MonoBehaviour
             case "bars": BuildBarsIcon(iconRT, iconColor); break;
             case "gear": BuildGearIcon(iconRT, iconColor); break;
             case "power": BuildPowerIcon(iconRT, iconColor); break;
+            case "back": BuildBackIcon(iconRT, iconColor); break;
         }
 
         return btn;
@@ -2481,6 +2644,17 @@ public class ScoreSync : MonoBehaviour
         d1.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
         Image d2 = CreateIconBar(parent, "X2", color, 0.8f, 0.18f);
         d2.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
+    }
+
+    void BuildBackIcon(RectTransform parent, Color color)
+    {
+        // Left-pointing chevron — two short bars meeting at a left-facing point.
+        Image top = CreateIconBar(parent, "ChevTop", color, 0.55f, 0.18f);
+        top.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        top.rectTransform.anchoredPosition = new Vector2(-3f, 10f);
+        Image bot = CreateIconBar(parent, "ChevBot", color, 0.55f, 0.18f);
+        bot.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
+        bot.rectTransform.anchoredPosition = new Vector2(-3f, -10f);
     }
 
     Image CreateIconBar(RectTransform parent, string name, Color color, float wFrac, float hFrac)
@@ -3240,6 +3414,12 @@ public class ScoreSync : MonoBehaviour
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
+    }
+
+    void OnModesTap()
+    {
+        if (mSphere != null) mSphere.ReturnToTitle();
+        forceShowTitle = true;
     }
 
     void OnLeaderboardTap()

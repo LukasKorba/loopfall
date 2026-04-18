@@ -93,8 +93,10 @@ public class Sphere : MonoBehaviour
         mScoreSync = FindAnyObjectByType<ScoreSync>();
         mAudio = FindAnyObjectByType<GameAudio>();
 
-        // Blitz shield visual — transparent green sphere around ball
-        if (GameConfig.IsBlitz() && mBlitzShieldMat != null)
+        // Blitz shield visual — transparent green sphere around ball. Created
+        // unconditionally since mode isn't committed yet at Start(); visibility is
+        // driven by Torus.IsShieldActive() which only becomes true in Blitz.
+        if (mBlitzShieldMat != null)
         {
             GameObject shield = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             shield.name = "ShieldVisual";
@@ -109,8 +111,9 @@ public class Sphere : MonoBehaviour
             mShieldVisual = shield;
         }
 
-        // Start paused — waiting for first tap
+        // Start paused — waiting for mode pick on title screen. Beam inactive until Blitz commit.
         mTorusScript.SetPaused(true);
+        if (mBlitzBeam != null) mBlitzBeam.SetActive(false);
     }
 
     bool IsPointerOverUI()
@@ -160,7 +163,9 @@ public class Sphere : MonoBehaviour
         // Suppress input while Torus is mid-transition (ball is kinematic, world is animating).
         if (mBlitzTransitionPending) return;
 
-        // Title state — tap anywhere to start
+        // Title state — the 2-mode picker owns input. Mode buttons call StartGame via
+        // ScoreSync after setting GameConfig.ActiveMode. tvOS has no on-screen picker,
+        // so the remote/gamepad commits to the last-active mode directly.
         if (mWaitingToStart)
         {
 #if UNITY_TVOS
@@ -171,7 +176,6 @@ public class Sphere : MonoBehaviour
                 ApplyForceWithForwardVector(GetForwardVector(remoteTap < 0 ? 1f : -1f));
             }
             else
-#endif
             {
                 int padTap = GetGamepadTap();
                 if (padTap != 0)
@@ -179,42 +183,8 @@ public class Sphere : MonoBehaviour
                     StartGame();
                     ApplyForceWithForwardVector(GetForwardVector(padTap < 0 ? 1f : -1f));
                 }
-#if !UNITY_TVOS
-                else if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
-                {
-                    StartGame();
-                    ApplyForceWithForwardVector(GetForwardVector(1f));
-                }
-                else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
-                {
-                    StartGame();
-                    ApplyForceWithForwardVector(GetForwardVector(-1f));
-                }
-                else if (Input.anyKeyDown && !Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1))
-                {
-                    // Truly any key — random direction
-                    StartGame();
-                    float dir = Random.value < 0.5f ? 1f : -1f;
-                    ApplyForceWithForwardVector(GetForwardVector(dir));
-                }
-                else if (!IsPointerOverUI() && Input.touchCount == 0 && Input.GetMouseButtonDown(0))
-                {
-                    StartGame();
-                    if (Input.mousePosition.x < Screen.width * 0.5f)
-                        ApplyForceWithForwardVector(GetForwardVector(1f));
-                    else
-                        ApplyForceWithForwardVector(GetForwardVector(-1f));
-                }
-                else if (!IsPointerOverUI() && Input.touchCount == 1 && Input.touches[0].phase == TouchPhase.Began)
-                {
-                    StartGame();
-                    if (Input.touches[0].position.x < Screen.width * 0.5f)
-                        ApplyForceWithForwardVector(GetForwardVector(1f));
-                    else
-                        ApplyForceWithForwardVector(GetForwardVector(-1f));
-                }
-#endif
             }
+#endif
             return;
         }
 
@@ -530,11 +500,15 @@ public class Sphere : MonoBehaviour
     public bool IsWaiting() { return mWaitingToStart; }
     public bool IsGameOver() { return mGameOver; }
 
-    /// <summary>Start game from UI button (mode selection).</summary>
+    /// <summary>Start game from UI button (mode selection). Spawns obstacles for the committed mode.</summary>
     public void StartGame()
     {
         if (!mWaitingToStart) return;
         mWaitingToStart = false;
+
+        // Torus was empty on title — spawn obstacles for the now-committed mode.
+        mTorusScript.Reset(true);
+
         if (mSplineController == null)
             mTorusScript.SetPaused(false);
 
@@ -549,6 +523,40 @@ public class Sphere : MonoBehaviour
         }
 
         IncrementRuns();
+    }
+
+    /// <summary>Return to title state — clears torus, parks ball, pauses. Called from back-to-modes button.</summary>
+    public void ReturnToTitle()
+    {
+        mWaitingToStart = true;
+        mGameOver = false;
+        mBlitzTransitionPending = false;
+
+        // Clear torus obstacles without respawning — stays empty until next mode commit.
+        mTorusScript.Reset(false);
+        mTorusScript.SetPaused(true);
+
+        // Park ball at start, reset physics.
+        mRigid.isKinematic = false;
+        mRigid.linearDamping = mOriginalDrag;
+        mRigid.angularDamping = mOriginalAngularDrag;
+        mRigid.linearVelocity = Vector3.zero;
+        mRigid.angularVelocity = Vector3.zero;
+        transform.position = mBeginPosition;
+        mPrevPosition = transform.position;
+
+        mCamera.transform.position = mCameraStartPos;
+        mCamera.transform.rotation = mCameraStartRot;
+
+        CameraSwing swing = mCamera.GetComponent<CameraSwing>();
+        if (swing != null) { swing.mDiff = Vector3.zero; swing.ResetSpring(); }
+
+        DeathEffect death = mCamera.GetComponent<DeathEffect>();
+        if (death != null) death.ResetShake();
+
+        if (mRewindSystem != null) mRewindSystem.ResetSystem();
+
+        if (mBlitzBeam != null) mBlitzBeam.SetActive(false);
     }
     public bool IsRewinding()
     {
