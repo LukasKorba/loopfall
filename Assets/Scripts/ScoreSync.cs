@@ -23,7 +23,7 @@ public class ScoreSync : MonoBehaviour
     private const string SCORES_KEY = "TopScores";
 
     // ── STATE ────────────────────────────────────────────────
-    private enum State { Splash, Title, Playing, Rewinding, GameOver }
+    private enum State { Splash, Title, Tutorial, Playing, Rewinding, GameOver }
 #if UNITY_EDITOR
     private State state = State.Title;
 #else
@@ -232,9 +232,36 @@ public class ScoreSync : MonoBehaviour
     private float pauseAnimTimer = -1f;
     private const float PAUSE_ANIM_DURATION = 0.4f;
 
+    // ── TUTORIAL ─────────────────────────────────────────────
+    // First-run onboarding: stationary torus, no obstacles, UI walks the player through
+    // left + right swing. Stashed mode re-enters the normal flow once both fired + tap.
+    private RectTransform tutorialGroup;
+    private Image tutorialCenterLine;
+    private TMP_Text tutorialLeftArrow;
+    private TMP_Text tutorialRightArrow;
+    private TMP_Text tutorialInstructionText;
+    private TMP_Text tutorialNudgeText;
+    private TMP_Text tutorialReadyText;
+    private TMP_Text tutorialReadyHintText;
+    private Image tutorialPlatformImage; // Placeholder — user will supply per-platform sprites
+    private float mTutorialSinceBothSeenTimer = -1f; // When both L/R fired, countdown to Ready prompt
+    private float mTutorialNudgeTimer = 0f;          // Elapsed since last progress — nudges after threshold
+    private float mTutorialDeathFlashTimer = -1f;    // Non-neg: death message visible
+    private bool  mTutorialReady = false;            // Ready? prompt shown, awaiting tap
+    private const float TUTORIAL_NUDGE_DELAY = 5f;   // Seconds with only one dir before nudging for the other
+    private const float TUTORIAL_READY_DELAY = 0.6f; // Pause after both fired before showing "Ready?"
+    private const float TUTORIAL_DEATH_FLASH_DURATION = 2.0f;
+
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
+    private TMP_FontAsset phosphorFont;
     private Sprite circleSprite;
+
+    // Phosphor Icons codepoints (Private Use Area).
+    private const string PHOSPHOR_TROPHY      = "\uE67E";
+    private const string PHOSPHOR_GEAR        = "\uE270";
+    private const string PHOSPHOR_CARET_LEFT  = "\uE138";
+    private const string PHOSPHOR_LIST_BULLET = "\uE2F2";
 
     // ── CACHED REFS ─────────────────────────────────────────
     private Sphere mSphere;
@@ -247,6 +274,9 @@ public class ScoreSync : MonoBehaviour
 #endif
         LoadScores();
         defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+        Font phosphorSource = Resources.Load<Font>("Fonts/Phosphor-Thin");
+        if (phosphorSource != null)
+            phosphorFont = TMP_FontAsset.CreateFontAsset(phosphorSource);
         circleSprite = CreateCircleSprite(32);
         mSphere = FindAnyObjectByType<Sphere>();
         mAudio = FindAnyObjectByType<GameAudio>();
@@ -310,6 +340,8 @@ public class ScoreSync : MonoBehaviour
             newState = State.Rewinding;
         else if (mSphere.IsGameOver())
             newState = State.GameOver;
+        else if (GameConfig.IsTutorialActive)
+            newState = State.Tutorial;
         else
             newState = State.Playing;
 
@@ -507,6 +539,7 @@ public class ScoreSync : MonoBehaviour
         BuildSplashGroup(canvasObj.transform);
         BuildTitleGroup(canvasObj.transform);
         BuildPlayingGroup(canvasObj.transform);
+        BuildTutorialGroup(canvasObj.transform);
         BuildGameOverGroup(canvasObj.transform);
         BuildPauseGroup(canvasObj.transform);
 
@@ -752,7 +785,7 @@ public class ScoreSync : MonoBehaviour
 
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
-            "star", NEON_GOLD, out titleLBIcon);
+            "trophy", NEON_GOLD, out titleLBIcon);
         titleLBBtn.onClick.AddListener(OnLeaderboardTap);
 
         titleSettingsBtn = CreateIconButton(titleGroup, "TitleSettingsBtn",
@@ -922,12 +955,12 @@ public class ScoreSync : MonoBehaviour
 
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
-            "star", NEON_GOLD, out goLBIcon);
+            "trophy", NEON_GOLD, out goLBIcon);
         goLBBtn.onClick.AddListener(OnLeaderboardTap);
 
         goStatsBtn = CreateIconButton(gameOverGroup, "GOStatsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
-            "bars", NEON_CYAN, out goStatsIcon);
+            "stats", NEON_CYAN, out goStatsIcon);
         goStatsBtn.onClick.AddListener(OnStatsTap);
 
         goSettingsBtn = CreateIconButton(gameOverGroup, "GOSettingsBtn",
@@ -1095,6 +1128,7 @@ public class ScoreSync : MonoBehaviour
     {
         SetGroupActive(splashGroup, s == State.Splash);
         SetGroupActive(titleGroup, s == State.Title);
+        SetGroupActive(tutorialGroup, s == State.Tutorial);
         SetGroupActive(playingGroup, s == State.Playing);
         SetGroupActive(gameOverGroup, s == State.GameOver);
         CloseSettings();
@@ -1144,6 +1178,7 @@ public class ScoreSync : MonoBehaviour
         {
             case State.Splash: AnimateSplash(); break;
             case State.Title: AnimateTitle(); break;
+            case State.Tutorial: AnimateTutorial(); break;
             case State.Playing: AnimatePlaying(); break;
             case State.Rewinding: AnimateRewinding(); break;
             case State.GameOver: AnimateGameOver(); break;
@@ -2652,10 +2687,29 @@ public class ScoreSync : MonoBehaviour
 
     void StartWithMode(GameModeType mode)
     {
+        // First-ever run: stash the chosen mode and route into tutorial instead. The
+        // flag stays active until both L and R have fired + the player taps "Ready?".
+        // IsTutorialActive is read by Torus (skip obstacle spawn, freeze rotation) and
+        // Sphere (turn wall/trailing hits into ball-resets instead of game-over).
+        if (!GameConfig.HasSeenTutorial())
+        {
+            GameConfig.IsTutorialActive = true;
+            ResetTutorialState();
+            if (mSphere != null) mSphere.ResetTutorialInputs();
+        }
+
         GameConfig.ActiveMode = mode;
         LoadScores(); // Reload for the selected mode's leaderboard
         if (mSphere != null && mSphere.IsWaiting())
             mSphere.StartGame();
+    }
+
+    void ResetTutorialState()
+    {
+        mTutorialSinceBothSeenTimer = -1f;
+        mTutorialNudgeTimer = 0f;
+        mTutorialDeathFlashTimer = -1f;
+        mTutorialReady = false;
     }
 
     void CreateDockStrip(RectTransform parent, string name,
@@ -2730,11 +2784,13 @@ public class ScoreSync : MonoBehaviour
 
         switch (iconType)
         {
-            case "star": BuildStarIcon(iconRT, iconColor); break;
-            case "bars": BuildBarsIcon(iconRT, iconColor); break;
-            case "gear": BuildGearIcon(iconRT, iconColor); break;
-            case "power": BuildPowerIcon(iconRT, iconColor); break;
-            case "back": BuildBackIcon(iconRT, iconColor); break;
+            case "star":    BuildStarIcon(iconRT, iconColor); break;
+            case "bars":    BuildBarsIcon(iconRT, iconColor); break;
+            case "gear":    BuildPhosphorIcon(iconRT, PHOSPHOR_GEAR, iconColor, false); break;
+            case "power":   BuildPowerIcon(iconRT, iconColor); break;
+            case "back":    BuildPhosphorIcon(iconRT, PHOSPHOR_CARET_LEFT, iconColor, false); break;
+            case "trophy":  BuildPhosphorIcon(iconRT, PHOSPHOR_TROPHY, iconColor, false); break;
+            case "stats":   BuildPhosphorIcon(iconRT, PHOSPHOR_LIST_BULLET, iconColor, true); break;
         }
 
         return btn;
@@ -2803,6 +2859,30 @@ public class ScoreSync : MonoBehaviour
         Image bot = CreateIconBar(parent, "ChevBot", color, 0.55f, 0.18f);
         bot.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
         bot.rectTransform.anchoredPosition = new Vector2(-3f, -10f);
+    }
+
+    void BuildPhosphorIcon(RectTransform parent, string glyph, Color color, bool flipY)
+    {
+        GameObject obj = new GameObject("Glyph");
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        if (flipY) rt.localScale = new Vector3(1f, -1f, 1f);
+
+        TextMeshProUGUI tmp = obj.AddComponent<TextMeshProUGUI>();
+        if (phosphorFont != null) tmp.font = phosphorFont;
+        tmp.text = glyph;
+        tmp.color = color;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.enableWordWrapping = false;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+        tmp.raycastTarget = false;
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = 8f;
+        tmp.fontSizeMax = 200f;
     }
 
     Image CreateIconBar(RectTransform parent, string name, Color color, float wFrac, float hFrac)
@@ -2878,6 +2958,267 @@ public class ScoreSync : MonoBehaviour
             28, FontStyles.Normal, DIM_TEXT);
         SetAnchored(pauseHintText.rectTransform, new Vector2(0.5f, 0.42f), new Vector2(600, 50));
         pauseHintText.characterSpacing = 6f;
+    }
+
+    // ── TUTORIAL ────────────────────────────────────────────
+
+    void BuildTutorialGroup(Transform parent)
+    {
+        tutorialGroup = CreateGroup(parent, "TutorialGroup");
+#if UNITY_IOS && !UNITY_TVOS
+        ApplySafeAreaInsets(tutorialGroup);
+#endif
+        tutorialGroup.gameObject.SetActive(false);
+
+        // Center vertical line — visually divides the screen into left/right halves.
+        tutorialCenterLine = CreateImage(tutorialGroup.transform, "TutorialCenterLine",
+            new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.25f));
+        RectTransform lineRT = tutorialCenterLine.rectTransform;
+        lineRT.anchorMin = new Vector2(0.5f, 0.12f);
+        lineRT.anchorMax = new Vector2(0.5f, 0.78f);
+        lineRT.pivot = new Vector2(0.5f, 0.5f);
+        lineRT.anchoredPosition = Vector2.zero;
+        lineRT.sizeDelta = new Vector2(2f, 0f);
+
+        // Left / right arrows flanking the line. Unicode arrows keep the TMP path
+        // simple and scale cleanly; we tint them when their direction has fired.
+        tutorialLeftArrow = CreateText(tutorialGroup, "TutorialLeftArrow", "\u2B05",
+            140, FontStyles.Bold, NEON_CYAN);
+        SetAnchored(tutorialLeftArrow.rectTransform, new Vector2(0.28f, 0.50f), new Vector2(220, 200));
+        ApplyDropShadow(tutorialLeftArrow);
+
+        tutorialRightArrow = CreateText(tutorialGroup, "TutorialRightArrow", "\u27A1",
+            140, FontStyles.Bold, NEON_MAGENTA);
+        SetAnchored(tutorialRightArrow.rectTransform, new Vector2(0.72f, 0.50f), new Vector2(220, 200));
+        ApplyDropShadow(tutorialRightArrow);
+
+        // Primary instruction — modality-agnostic, reads left AND right as input actions.
+#if UNITY_TVOS
+        string instruction = "SWIPE OR PRESS LEFT AND RIGHT";
+#elif UNITY_STANDALONE
+        string instruction = "PRESS LEFT AND RIGHT";
+#else
+        string instruction = "TAP LEFT AND RIGHT";
+#endif
+        tutorialInstructionText = CreateText(tutorialGroup, "TutorialInstruction", instruction,
+            42, FontStyles.Bold, Color.white);
+        SetAnchored(tutorialInstructionText.rectTransform, new Vector2(0.5f, 0.76f), new Vector2(1400, 90));
+        tutorialInstructionText.characterSpacing = 6f;
+        ApplyDropShadow(tutorialInstructionText);
+
+        // Nudge — only surfaces if the player uses one direction and stops.
+        tutorialNudgeText = CreateText(tutorialGroup, "TutorialNudge", "",
+            30, FontStyles.Italic, NEON_GOLD);
+        SetAnchored(tutorialNudgeText.rectTransform, new Vector2(0.5f, 0.68f), new Vector2(1400, 60));
+        tutorialNudgeText.characterSpacing = 4f;
+        tutorialNudgeText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f);
+
+        // Ready? prompt + resolving hint. Both hidden until both directions fired.
+        tutorialReadyText = CreateText(tutorialGroup, "TutorialReady", "READY?",
+            96, FontStyles.Bold, NEON_GOLD);
+        SetAnchored(tutorialReadyText.rectTransform, new Vector2(0.5f, 0.50f), new Vector2(1200, 140));
+        tutorialReadyText.characterSpacing = 12f;
+        ApplyDropShadow(tutorialReadyText);
+        tutorialReadyText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f);
+
+#if UNITY_TVOS
+        string readyHint = "TAP TO BEGIN";
+#elif UNITY_STANDALONE
+        string readyHint = "TAP OR PRESS ANY DIRECTION TO BEGIN";
+#else
+        string readyHint = "TAP TO BEGIN";
+#endif
+        tutorialReadyHintText = CreateText(tutorialGroup, "TutorialReadyHint", readyHint,
+            28, FontStyles.Normal, DIM_TEXT);
+        SetAnchored(tutorialReadyHintText.rectTransform, new Vector2(0.5f, 0.40f), new Vector2(1400, 50));
+        tutorialReadyHintText.characterSpacing = 6f;
+        tutorialReadyHintText.color = new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f);
+
+        // Platform image placeholder — user will swap in per-platform sprites (iOS/tvOS/
+        // keyboard/gamepad) later. Empty image keeps the slot allocated for future art.
+        tutorialPlatformImage = CreateImage(tutorialGroup.transform, "TutorialPlatformImage",
+            new Color(1f, 1f, 1f, 0f));
+        RectTransform pImgRT = tutorialPlatformImage.rectTransform;
+        pImgRT.anchorMin = new Vector2(0.5f, 0.22f);
+        pImgRT.anchorMax = new Vector2(0.5f, 0.22f);
+        pImgRT.pivot = new Vector2(0.5f, 0.5f);
+        pImgRT.anchoredPosition = Vector2.zero;
+        pImgRT.sizeDelta = new Vector2(400f, 160f);
+    }
+
+    void AnimateTutorial()
+    {
+        if (mSphere == null) return;
+
+        // Breathe the center line a little so the empty stage doesn't feel dead.
+        float pulse = 0.25f + Mathf.Sin(Time.time * 2.2f) * 0.10f;
+        if (tutorialCenterLine != null)
+            tutorialCenterLine.color = new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, pulse);
+
+        bool leftDone = mSphere.WasTutorialLeftFired();
+        bool rightDone = mSphere.WasTutorialRightFired();
+
+        // Arrow tint reflects progress — fired direction dims + desaturates.
+        if (tutorialLeftArrow != null)
+            tutorialLeftArrow.color = leftDone
+                ? new Color(NEON_CYAN.r * 0.35f, NEON_CYAN.g * 0.35f, NEON_CYAN.b * 0.35f, 0.6f)
+                : new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 1f);
+        if (tutorialRightArrow != null)
+            tutorialRightArrow.color = rightDone
+                ? new Color(NEON_MAGENTA.r * 0.35f, NEON_MAGENTA.g * 0.35f, NEON_MAGENTA.b * 0.35f, 0.6f)
+                : new Color(NEON_MAGENTA.r, NEON_MAGENTA.g, NEON_MAGENTA.b, 1f);
+
+        // Subtle float animation on the arrow that still needs hitting.
+        if (tutorialLeftArrow != null && !leftDone)
+        {
+            float ox = Mathf.Sin(Time.time * 3.2f) * 10f;
+            RectTransform rt = tutorialLeftArrow.rectTransform;
+            Vector2 ap = rt.anchoredPosition; ap.x = ox - 6f; rt.anchoredPosition = ap;
+        }
+        if (tutorialRightArrow != null && !rightDone)
+        {
+            float ox = Mathf.Sin(Time.time * 3.2f + Mathf.PI) * 10f;
+            RectTransform rt = tutorialRightArrow.rectTransform;
+            Vector2 ap = rt.anchoredPosition; ap.x = ox + 6f; rt.anchoredPosition = ap;
+        }
+
+        // Death flash from tutorial wall hit — show a corrective nudge.
+        if (mSphere.ConsumeTutorialDeath())
+        {
+            mTutorialDeathFlashTimer = 0f;
+            // Full restart of coverage so the player re-earns both directions.
+            mSphere.ResetTutorialInputs();
+            leftDone = false;
+            rightDone = false;
+            mTutorialSinceBothSeenTimer = -1f;
+            mTutorialReady = false;
+        }
+
+        // Instruction line — replaced by death message for a short window.
+        if (mTutorialDeathFlashTimer >= 0f)
+        {
+            mTutorialDeathFlashTimer += Time.deltaTime;
+            if (tutorialInstructionText != null)
+            {
+                tutorialInstructionText.text = "DON'T HIT THE WALLS — TRY AGAIN";
+                tutorialInstructionText.color = NEON_MAGENTA;
+            }
+            if (mTutorialDeathFlashTimer >= TUTORIAL_DEATH_FLASH_DURATION)
+            {
+                mTutorialDeathFlashTimer = -1f;
+                if (tutorialInstructionText != null)
+                {
+#if UNITY_TVOS
+                    tutorialInstructionText.text = "SWIPE OR PRESS LEFT AND RIGHT";
+#elif UNITY_STANDALONE
+                    tutorialInstructionText.text = "PRESS LEFT AND RIGHT";
+#else
+                    tutorialInstructionText.text = "TAP LEFT AND RIGHT";
+#endif
+                    tutorialInstructionText.color = Color.white;
+                }
+            }
+        }
+
+        // Nudge logic: one direction done + long silence on the other → encourage it.
+        bool onlyOneDirection = (leftDone ^ rightDone);
+        if (onlyOneDirection && mTutorialDeathFlashTimer < 0f)
+        {
+            mTutorialNudgeTimer += Time.deltaTime;
+            if (mTutorialNudgeTimer >= TUTORIAL_NUDGE_DELAY && tutorialNudgeText != null)
+            {
+                string nudge = leftDone ? "NOW TRY RIGHT" : "NOW TRY LEFT";
+                tutorialNudgeText.text = nudge;
+                float a = Mathf.Clamp01((mTutorialNudgeTimer - TUTORIAL_NUDGE_DELAY) / 0.5f);
+                tutorialNudgeText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, a * 0.9f);
+            }
+        }
+        else
+        {
+            mTutorialNudgeTimer = 0f;
+            if (tutorialNudgeText != null)
+            {
+                Color c = tutorialNudgeText.color;
+                c.a = Mathf.Max(0f, c.a - Time.deltaTime * 3f);
+                tutorialNudgeText.color = c;
+            }
+        }
+
+        // Both fired → small breather, then swap in the "Ready?" prompt.
+        if (leftDone && rightDone)
+        {
+            if (mTutorialSinceBothSeenTimer < 0f) mTutorialSinceBothSeenTimer = 0f;
+            mTutorialSinceBothSeenTimer += Time.deltaTime;
+
+            if (mTutorialSinceBothSeenTimer >= TUTORIAL_READY_DELAY)
+            {
+                mTutorialReady = true;
+                if (tutorialInstructionText != null)
+                {
+                    Color ic = tutorialInstructionText.color;
+                    ic.a = Mathf.Max(0f, ic.a - Time.deltaTime * 3f);
+                    tutorialInstructionText.color = ic;
+                }
+                if (tutorialLeftArrow != null)
+                {
+                    Color lc = tutorialLeftArrow.color;
+                    lc.a = Mathf.Max(0f, lc.a - Time.deltaTime * 3f);
+                    tutorialLeftArrow.color = lc;
+                }
+                if (tutorialRightArrow != null)
+                {
+                    Color rc = tutorialRightArrow.color;
+                    rc.a = Mathf.Max(0f, rc.a - Time.deltaTime * 3f);
+                    tutorialRightArrow.color = rc;
+                }
+                if (tutorialReadyText != null)
+                {
+                    float t = Mathf.Clamp01((mTutorialSinceBothSeenTimer - TUTORIAL_READY_DELAY) / 0.35f);
+                    float pulseAlpha = 0.75f + Mathf.Sin(Time.time * 3.0f) * 0.25f;
+                    tutorialReadyText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, t * pulseAlpha);
+                }
+                if (tutorialReadyHintText != null)
+                {
+                    float t = Mathf.Clamp01((mTutorialSinceBothSeenTimer - TUTORIAL_READY_DELAY - 0.2f) / 0.4f);
+                    tutorialReadyHintText.color = new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, t * 0.9f);
+                }
+                TickTutorialReadyTap();
+            }
+        }
+    }
+
+    // Ready? accepts the next tap as both "finish tutorial" and "open the mode". The
+    // tap direction becomes the first force of the real run via Sphere.ExitTutorial.
+    void TickTutorialReadyTap()
+    {
+        if (!mTutorialReady || mSphere == null) return;
+
+        float tapSign = 0f;
+        if (Input.GetMouseButtonDown(0))
+        {
+            tapSign = Input.mousePosition.x < Screen.width * 0.5f ? 1f : -1f;
+        }
+        else if (Input.touchCount > 0 && Input.touches[0].phase == TouchPhase.Began)
+        {
+            tapSign = Input.touches[0].position.x < Screen.width * 0.5f ? 1f : -1f;
+        }
+#if UNITY_STANDALONE || UNITY_EDITOR
+        else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
+            tapSign = 1f;
+        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
+            tapSign = -1f;
+        else if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+            tapSign = 1f;
+#endif
+
+        if (tapSign != 0f)
+        {
+            mSphere.ExitTutorial(tapSign);
+            mTutorialReady = false;
+            mTutorialSinceBothSeenTimer = -1f;
+            // State transition picked up next frame: IsTutorialActive is now false, so
+            // detection lands on State.Playing.
+        }
     }
 
     // ── SETTINGS PANEL ──────────────────────────────────────

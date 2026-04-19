@@ -17,6 +17,23 @@ public static class GameConfig
     // Wired from SceneSetup's inspector flag; leave false for ship builds.
     public static bool BlitzDebugMaxPower = false;
 
+    // Tutorial: active for the first run ever, or until the player proves they
+    // understand left/right swing. ScoreSync owns the state; Torus/Sphere read
+    // IsTutorialActive to skip obstacle spawn, freeze torus rotation, and turn
+    // collisions into ball resets.
+    public static bool IsTutorialActive = false;
+
+    private const string PREF_HAS_SEEN_TUTORIAL = "HasSeenTutorial";
+    public static bool HasSeenTutorial()
+    {
+        return UnityEngine.PlayerPrefs.GetInt(PREF_HAS_SEEN_TUTORIAL, 0) == 1;
+    }
+    public static void MarkTutorialSeen()
+    {
+        UnityEngine.PlayerPrefs.SetInt(PREF_HAS_SEEN_TUTORIAL, 1);
+        UnityEngine.PlayerPrefs.Save();
+    }
+
     public static string GetScoresKey() { return GetScoresKey(ActiveMode); }
     public static string GetScoresKey(GameModeType mode)
     {

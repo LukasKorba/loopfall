@@ -199,6 +199,12 @@ public class Torus : MonoBehaviour
         if (mGameOver || mPaused)
             return;
 
+        // Tutorial: ball physics run normally (Sphere.Update), but the torus is frozen
+        // — no rotation, no obstacle windowing, no scoring. This leaves a calm empty
+        // tube so the player can focus on left/right swing.
+        if (GameConfig.IsTutorialActive)
+            return;
+
         // Constant speed — no acceleration (the version you loved)
         // MANUAL PARAM: mAngleStep controls game speed
         mAngle += mAngleStep;
@@ -375,9 +381,10 @@ public class Torus : MonoBehaviour
 
     /// Clears the world and resets run state. Both mode's obstacle sets are cleared
     /// unconditionally so switching modes never leaves stragglers. When spawnObstacles
-    /// is false (ReturnToTitle), the torus stays empty until a mode is committed.
+    /// is false (ReturnToTitle) or tutorial is active, the torus stays empty.
     public void Reset(bool spawnObstacles)
     {
+        if (GameConfig.IsTutorialActive) spawnObstacles = false;
         mAngle = 0.0f;
         mAngleScore = 0.0f;
         mRounds = 0;

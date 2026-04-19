@@ -32,6 +32,14 @@ public class Sphere : MonoBehaviour
     private bool mPadRightFired = false;
     private const float PAD_THRESHOLD = 0.5f;
 
+    // Tutorial — set by GetForwardVector so ScoreSync can detect left/right coverage.
+    // Consumed via public Was/Consume helpers; we never clear on its own.
+    private bool mTutorialLeftFired;
+    private bool mTutorialRightFired;
+    // Death during tutorial turns into a ball-reset + one-shot flag the tutorial UI
+    // reads to flash a "don't hit the walls" message, then clears.
+    private bool mTutorialDeathPending;
+
     // Rewind
     public RewindSystem mRewindSystem;
 
@@ -67,6 +75,14 @@ public class Sphere : MonoBehaviour
     private Quaternion mBlitzCamLerpStartRot;
     private float mBlitzCamLerpTimer;
     private const float BLITZ_CAM_LERP_DURATION = 0.45f; // matches Torus dismiss phase
+
+    // Tutorial exit camera recovery: player's free-swinging during tutorial leaves the
+    // camera tilted; lerp it back so the real run doesn't begin with a one-frame snap.
+    private bool mTutorialCamLerpActive;
+    private Vector3 mTutorialCamLerpStartPos;
+    private Quaternion mTutorialCamLerpStartRot;
+    private float mTutorialCamLerpTimer;
+    private const float TUTORIAL_CAM_LERP_DURATION = 0.45f;
 
     // Persistent stats. Cross-mode counters (STAT_TAPS / STAT_RUNS) stay authoritative
     // for career leaderboards (TapMaster_Total, Runs_Total) and cross-mode achievements
@@ -155,6 +171,23 @@ public class Sphere : MonoBehaviour
             float ce = ct < 0.5f ? 4f * ct * ct * ct : 1f - Mathf.Pow(-2f * ct + 2f, 3f) * 0.5f;
             mCamera.transform.position = Vector3.Lerp(mBlitzCamLerpStartPos, mCameraStartPos, ce);
             mCamera.transform.rotation = Quaternion.Slerp(mBlitzCamLerpStartRot, mCameraStartRot, ce);
+        }
+
+        // Tutorial exit: lerp camera rotation/position back to rest. Runs in parallel with
+        // the spawn anim (0.6s) and finishes before the opening force fires.
+        if (mTutorialCamLerpActive)
+        {
+            mTutorialCamLerpTimer += Time.deltaTime;
+            float tt = Mathf.Clamp01(mTutorialCamLerpTimer / TUTORIAL_CAM_LERP_DURATION);
+            float te = tt < 0.5f ? 4f * tt * tt * tt : 1f - Mathf.Pow(-2f * tt + 2f, 3f) * 0.5f;
+            mCamera.transform.position = Vector3.Lerp(mTutorialCamLerpStartPos, mCameraStartPos, te);
+            mCamera.transform.rotation = Quaternion.Slerp(mTutorialCamLerpStartRot, mCameraStartRot, te);
+            if (tt >= 1f)
+            {
+                mCamera.transform.position = mCameraStartPos;
+                mCamera.transform.rotation = mCameraStartRot;
+                mTutorialCamLerpActive = false;
+            }
         }
 
         // Blitz transition finish-up — restore physics once the dismiss→spawn cycle ends.
@@ -359,9 +392,88 @@ public class Sphere : MonoBehaviour
     /// </summary>
     Vector3 GetForwardVector(float sign)
     {
+        if (GameConfig.IsTutorialActive)
+        {
+            if (sign > 0f) mTutorialLeftFired = true;
+            else           mTutorialRightFired = true;
+        }
         if (mSplineController != null)
             return mSplineController.GetBallForwardDirection() * sign;
         return new Vector3(sign, 0f, 0f);
+    }
+
+    public bool WasTutorialLeftFired()  { return mTutorialLeftFired; }
+    public bool WasTutorialRightFired() { return mTutorialRightFired; }
+    public void ResetTutorialInputs()
+    {
+        mTutorialLeftFired = false;
+        mTutorialRightFired = false;
+    }
+    public bool ConsumeTutorialDeath()
+    {
+        bool v = mTutorialDeathPending;
+        mTutorialDeathPending = false;
+        return v;
+    }
+
+    /// Called from OnCollisionEnter when IsTutorialActive — resets ball to start
+    /// position with zero velocity, sets the death flag for ScoreSync to flash a
+    /// nudge. No mGameOver, no life deduction, tutorial continues.
+    void ResetBallForTutorial()
+    {
+        transform.position = mBeginPosition;
+        if (mRigid != null)
+        {
+            mRigid.linearVelocity = Vector3.zero;
+            mRigid.angularVelocity = Vector3.zero;
+        }
+        mTutorialDeathPending = true;
+    }
+
+    /// Finish the tutorial and hand off to the stashed mode. Re-enters the spawn
+    /// phase so obstacles materialize with their normal entrance anim; the tap that
+    /// dismissed "Ready?" becomes the opening force via mPendingStartForce.
+    public void ExitTutorial(float tapSign)
+    {
+        GameConfig.IsTutorialActive = false;
+        GameConfig.MarkTutorialSeen();
+        mTutorialLeftFired = false;
+        mTutorialRightFired = false;
+        mTutorialDeathPending = false;
+
+        mTorusScript.SetPaused(true);
+        mTorusScript.Reset(true);
+        mTorusScript.BeginInitialSpawnAnim();
+
+        transform.position = mBeginPosition;
+        mPrevPosition = transform.position;
+        if (mRigid != null)
+        {
+            mRigid.linearVelocity = Vector3.zero;
+            mRigid.angularVelocity = Vector3.zero;
+        }
+
+        // Camera recovery — snapshot current tilt and lerp back to rest over
+        // TUTORIAL_CAM_LERP_DURATION so the real run doesn't snap in one frame.
+        mTutorialCamLerpStartPos = mCamera.transform.position;
+        mTutorialCamLerpStartRot = mCamera.transform.rotation;
+        mTutorialCamLerpTimer = 0f;
+        mTutorialCamLerpActive = true;
+
+        CameraSwing swing = mCamera.GetComponent<CameraSwing>();
+        if (swing != null)
+        {
+            swing.mDiff = Vector3.zero;
+            swing.ResetSpring();
+        }
+
+        // Buffer the Ready? tap as the opening force — fires when TickStartSequence
+        // transitions into Running after SPAWN_DURATION.
+        mPendingStartForce = GetForwardVector(tapSign);
+        mHasPendingStartForce = true;
+
+        mStartPhase = StartPhase.Spawning;
+        mStartPhaseTimer = 0f;
     }
 
     void ApplyForceWithForwardVector(Vector3 forward)
@@ -530,6 +642,13 @@ public class Sphere : MonoBehaviour
     {
         if (!mWaitingToStart) return;
         if (mStartPhase != StartPhase.Idle) return; // already sequencing
+
+        // First-run onboarding — covers tvOS where the mode picker isn't visited.
+        // On iOS/Android/macOS this is already set by ScoreSync.StartWithMode, which
+        // also resets the tutorial UI timers; setting the flag again is harmless.
+        if (!GameConfig.HasSeenTutorial())
+            GameConfig.IsTutorialActive = true;
+
         mWaitingToStart = false; // ScoreSync will transition Title→Playing; title fade begins
         mStartPhase = StartPhase.Dismissing;
         mStartPhaseTimer = 0f;
@@ -556,22 +675,29 @@ public class Sphere : MonoBehaviour
         else if (mStartPhase == StartPhase.Spawning && mStartPhaseTimer >= START_SPAWN_DURATION)
         {
             // Phase 3 — world wakes up: torus rotates, mode systems arm, stats tick.
+            // Tutorial entry skips mode arming (beam/rewind) and run counting — the
+            // real mode arms later when Sphere.ExitTutorial re-enters the spawn phase.
+            bool tutorialEntry = GameConfig.IsTutorialActive;
+
             if (mSplineController == null)
                 mTorusScript.SetPaused(false);
 
-            if (GameConfig.IsBlitz())
+            if (!tutorialEntry)
             {
-                if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
-                if (GameConfig.BlitzDebugMaxPower)
-                    mTorusScript.DebugApplyMaxBlitzPower();
-            }
-            else
-            {
-                if (mRewindSystem != null)
-                    mRewindSystem.StartRecording();
-            }
+                if (GameConfig.IsBlitz())
+                {
+                    if (mBlitzBeam != null) mBlitzBeam.SetActive(true);
+                    if (GameConfig.BlitzDebugMaxPower)
+                        mTorusScript.DebugApplyMaxBlitzPower();
+                }
+                else
+                {
+                    if (mRewindSystem != null)
+                        mRewindSystem.StartRecording();
+                }
 
-            IncrementRuns();
+                IncrementRuns();
+            }
 
             if (mHasPendingStartForce)
             {
@@ -634,6 +760,15 @@ public class Sphere : MonoBehaviour
 
         if (!mGameOver && !mDebugGodMode && !mBlitzTransitionPending && (collision.gameObject.name == "torusObstacle" || collision.gameObject.name == "Mesh" || collision.gameObject.name == "BlitzBox" || collision.gameObject.name == "BlitzGateBar" || collision.gameObject.name == "BlitzDividerBar"))
         {
+            // Tutorial: no obstacles to hit, but tube walls (Mesh) still lethal. Turn
+            // every lethal collision into a ball reset so the player learns the rule
+            // without ending the run.
+            if (GameConfig.IsTutorialActive)
+            {
+                ResetBallForTutorial();
+                return;
+            }
+
             // Blitz shield absorbs one lethal hit
             if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())
             {

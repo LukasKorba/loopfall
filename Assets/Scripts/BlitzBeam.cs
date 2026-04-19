@@ -352,21 +352,12 @@ public class BlitzBeam : MonoBehaviour
     {
         if (mAudio != null) mAudio.PlayBeamFire(mGunLevel);
 
-        if (mBeamCount >= 3)
-        {
-            FireSingleBeam(-8f);
-            FireSingleBeam(0f);
-            FireSingleBeam(8f);
-        }
-        else if (mBeamCount >= 2)
-        {
-            FireSingleBeam(-6f);
-            FireSingleBeam(6f);
-        }
-        else
-        {
-            FireSingleBeam(0f);
-        }
+        // Center beam is always present; upgrades add a left beam, then a right beam.
+        // Keeps "what the ball is pointed at" hittable at every level — no more being
+        // forced slightly off-axis to land shots at L1.
+        FireSingleBeam(0f);
+        if (mBeamCount >= 2) FireSingleBeam(-8f);
+        if (mBeamCount >= 3) FireSingleBeam(8f);
     }
 
     void FireSingleBeam(float lateralDeg)
