@@ -160,12 +160,17 @@ public class ScoreSync : MonoBehaviour
 
     // ── SETTINGS PANEL ───────────────────────────────────────
     private RectTransform settingsPanel;
-    private TMP_Text settingsMusicLabel;
-    private TMP_Text settingsSoundLabel;
+    private TMP_Text settingsMusicIcon;
+    private TMP_Text settingsSoundIcon;
     private TMP_Text settingsThemeLabel;
+    private TMP_Text settingsLanguageLabel;
     private TMP_Text settingsFullscreenLabel;
     private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
+
+    // Language cycle (English-only for now — future i18n).
+    private int settingsLanguageIndex = 0;
+    private static readonly string[] SETTINGS_LANGUAGES = { "ENGLISH" };
     // ── QUIT BUTTON (desktop only) + BACK BUTTON (game over, all platforms) ────
     private Button titleQuitBtn;
     private CanvasGroup titleQuitIcon;
@@ -258,10 +263,12 @@ public class ScoreSync : MonoBehaviour
     private Sprite circleSprite;
 
     // Phosphor Icons codepoints (Private Use Area).
-    private const string PHOSPHOR_TROPHY      = "\uE67E";
-    private const string PHOSPHOR_GEAR        = "\uE270";
-    private const string PHOSPHOR_CARET_LEFT  = "\uE138";
-    private const string PHOSPHOR_LIST_BULLET = "\uE2F2";
+    private const string PHOSPHOR_TROPHY        = "\uE67E";
+    private const string PHOSPHOR_GEAR          = "\uE270";
+    private const string PHOSPHOR_CARET_LEFT    = "\uE138";
+    private const string PHOSPHOR_LIST_BULLET   = "\uE2F2";
+    private const string PHOSPHOR_SPEAKER_HIGH  = "\uE44A";
+    private const string PHOSPHOR_SPEAKER_X     = "\uE45C";
 
     // ── CACHED REFS ─────────────────────────────────────────
     private Sphere mSphere;
@@ -3248,7 +3255,7 @@ public class ScoreSync : MonoBehaviour
 #if UNITY_STANDALONE && !UNITY_EDITOR
         showDisplay = true;
 #endif
-        cardRT.sizeDelta = showDisplay ? new Vector2(500, 620) : new Vector2(500, 400);
+        cardRT.sizeDelta = showDisplay ? new Vector2(500, 720) : new Vector2(500, 500);
 
         Image cardBg = card.AddComponent<Image>();
         cardBg.color = new Color(0.06f, 0.03f, 0.10f, 0.96f);
@@ -3263,69 +3270,85 @@ public class ScoreSync : MonoBehaviour
         // Title
         TMP_Text title = CreateText(cardRT, "Title", "SETTINGS",
             36, FontStyles.Bold, NEON_CYAN);
-        SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.92f : 0.85f), new Vector2(400, 50));
+        SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.93f : 0.88f), new Vector2(400, 50));
         title.characterSpacing = 8f;
         title.raycastTarget = false;
 
         // Title underline accent
-        CreateSettingsDivider(cardRT, showDisplay ? 0.87f : 0.78f, NEON_CYAN, 0.25f);
+        CreateSettingsDivider(cardRT, showDisplay ? 0.885f : 0.81f, NEON_CYAN, 0.25f);
 
         if (showDisplay)
         {
             // ── AUDIO SECTION ──
             TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", "AUDIO",
-                20, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.82f), new Vector2(400, 30));
+                18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
+            SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.83f), new Vector2(400, 28));
             audioHeader.characterSpacing = 6f;
             audioHeader.raycastTarget = false;
 
-            Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
-                new Vector2(0.5f, 0.73f), out settingsMusicLabel);
-            musicBtn.onClick.AddListener(ToggleMusic);
-
-            Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
-                new Vector2(0.5f, 0.63f), out settingsSoundLabel);
+            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", "SOUNDS",
+                new Vector2(0.5f, 0.76f), out settingsSoundIcon);
             soundBtn.onClick.AddListener(ToggleSound);
 
+            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", "MUSIC",
+                new Vector2(0.5f, 0.68f), out settingsMusicIcon);
+            musicBtn.onClick.AddListener(ToggleMusic);
+
             // Section divider between Audio and Display
-            CreateSettingsDivider(cardRT, 0.565f, DIM_TEXT, 0.08f);
+            CreateSettingsDivider(cardRT, 0.625f, DIM_TEXT, 0.08f);
 
             // ── DISPLAY SECTION ──
             TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", "DISPLAY",
-                20, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.52f), new Vector2(400, 30));
+                18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
+            SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(400, 28));
             displayHeader.characterSpacing = 6f;
             displayHeader.raycastTarget = false;
 
             Button resBtn = CreateSettingsToggle(cardRT, "ResBtn",
-                new Vector2(0.5f, 0.43f), out settingsResLabel);
+                new Vector2(0.5f, 0.51f), out settingsResLabel);
             resBtn.onClick.AddListener(OnCycleResolution);
 
             Button fullBtn = CreateSettingsToggle(cardRT, "FullBtn",
-                new Vector2(0.5f, 0.33f), out settingsFullscreenLabel);
+                new Vector2(0.5f, 0.43f), out settingsFullscreenLabel);
             fullBtn.onClick.AddListener(OnToggleFullscreen);
 
             Button vsyncBtn = CreateSettingsToggle(cardRT, "VSyncBtn",
-                new Vector2(0.5f, 0.23f), out settingsVSyncLabel);
+                new Vector2(0.5f, 0.35f), out settingsVSyncLabel);
             vsyncBtn.onClick.AddListener(OnToggleVSync);
 
-            // Theme divider + selector
-            CreateSettingsDivider(cardRT, 0.175f, DIM_TEXT, 0.08f);
-            CreateThemeSelector(cardRT, new Vector2(0.5f, 0.12f));
+            // ── PREFERENCES SECTION ──
+            CreateSettingsDivider(cardRT, 0.30f, DIM_TEXT, 0.08f);
+
+            TMP_Text prefsHeader = CreateText(cardRT, "PrefsHeader", "PREFERENCES",
+                18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
+            SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.26f), new Vector2(400, 28));
+            prefsHeader.characterSpacing = 6f;
+            prefsHeader.raycastTarget = false;
+
+            CreateSettingsCycleRow(cardRT, "ThemeRow", "THEME",
+                new Vector2(0.5f, 0.19f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
+
+            CreateSettingsCycleRow(cardRT, "LanguageRow", "LANGUAGE",
+                new Vector2(0.5f, 0.11f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
         }
         else
         {
-            // Mobile layout — audio + theme
-            Button musicBtn = CreateSettingsToggle(cardRT, "MusicBtn",
-                new Vector2(0.5f, 0.65f), out settingsMusicLabel);
-            musicBtn.onClick.AddListener(ToggleMusic);
-
-            Button soundBtn = CreateSettingsToggle(cardRT, "SoundBtn",
-                new Vector2(0.5f, 0.48f), out settingsSoundLabel);
+            // Mobile layout — sounds, music, theme, language
+            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", "SOUNDS",
+                new Vector2(0.5f, 0.72f), out settingsSoundIcon);
             soundBtn.onClick.AddListener(ToggleSound);
 
-            CreateSettingsDivider(cardRT, 0.375f, DIM_TEXT, 0.08f);
-            CreateThemeSelector(cardRT, new Vector2(0.5f, 0.28f));
+            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", "MUSIC",
+                new Vector2(0.5f, 0.58f), out settingsMusicIcon);
+            musicBtn.onClick.AddListener(ToggleMusic);
+
+            CreateSettingsDivider(cardRT, 0.495f, DIM_TEXT, 0.08f);
+
+            CreateSettingsCycleRow(cardRT, "ThemeRow", "THEME",
+                new Vector2(0.5f, 0.41f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
+
+            CreateSettingsCycleRow(cardRT, "LanguageRow", "LANGUAGE",
+                new Vector2(0.5f, 0.27f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
         }
 
         // Close label
@@ -3335,7 +3358,7 @@ public class ScoreSync : MonoBehaviour
 #endif
         TMP_Text closeLabel = CreateText(cardRT, "Close", closeHint,
             16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
-        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.07f : 0.1f), new Vector2(400, 30));
+        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.04f : 0.12f), new Vector2(400, 30));
         closeLabel.characterSpacing = 3f;
         closeLabel.raycastTarget = false;
     }
@@ -3367,6 +3390,167 @@ public class ScoreSync : MonoBehaviour
         Image img = obj.AddComponent<Image>();
         img.color = new Color(color.r, color.g, color.b, alpha);
         img.raycastTarget = false;
+    }
+
+    // Label on the left, a Phosphor glyph on the right — used for SOUNDS/MUSIC toggles.
+    // The glyph itself reflects state (speaker-high = on, speaker-x = off); the whole
+    // row background + accent bar animate via StyleSettingsToggle.
+    Button CreateSettingsIconToggle(RectTransform parent, string name, string labelText,
+        Vector2 anchor, out TMP_Text iconGlyph)
+    {
+        GameObject btnObj = new GameObject(name);
+        RectTransform rt = btnObj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = anchor;
+        rt.anchorMax = anchor;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(400, 55);
+
+        Image bg = btnObj.AddComponent<Image>();
+        bg.color = new Color(1f, 1f, 1f, 0.04f);
+        bg.raycastTarget = true;
+
+        Button btn = btnObj.AddComponent<Button>();
+        ColorBlock cb = btn.colors;
+        cb.normalColor = Color.white;
+        cb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+        cb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
+        btn.colors = cb;
+
+        // Left accent bar — reflects on/off state via StyleSettingsToggle
+        GameObject accent = new GameObject("Accent");
+        RectTransform accentRT = accent.AddComponent<RectTransform>();
+        accentRT.SetParent(rt, false);
+        accentRT.anchorMin = new Vector2(0f, 0.15f);
+        accentRT.anchorMax = new Vector2(0f, 0.85f);
+        accentRT.pivot = new Vector2(0f, 0.5f);
+        accentRT.sizeDelta = new Vector2(3f, 0f);
+        Image accentImg = accent.AddComponent<Image>();
+        accentImg.color = NEON_CYAN;
+        accentImg.raycastTarget = false;
+
+        // Static label on the left
+        TMP_Text label = CreateText(rt, "Label", labelText, 24, FontStyles.Normal, Color.white);
+        RectTransform lblRT = label.rectTransform;
+        lblRT.anchorMin = new Vector2(0f, 0f);
+        lblRT.anchorMax = new Vector2(1f, 1f);
+        lblRT.offsetMin = new Vector2(20f, 0f);
+        lblRT.offsetMax = new Vector2(-60f, 0f);
+        label.alignment = TextAlignmentOptions.Left;
+        label.characterSpacing = 4f;
+        label.raycastTarget = false;
+
+        // Phosphor glyph on the right — text is set by RefreshSettingsLabels
+        GameObject glyphObj = new GameObject("IconGlyph");
+        RectTransform glyphRT = glyphObj.AddComponent<RectTransform>();
+        glyphRT.SetParent(rt, false);
+        glyphRT.anchorMin = new Vector2(1f, 0.5f);
+        glyphRT.anchorMax = new Vector2(1f, 0.5f);
+        glyphRT.pivot = new Vector2(1f, 0.5f);
+        glyphRT.anchoredPosition = new Vector2(-16f, 0f);
+        glyphRT.sizeDelta = new Vector2(42f, 42f);
+
+        iconGlyph = glyphObj.AddComponent<TextMeshProUGUI>();
+        if (phosphorFont != null) iconGlyph.font = phosphorFont;
+        iconGlyph.text = PHOSPHOR_SPEAKER_HIGH;
+        iconGlyph.color = Color.white;
+        iconGlyph.alignment = TextAlignmentOptions.Center;
+        iconGlyph.enableWordWrapping = false;
+        iconGlyph.overflowMode = TextOverflowModes.Overflow;
+        iconGlyph.raycastTarget = false;
+        iconGlyph.enableAutoSizing = true;
+        iconGlyph.fontSizeMin = 8f;
+        iconGlyph.fontSizeMax = 60f;
+
+        return btn;
+    }
+
+    // Label on the left, < VALUE > cycle cluster on the right — used for THEME/LANGUAGE.
+    // Arrows are separate buttons; the row itself is not clickable (only the arrows are).
+    void CreateSettingsCycleRow(RectTransform parent, string name, string labelText,
+        Vector2 anchor, UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
+        out TMP_Text valueLabel)
+    {
+        GameObject container = new GameObject(name);
+        RectTransform crt = container.AddComponent<RectTransform>();
+        crt.SetParent(parent, false);
+        crt.anchorMin = anchor;
+        crt.anchorMax = anchor;
+        crt.pivot = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(400, 55);
+
+        Image bg = container.AddComponent<Image>();
+        bg.color = new Color(1f, 1f, 1f, 0.04f);
+        bg.raycastTarget = true; // Absorb taps so they don't fall through to the dim close-on-tap layer
+
+        // Left accent bar — always cyan (cycles are always "active")
+        GameObject accent = new GameObject("Accent");
+        RectTransform accentRT = accent.AddComponent<RectTransform>();
+        accentRT.SetParent(crt, false);
+        accentRT.anchorMin = new Vector2(0f, 0.15f);
+        accentRT.anchorMax = new Vector2(0f, 0.85f);
+        accentRT.pivot = new Vector2(0f, 0.5f);
+        accentRT.sizeDelta = new Vector2(3f, 0f);
+        Image accentImg = accent.AddComponent<Image>();
+        accentImg.color = NEON_CYAN;
+        accentImg.raycastTarget = false;
+
+        // Static label on the left
+        TMP_Text label = CreateText(crt, "Label", labelText, 24, FontStyles.Normal, Color.white);
+        RectTransform lblRT = label.rectTransform;
+        lblRT.anchorMin = new Vector2(0f, 0f);
+        lblRT.anchorMax = new Vector2(0.5f, 1f);
+        lblRT.offsetMin = new Vector2(20f, 0f);
+        lblRT.offsetMax = Vector2.zero;
+        label.alignment = TextAlignmentOptions.Left;
+        label.characterSpacing = 4f;
+        label.raycastTarget = false;
+
+        // Right-side cluster: < VALUE >
+        // Right arrow — anchored to right edge
+        CreateCycleArrow(crt, "Next", ">", new Vector2(-8f, 0f), onNext);
+        // Left arrow — sits to the left of the 130px value label
+        CreateCycleArrow(crt, "Prev", "<", new Vector2(-8f - 44f - 130f, 0f), onPrev);
+
+        // Value label — centered between the two arrows
+        valueLabel = CreateText(crt, "Value", "", 22, FontStyles.Normal, Color.white);
+        RectTransform vrt = valueLabel.rectTransform;
+        vrt.anchorMin = new Vector2(1f, 0f);
+        vrt.anchorMax = new Vector2(1f, 1f);
+        vrt.pivot = new Vector2(1f, 0.5f);
+        vrt.anchoredPosition = new Vector2(-8f - 44f, 0f);
+        vrt.sizeDelta = new Vector2(130f, 0f);
+        valueLabel.alignment = TextAlignmentOptions.Center;
+        valueLabel.characterSpacing = 4f;
+        valueLabel.raycastTarget = false;
+    }
+
+    void CreateCycleArrow(RectTransform parent, string name, string arrowText,
+        Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
+    {
+        GameObject obj = new GameObject(name);
+        RectTransform rt = obj.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(1f, 0f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 0.5f);
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta = new Vector2(44f, 0f);
+
+        Image btnBg = obj.AddComponent<Image>();
+        btnBg.color = new Color(1f, 1f, 1f, 0f);
+        btnBg.raycastTarget = true;
+
+        Button btn = obj.AddComponent<Button>();
+        ColorBlock cb = btn.colors;
+        cb.normalColor = Color.white;
+        cb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+        cb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
+        btn.colors = cb;
+        btn.onClick.AddListener(onClick);
+
+        TMP_Text arrow = CreateText(rt, "Arrow", arrowText, 28, FontStyles.Bold, NEON_CYAN);
+        StretchFull(arrow.rectTransform);
     }
 
     Button CreateSettingsToggle(RectTransform parent, string name, Vector2 anchor, out TMP_Text label)
@@ -3717,6 +3901,18 @@ public class ScoreSync : MonoBehaviour
         ApplyThemeSelection(prev);
     }
 
+    void OnLanguageNext()
+    {
+        settingsLanguageIndex = (settingsLanguageIndex + 1) % SETTINGS_LANGUAGES.Length;
+        RefreshSettingsLabels();
+    }
+
+    void OnLanguagePrev()
+    {
+        settingsLanguageIndex = (settingsLanguageIndex - 1 + SETTINGS_LANGUAGES.Length) % SETTINGS_LANGUAGES.Length;
+        RefreshSettingsLabels();
+    }
+
     void ApplyThemeSelection(int index)
     {
         ThemeData.SaveIndex(index);
@@ -3738,92 +3934,6 @@ public class ScoreSync : MonoBehaviour
         RefreshSettingsLabels();
     }
 
-    void CreateThemeSelector(RectTransform parent, Vector2 anchor)
-    {
-        // Container — same size as a normal toggle row
-        GameObject container = new GameObject("ThemeSelector");
-        RectTransform crt = container.AddComponent<RectTransform>();
-        crt.SetParent(parent, false);
-        crt.anchorMin = anchor;
-        crt.anchorMax = anchor;
-        crt.pivot = new Vector2(0.5f, 0.5f);
-        crt.sizeDelta = new Vector2(400, 55);
-
-        // Background — matches toggle style
-        Image bg = container.AddComponent<Image>();
-        bg.color = new Color(1f, 1f, 1f, 0.04f);
-        bg.raycastTarget = false;
-
-        // Left accent bar
-        GameObject accent = new GameObject("Accent");
-        RectTransform accentRT = accent.AddComponent<RectTransform>();
-        accentRT.SetParent(crt, false);
-        accentRT.anchorMin = new Vector2(0f, 0.15f);
-        accentRT.anchorMax = new Vector2(0f, 0.85f);
-        accentRT.pivot = new Vector2(0f, 0.5f);
-        accentRT.sizeDelta = new Vector2(3f, 0f);
-        Image accentImg = accent.AddComponent<Image>();
-        accentImg.color = NEON_CYAN;
-        accentImg.raycastTarget = false;
-
-        // Left arrow button "<"
-        GameObject leftObj = new GameObject("ThemePrev");
-        RectTransform leftRT = leftObj.AddComponent<RectTransform>();
-        leftRT.SetParent(crt, false);
-        leftRT.anchorMin = new Vector2(0f, 0f);
-        leftRT.anchorMax = new Vector2(0f, 1f);
-        leftRT.pivot = new Vector2(0f, 0.5f);
-        leftRT.anchoredPosition = new Vector2(8f, 0f);
-        leftRT.sizeDelta = new Vector2(55, 0f);
-
-        Image leftBg = leftObj.AddComponent<Image>();
-        leftBg.color = new Color(1f, 1f, 1f, 0f);
-        leftBg.raycastTarget = true;
-
-        Button leftBtn = leftObj.AddComponent<Button>();
-        ColorBlock lcb = leftBtn.colors;
-        lcb.normalColor = Color.white;
-        lcb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
-        lcb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
-        leftBtn.colors = lcb;
-        leftBtn.onClick.AddListener(OnThemePrev);
-
-        TMP_Text leftLabel = CreateText(leftRT, "Arrow", "<",
-            28, FontStyles.Bold, NEON_CYAN);
-        StretchFull(leftLabel.rectTransform);
-
-        // Right arrow button ">"
-        GameObject rightObj = new GameObject("ThemeNext");
-        RectTransform rightRT = rightObj.AddComponent<RectTransform>();
-        rightRT.SetParent(crt, false);
-        rightRT.anchorMin = new Vector2(1f, 0f);
-        rightRT.anchorMax = new Vector2(1f, 1f);
-        rightRT.pivot = new Vector2(1f, 0.5f);
-        rightRT.anchoredPosition = new Vector2(-8f, 0f);
-        rightRT.sizeDelta = new Vector2(55, 0f);
-
-        Image rightBg = rightObj.AddComponent<Image>();
-        rightBg.color = new Color(1f, 1f, 1f, 0f);
-        rightBg.raycastTarget = true;
-
-        Button rightBtn = rightObj.AddComponent<Button>();
-        ColorBlock rcb = rightBtn.colors;
-        rcb.normalColor = Color.white;
-        rcb.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
-        rcb.pressedColor = new Color(1f, 1f, 1f, 0.18f);
-        rightBtn.colors = rcb;
-        rightBtn.onClick.AddListener(OnThemeNext);
-
-        TMP_Text rightLabel = CreateText(rightRT, "Arrow", ">",
-            28, FontStyles.Bold, NEON_CYAN);
-        StretchFull(rightLabel.rectTransform);
-
-        // Center label — theme name
-        settingsThemeLabel = CreateText(crt, "ThemeLabel", "",
-            24, FontStyles.Normal, Color.white);
-        StretchFull(settingsThemeLabel.rectTransform);
-    }
-
     void RefreshSettingsLabels()
     {
         if (mAudio == null) return;
@@ -3831,15 +3941,15 @@ public class ScoreSync : MonoBehaviour
         bool musicOff = mAudio.IsMusicMuted();
         bool soundOff = mAudio.IsSoundMuted();
 
-        if (settingsMusicLabel != null)
+        if (settingsMusicIcon != null)
         {
-            settingsMusicLabel.text = musicOff ? "MUSIC   OFF" : "MUSIC   ON";
-            StyleSettingsToggle(settingsMusicLabel, !musicOff);
+            settingsMusicIcon.text = musicOff ? PHOSPHOR_SPEAKER_X : PHOSPHOR_SPEAKER_HIGH;
+            StyleSettingsToggle(settingsMusicIcon, !musicOff);
         }
-        if (settingsSoundLabel != null)
+        if (settingsSoundIcon != null)
         {
-            settingsSoundLabel.text = soundOff ? "SOUND   OFF" : "SOUND   ON";
-            StyleSettingsToggle(settingsSoundLabel, !soundOff);
+            settingsSoundIcon.text = soundOff ? PHOSPHOR_SPEAKER_X : PHOSPHOR_SPEAKER_HIGH;
+            StyleSettingsToggle(settingsSoundIcon, !soundOff);
         }
 
         // Display settings (standalone only)
@@ -3873,6 +3983,12 @@ public class ScoreSync : MonoBehaviour
                 themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
             settingsThemeLabel.text = themeName;
             settingsThemeLabel.color = Color.white;
+        }
+
+        if (settingsLanguageLabel != null)
+        {
+            settingsLanguageLabel.text = SETTINGS_LANGUAGES[settingsLanguageIndex];
+            settingsLanguageLabel.color = Color.white;
         }
     }
 
