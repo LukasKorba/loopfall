@@ -168,9 +168,6 @@ public class ScoreSync : MonoBehaviour
     private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
 
-    // Language cycle (English-only for now — future i18n).
-    private int settingsLanguageIndex = 0;
-    private static readonly string[] SETTINGS_LANGUAGES = { "ENGLISH" };
     // ── QUIT BUTTON (desktop only) + BACK BUTTON (game over, all platforms) ────
     private Button titleQuitBtn;
     private CanvasGroup titleQuitIcon;
@@ -280,7 +277,13 @@ public class ScoreSync : MonoBehaviour
         PlayerPrefs.DeleteKey("HasPlayed");
 #endif
         LoadScores();
+        L10n.Initialize();
+        L10n.OnLanguageChanged += OnLanguageChanged;
         defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+        // Switch to dynamic atlas so glyphs outside ASCII (Cyrillic, accented Latin) get
+        // rasterized on demand from the underlying TTF. Translations pull in German,
+        // French, Spanish, Italian, Portuguese, and Russian character sets at runtime.
+        if (defaultFont != null) defaultFont.atlasPopulationMode = AtlasPopulationMode.Dynamic;
         Font phosphorSource = Resources.Load<Font>("Fonts/Phosphor-Thin");
         if (phosphorSource != null)
             phosphorFont = TMP_FontAsset.CreateFontAsset(phosphorSource);
@@ -289,6 +292,47 @@ public class ScoreSync : MonoBehaviour
         mAudio = FindAnyObjectByType<GameAudio>();
         isFirstRun = PlayerPrefs.GetInt(PREF_FIRST_RUN, 0) == 0;
         BuildUI();
+    }
+
+    void OnDestroy()
+    {
+        L10n.OnLanguageChanged -= OnLanguageChanged;
+    }
+
+    void OnLanguageChanged()
+    {
+        RefreshLocalizedLabels();
+        // Panels are rebuilt on next open — drop any cached ones so they pick up new strings.
+        if (settingsPanel != null)
+        {
+            Destroy(settingsPanel.gameObject);
+            settingsPanel = null;
+        }
+        if (statsPanel != null)
+        {
+            Destroy(statsPanel.gameObject);
+            statsPanel = null;
+        }
+    }
+
+    // Sweep all persistent in-scene labels so a language swap takes effect immediately
+    // without needing to rebuild the whole UI. Panels that are torn down on close
+    // (settings, stats) are handled separately in OnLanguageChanged.
+    void RefreshLocalizedLabels()
+    {
+        if (splashPresentsText != null) splashPresentsText.text = L10n.T("splash.presents");
+        if (titleHintText != null) titleHintText.text = L10n.T("title.select_mode");
+        if (pausedText != null) pausedText.text = L10n.T("pause.paused");
+        if (pauseHintText != null) pauseHintText.text = GetResumeHint();
+        if (goTapText != null) goTapText.text = GetTapPrompt();
+        if (tutorialInstructionText != null) tutorialInstructionText.text = GetTutorialInstruction();
+        if (tutorialReadyText != null) tutorialReadyText.text = L10n.T("tutorial.ready");
+        if (tutorialReadyHintText != null) tutorialReadyHintText.text = GetTutorialReadyHint();
+        // Force the Blitz HUD labels to re-emit from their cached levels on the next tick.
+        blitzLastGunLevel = -1;
+        blitzLastCadencyLevel = -1;
+        blitzLastCadencyCount = -1;
+        RefreshModeBestLabels();
     }
 
     void Update()
@@ -606,7 +650,7 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(splashNameText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(1000, 120));
 
         // "PRESENTS"
-        splashPresentsText = CreateText(splashGroup, "SplashPresents", "PRESENTS",
+        splashPresentsText = CreateText(splashGroup, "SplashPresents", L10n.T("splash.presents"),
             30, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f));
         SetAnchored(splashPresentsText.rectTransform, new Vector2(0.5f, 0.46f), new Vector2(500, 45));
         splashPresentsText.characterSpacing = 16f;
@@ -778,7 +822,7 @@ public class ScoreSync : MonoBehaviour
         titleTapText.characterSpacing = 8f;
 
         // Above the mode buttons — soft prompt.
-        titleHintText = CreateText(titleGroup, "TutorialHint", "SELECT MODE",
+        titleHintText = CreateText(titleGroup, "TutorialHint", L10n.T("title.select_mode"),
             24, FontStyles.Normal, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
         SetAnchored(titleHintText.rectTransform, new Vector2(0.5f, 0.37f), new Vector2(600, 40));
         titleHintText.rectTransform.anchoredPosition = new Vector2(0f, 15f);
@@ -912,7 +956,7 @@ public class ScoreSync : MonoBehaviour
         SetAnchored(goScoreText.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(800, 250));
 
         // "NEW BEST" — gold shimmer
-        goNewBestText = CreateText(gameOverGroup, "GONewBest", "NEW BEST",
+        goNewBestText = CreateText(gameOverGroup, "GONewBest", L10n.T("gameover.new_best"),
             38, FontStyles.Bold, new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f));
         SetAnchored(goNewBestText.rectTransform, new Vector2(0.5f, 0.475f), new Vector2(500, 50));
         goNewBestText.characterSpacing = 10f;
@@ -943,14 +987,7 @@ public class ScoreSync : MonoBehaviour
         }
 
         // Tap to play again
-#if UNITY_TVOS
-        string goTapPrompt = "SWIPE TO PLAY";
-#elif UNITY_STANDALONE
-        string goTapPrompt = "PRESS ANY KEY TO PLAY";
-#else
-        string goTapPrompt = "TAP TO PLAY";
-#endif
-        goTapText = CreateText(gameOverGroup, "GOTap", goTapPrompt,
+        goTapText = CreateText(gameOverGroup, "GOTap", GetTapPrompt(),
             36, FontStyles.Normal, new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f));
         SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         goTapText.characterSpacing = 8f;
@@ -1638,8 +1675,8 @@ public class ScoreSync : MonoBehaviour
         Color cadencyColor = new Color(0.2f, 0.7f, 1.0f);
         Color shieldColor = new Color(0.1f, 1.0f, 0.4f);
 
-        blitzGunLabel = CreateRowLabel(blitzUpgradeGroup, "GunLabel", "Beams 1/3", 0, gunColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
-        blitzCadencyLabel = CreateRowLabel(blitzUpgradeGroup, "CadencyLabel", "Cadency 1x", 1, cadencyColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+        blitzGunLabel = CreateRowLabel(blitzUpgradeGroup, "GunLabel", L10n.T("hud.beams") + " 1/3", 0, gunColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+        blitzCadencyLabel = CreateRowLabel(blitzUpgradeGroup, "CadencyLabel", L10n.T("hud.cadency") + " 1x", 1, cadencyColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
         blitzShieldLabel = CreateRowLabel(blitzUpgradeGroup, "ShieldLabel", "Shield", 2, shieldColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
 
         blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 5, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
@@ -1819,7 +1856,7 @@ public class ScoreSync : MonoBehaviour
             blitzLastGunLevel = gunLevel;
             int filled = gunLevel >= 2 ? 5 : gun - gunLevel * 5;
             UpdateSlotRow(blitzGunSlots, filled, new Color(1f, 0.85f, 0.1f));
-            if (blitzGunLabel != null) blitzGunLabel.text = "Beams " + (gunLevel + 1) + "/3";
+            if (blitzGunLabel != null) blitzGunLabel.text = L10n.T("hud.beams") + " " + (gunLevel + 1) + "/3";
         }
         if (cadency != blitzLastCadencyCount || cadencyLevel != blitzLastCadencyLevel)
         {
@@ -1827,7 +1864,7 @@ public class ScoreSync : MonoBehaviour
             blitzLastCadencyLevel = cadencyLevel;
             int filled = cadencyLevel >= 2 ? 5 : cadency - cadencyLevel * 5;
             UpdateSlotRow(blitzCadencySlots, filled, new Color(0.2f, 0.7f, 1.0f));
-            if (blitzCadencyLabel != null) blitzCadencyLabel.text = "Cadency " + (cadencyLevel + 1) + "x";
+            if (blitzCadencyLabel != null) blitzCadencyLabel.text = L10n.T("hud.cadency") + " " + (cadencyLevel + 1) + "x";
         }
         if (shield != blitzLastShieldCount)
         {
@@ -2103,7 +2140,7 @@ public class ScoreSync : MonoBehaviour
 
             if (isNewBest)
             {
-                goNewBestText.text = "NEW BEST";
+                goNewBestText.text = L10n.T("gameover.new_best");
                 float shimmer = 0.8f + Mathf.Sin(Time.time * 3f) * 0.15f
                               + Mathf.Sin(Time.time * 7f) * 0.05f;
                 SetAlpha(goNewBestText, eased * shimmer);
@@ -2119,7 +2156,7 @@ public class ScoreSync : MonoBehaviour
             }
             else
             {
-                goNewBestText.text = "TOP 5";
+                goNewBestText.text = L10n.T("gameover.top_five");
                 float pulse = 0.6f + Mathf.Sin(Time.time * 2f) * 0.1f;
                 SetAlpha(goNewBestText, eased * pulse);
                 goNewBestText.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b,
@@ -2628,15 +2665,15 @@ public class ScoreSync : MonoBehaviour
         {
             int best = GetBestForMode(GameModeType.PureHell);
             titlePureHellBestLabel.text = best > 0
-                ? "BEST  " + FormatModeScore(best)
-                : "NO RUNS YET";
+                ? L10n.T("title.best") + "  " + FormatModeScore(best)
+                : L10n.T("title.no_runs_yet");
         }
         if (titleBlitzBestLabel != null)
         {
             int best = GetBestForMode(GameModeType.Blitz);
             titleBlitzBestLabel.text = best > 0
-                ? "BEST  " + FormatModeScore(best)
-                : "NO RUNS YET";
+                ? L10n.T("title.best") + "  " + FormatModeScore(best)
+                : L10n.T("title.no_runs_yet");
         }
     }
 
@@ -2948,20 +2985,13 @@ public class ScoreSync : MonoBehaviour
         pauseDimImage.raycastTarget = false;
 
         // "PAUSED" text
-        pausedText = CreateText(pauseGroup, "PausedLabel", "PAUSED",
+        pausedText = CreateText(pauseGroup, "PausedLabel", L10n.T("pause.paused"),
             64, FontStyles.Bold, NEON_CYAN);
         SetAnchored(pausedText.rectTransform, new Vector2(0.5f, 0.55f), new Vector2(600, 90));
         pausedText.characterSpacing = 16f;
 
         // Resume hint
-#if UNITY_TVOS
-        string resumeHint = "PRESS MENU TO RESUME";
-#elif UNITY_STANDALONE
-        string resumeHint = "PRESS ESC TO RESUME";
-#else
-        string resumeHint = "TAP TO RESUME";
-#endif
-        pauseHintText = CreateText(pauseGroup, "PauseHint", resumeHint,
+        pauseHintText = CreateText(pauseGroup, "PauseHint", GetResumeHint(),
             28, FontStyles.Normal, DIM_TEXT);
         SetAnchored(pauseHintText.rectTransform, new Vector2(0.5f, 0.42f), new Vector2(600, 50));
         pauseHintText.characterSpacing = 6f;
@@ -3000,14 +3030,7 @@ public class ScoreSync : MonoBehaviour
         ApplyDropShadow(tutorialRightArrow);
 
         // Primary instruction — modality-agnostic, reads left AND right as input actions.
-#if UNITY_TVOS
-        string instruction = "SWIPE OR PRESS LEFT AND RIGHT";
-#elif UNITY_STANDALONE
-        string instruction = "PRESS LEFT AND RIGHT";
-#else
-        string instruction = "TAP LEFT AND RIGHT";
-#endif
-        tutorialInstructionText = CreateText(tutorialGroup, "TutorialInstruction", instruction,
+        tutorialInstructionText = CreateText(tutorialGroup, "TutorialInstruction", GetTutorialInstruction(),
             42, FontStyles.Bold, Color.white);
         SetAnchored(tutorialInstructionText.rectTransform, new Vector2(0.5f, 0.76f), new Vector2(1400, 90));
         tutorialInstructionText.characterSpacing = 6f;
@@ -3021,21 +3044,14 @@ public class ScoreSync : MonoBehaviour
         tutorialNudgeText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f);
 
         // Ready? prompt + resolving hint. Both hidden until both directions fired.
-        tutorialReadyText = CreateText(tutorialGroup, "TutorialReady", "READY?",
+        tutorialReadyText = CreateText(tutorialGroup, "TutorialReady", L10n.T("tutorial.ready"),
             96, FontStyles.Bold, NEON_GOLD);
         SetAnchored(tutorialReadyText.rectTransform, new Vector2(0.5f, 0.50f), new Vector2(1200, 140));
         tutorialReadyText.characterSpacing = 12f;
         ApplyDropShadow(tutorialReadyText);
         tutorialReadyText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f);
 
-#if UNITY_TVOS
-        string readyHint = "TAP TO BEGIN";
-#elif UNITY_STANDALONE
-        string readyHint = "TAP OR PRESS ANY DIRECTION TO BEGIN";
-#else
-        string readyHint = "TAP TO BEGIN";
-#endif
-        tutorialReadyHintText = CreateText(tutorialGroup, "TutorialReadyHint", readyHint,
+        tutorialReadyHintText = CreateText(tutorialGroup, "TutorialReadyHint", GetTutorialReadyHint(),
             28, FontStyles.Normal, DIM_TEXT);
         SetAnchored(tutorialReadyHintText.rectTransform, new Vector2(0.5f, 0.40f), new Vector2(1400, 50));
         tutorialReadyHintText.characterSpacing = 6f;
@@ -3107,7 +3123,7 @@ public class ScoreSync : MonoBehaviour
             mTutorialDeathFlashTimer += Time.deltaTime;
             if (tutorialInstructionText != null)
             {
-                tutorialInstructionText.text = "DON'T HIT THE WALLS — TRY AGAIN";
+                tutorialInstructionText.text = L10n.T("tutorial.hit_walls");
                 tutorialInstructionText.color = NEON_MAGENTA;
             }
             if (mTutorialDeathFlashTimer >= TUTORIAL_DEATH_FLASH_DURATION)
@@ -3115,13 +3131,7 @@ public class ScoreSync : MonoBehaviour
                 mTutorialDeathFlashTimer = -1f;
                 if (tutorialInstructionText != null)
                 {
-#if UNITY_TVOS
-                    tutorialInstructionText.text = "SWIPE OR PRESS LEFT AND RIGHT";
-#elif UNITY_STANDALONE
-                    tutorialInstructionText.text = "PRESS LEFT AND RIGHT";
-#else
-                    tutorialInstructionText.text = "TAP LEFT AND RIGHT";
-#endif
+                    tutorialInstructionText.text = GetTutorialInstruction();
                     tutorialInstructionText.color = Color.white;
                 }
             }
@@ -3134,7 +3144,7 @@ public class ScoreSync : MonoBehaviour
             mTutorialNudgeTimer += Time.deltaTime;
             if (mTutorialNudgeTimer >= TUTORIAL_NUDGE_DELAY && tutorialNudgeText != null)
             {
-                string nudge = leftDone ? "NOW TRY RIGHT" : "NOW TRY LEFT";
+                string nudge = leftDone ? L10n.T("tutorial.nudge_right") : L10n.T("tutorial.nudge_left");
                 tutorialNudgeText.text = nudge;
                 float a = Mathf.Clamp01((mTutorialNudgeTimer - TUTORIAL_NUDGE_DELAY) / 0.5f);
                 tutorialNudgeText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, a * 0.9f);
@@ -3268,7 +3278,7 @@ public class ScoreSync : MonoBehaviour
         CreateSettingsBorderEdge(cardRT, "BorderR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f));
 
         // Title
-        TMP_Text title = CreateText(cardRT, "Title", "SETTINGS",
+        TMP_Text title = CreateText(cardRT, "Title", L10n.T("settings.title"),
             36, FontStyles.Bold, NEON_CYAN);
         SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.93f : 0.88f), new Vector2(400, 50));
         title.characterSpacing = 8f;
@@ -3280,17 +3290,17 @@ public class ScoreSync : MonoBehaviour
         if (showDisplay)
         {
             // ── AUDIO SECTION ──
-            TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", "AUDIO",
+            TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", L10n.T("settings.section.audio"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
             SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.83f), new Vector2(400, 28));
             audioHeader.characterSpacing = 6f;
             audioHeader.raycastTarget = false;
 
-            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", "SOUNDS",
+            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", L10n.T("settings.sounds"),
                 new Vector2(0.5f, 0.76f), out settingsSoundIcon);
             soundBtn.onClick.AddListener(ToggleSound);
 
-            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", "MUSIC",
+            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", L10n.T("settings.music"),
                 new Vector2(0.5f, 0.68f), out settingsMusicIcon);
             musicBtn.onClick.AddListener(ToggleMusic);
 
@@ -3298,7 +3308,7 @@ public class ScoreSync : MonoBehaviour
             CreateSettingsDivider(cardRT, 0.625f, DIM_TEXT, 0.08f);
 
             // ── DISPLAY SECTION ──
-            TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", "DISPLAY",
+            TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", L10n.T("settings.section.display"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
             SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(400, 28));
             displayHeader.characterSpacing = 6f;
@@ -3319,44 +3329,40 @@ public class ScoreSync : MonoBehaviour
             // ── PREFERENCES SECTION ──
             CreateSettingsDivider(cardRT, 0.30f, DIM_TEXT, 0.08f);
 
-            TMP_Text prefsHeader = CreateText(cardRT, "PrefsHeader", "PREFERENCES",
+            TMP_Text prefsHeader = CreateText(cardRT, "PrefsHeader", L10n.T("settings.section.preferences"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
             SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.26f), new Vector2(400, 28));
             prefsHeader.characterSpacing = 6f;
             prefsHeader.raycastTarget = false;
 
-            CreateSettingsCycleRow(cardRT, "ThemeRow", "THEME",
+            CreateSettingsCycleRow(cardRT, "ThemeRow", L10n.T("settings.theme"),
                 new Vector2(0.5f, 0.19f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
 
-            CreateSettingsCycleRow(cardRT, "LanguageRow", "LANGUAGE",
+            CreateSettingsCycleRow(cardRT, "LanguageRow", L10n.T("settings.language"),
                 new Vector2(0.5f, 0.11f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
         }
         else
         {
             // Mobile layout — sounds, music, theme, language
-            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", "SOUNDS",
+            Button soundBtn = CreateSettingsIconToggle(cardRT, "SoundBtn", L10n.T("settings.sounds"),
                 new Vector2(0.5f, 0.72f), out settingsSoundIcon);
             soundBtn.onClick.AddListener(ToggleSound);
 
-            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", "MUSIC",
+            Button musicBtn = CreateSettingsIconToggle(cardRT, "MusicBtn", L10n.T("settings.music"),
                 new Vector2(0.5f, 0.58f), out settingsMusicIcon);
             musicBtn.onClick.AddListener(ToggleMusic);
 
             CreateSettingsDivider(cardRT, 0.495f, DIM_TEXT, 0.08f);
 
-            CreateSettingsCycleRow(cardRT, "ThemeRow", "THEME",
+            CreateSettingsCycleRow(cardRT, "ThemeRow", L10n.T("settings.theme"),
                 new Vector2(0.5f, 0.41f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
 
-            CreateSettingsCycleRow(cardRT, "LanguageRow", "LANGUAGE",
+            CreateSettingsCycleRow(cardRT, "LanguageRow", L10n.T("settings.language"),
                 new Vector2(0.5f, 0.27f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
         }
 
         // Close label
-        string closeHint = showDisplay ? "CLICK OUTSIDE TO CLOSE" : "TAP OUTSIDE TO CLOSE";
-#if UNITY_TVOS
-        closeHint = "PRESS MENU TO CLOSE";
-#endif
-        TMP_Text closeLabel = CreateText(cardRT, "Close", closeHint,
+        TMP_Text closeLabel = CreateText(cardRT, "Close", GetCloseHint(),
             16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
         SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.04f : 0.12f), new Vector2(400, 30));
         closeLabel.characterSpacing = 3f;
@@ -3672,7 +3678,7 @@ public class ScoreSync : MonoBehaviour
         CreateSettingsBorderEdge(cardRT, "BorderR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f));
 
         // Title
-        TMP_Text title = CreateText(cardRT, "Title", "STATISTICS",
+        TMP_Text title = CreateText(cardRT, "Title", L10n.T("stats.title"),
             36, FontStyles.Bold, NEON_CYAN);
         SetAnchored(title.rectTransform, new Vector2(0.5f, 0.90f), new Vector2(400, 50));
         title.characterSpacing = 8f;
@@ -3681,29 +3687,23 @@ public class ScoreSync : MonoBehaviour
         CreateSettingsDivider(cardRT, 0.84f, NEON_CYAN, 0.25f);
 
         // Stat rows — label left, value right. Blitz swaps GATES for OBSTACLES.
-        statsRunsLabel = CreateStatsRow(cardRT, "Runs", "TOTAL RUNS", 0.72f);
-        statsTapsLabel = CreateStatsRow(cardRT, "Taps", "TOTAL TAPS", 0.60f);
-        statsBestLabel = CreateStatsRow(cardRT, "Best", "BEST SCORE", 0.48f);
-        statsAvgLabel = CreateStatsRow(cardRT, "Avg", "AVG SCORE", 0.36f);
+        statsRunsLabel = CreateStatsRow(cardRT, "Runs", L10n.T("stats.total_runs"), 0.72f);
+        statsTapsLabel = CreateStatsRow(cardRT, "Taps", L10n.T("stats.total_taps"), 0.60f);
+        statsBestLabel = CreateStatsRow(cardRT, "Best", L10n.T("stats.best_score"), 0.48f);
+        statsAvgLabel = CreateStatsRow(cardRT, "Avg", L10n.T("stats.avg_score"), 0.36f);
         if (GameConfig.IsBlitz())
         {
-            statsObstaclesLabel = CreateStatsRow(cardRT, "Obstacles", "OBSTACLES", 0.24f);
+            statsObstaclesLabel = CreateStatsRow(cardRT, "Obstacles", L10n.T("stats.obstacles"), 0.24f);
             statsGatesLabel = null;
         }
         else
         {
-            statsGatesLabel = CreateStatsRow(cardRT, "Gates", "TOTAL GATES", 0.24f);
+            statsGatesLabel = CreateStatsRow(cardRT, "Gates", L10n.T("stats.total_gates"), 0.24f);
             statsObstaclesLabel = null;
         }
 
         // Close hint
-        string closeHint = "TAP OUTSIDE TO CLOSE";
-#if UNITY_STANDALONE && !UNITY_EDITOR
-        closeHint = "CLICK OUTSIDE TO CLOSE";
-#elif UNITY_TVOS
-        closeHint = "PRESS MENU TO CLOSE";
-#endif
-        TMP_Text closeLabel = CreateText(cardRT, "Close", closeHint,
+        TMP_Text closeLabel = CreateText(cardRT, "Close", GetCloseHint(),
             16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
         SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, 0.08f), new Vector2(400, 30));
         closeLabel.characterSpacing = 3f;
@@ -3901,16 +3901,73 @@ public class ScoreSync : MonoBehaviour
         ApplyThemeSelection(prev);
     }
 
+    // ── PLATFORM-SPECIFIC LOCALIZED STRINGS ─────────────────────
+
+    string GetTapPrompt()
+    {
+#if UNITY_IOS && !UNITY_TVOS
+        return L10n.T("tap_prompt.swipe");
+#elif UNITY_STANDALONE
+        return L10n.T("tap_prompt.keyboard");
+#else
+        return L10n.T("tap_prompt.tap");
+#endif
+    }
+
+    string GetResumeHint()
+    {
+#if UNITY_TVOS
+        return L10n.T("pause.resume.tv");
+#elif UNITY_STANDALONE
+        return L10n.T("pause.resume.keyboard");
+#else
+        return L10n.T("pause.resume.tap");
+#endif
+    }
+
+    string GetTutorialInstruction()
+    {
+#if UNITY_IOS && !UNITY_TVOS
+        return L10n.T("tutorial.instruction.swipe");
+#elif UNITY_STANDALONE
+        return L10n.T("tutorial.instruction.keyboard");
+#else
+        return L10n.T("tutorial.instruction.tap");
+#endif
+    }
+
+    string GetTutorialReadyHint()
+    {
+#if UNITY_STANDALONE
+        return L10n.T("tutorial.ready_hint.keyboard");
+#else
+        return L10n.T("tutorial.ready_hint.tap");
+#endif
+    }
+
+    string GetCloseHint()
+    {
+#if UNITY_TVOS
+        return L10n.T("settings.close.tv");
+#elif UNITY_STANDALONE
+        return L10n.T("settings.close.keyboard");
+#else
+        return L10n.T("settings.close.tap");
+#endif
+    }
+
     void OnLanguageNext()
     {
-        settingsLanguageIndex = (settingsLanguageIndex + 1) % SETTINGS_LANGUAGES.Length;
-        RefreshSettingsLabels();
+        int cur = System.Array.IndexOf(L10n.AllPrefs, L10n.CurrentPref);
+        int next = (cur + 1 + L10n.AllPrefs.Length) % L10n.AllPrefs.Length;
+        L10n.SetPref(L10n.AllPrefs[next]);
     }
 
     void OnLanguagePrev()
     {
-        settingsLanguageIndex = (settingsLanguageIndex - 1 + SETTINGS_LANGUAGES.Length) % SETTINGS_LANGUAGES.Length;
-        RefreshSettingsLabels();
+        int cur = System.Array.IndexOf(L10n.AllPrefs, L10n.CurrentPref);
+        int prev = (cur - 1 + L10n.AllPrefs.Length) % L10n.AllPrefs.Length;
+        L10n.SetPref(L10n.AllPrefs[prev]);
     }
 
     void ApplyThemeSelection(int index)
@@ -3957,19 +4014,19 @@ public class ScoreSync : MonoBehaviour
         {
             if (settingsResLabel != null)
             {
-                settingsResLabel.text = "RES   " + DisplaySettings.Instance.GetResolutionLabel();
+                settingsResLabel.text = L10n.T("settings.res") + "   " + DisplaySettings.Instance.GetResolutionLabel();
                 StyleSettingsToggle(settingsResLabel, true); // Always "on" style
             }
             if (settingsFullscreenLabel != null)
             {
                 bool fs = DisplaySettings.Instance.IsFullscreen();
-                settingsFullscreenLabel.text = fs ? "FULLSCREEN   ON" : "FULLSCREEN   OFF";
+                settingsFullscreenLabel.text = L10n.T("settings.fullscreen") + "   " + L10n.T(fs ? "settings.on" : "settings.off");
                 StyleSettingsToggle(settingsFullscreenLabel, fs);
             }
             if (settingsVSyncLabel != null)
             {
                 bool vs = DisplaySettings.Instance.IsVSync();
-                settingsVSyncLabel.text = vs ? "VSYNC   ON" : "VSYNC   OFF";
+                settingsVSyncLabel.text = L10n.T("settings.vsync") + "   " + L10n.T(vs ? "settings.on" : "settings.off");
                 StyleSettingsToggle(settingsVSyncLabel, vs);
             }
         }
@@ -3978,7 +4035,7 @@ public class ScoreSync : MonoBehaviour
         {
             string themeName;
             if (ThemeData.LoadSavedIndex() == ThemeData.AUTO_INDEX)
-                themeName = "AUTO";
+                themeName = L10n.T("settings.theme.auto");
             else
                 themeName = SceneSetup.activeTheme != null ? SceneSetup.activeTheme.name : "NEON VOID";
             settingsThemeLabel.text = themeName;
@@ -3987,7 +4044,7 @@ public class ScoreSync : MonoBehaviour
 
         if (settingsLanguageLabel != null)
         {
-            settingsLanguageLabel.text = SETTINGS_LANGUAGES[settingsLanguageIndex];
+            settingsLanguageLabel.text = L10n.LanguageDisplayName(L10n.CurrentPref);
             settingsLanguageLabel.color = Color.white;
         }
     }
