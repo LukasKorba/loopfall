@@ -302,16 +302,33 @@ public class ScoreSync : MonoBehaviour
     void OnLanguageChanged()
     {
         RefreshLocalizedLabels();
-        // Panels are rebuilt on next open — drop any cached ones so they pick up new strings.
+        // Rebuild any panel that's currently visible so the swap lands in-place
+        // instead of kicking the player back out. Hidden panels just get dropped
+        // and will rebuild fresh on next open.
+        bool settingsWasOpen = IsSettingsOpen();
         if (settingsPanel != null)
         {
             Destroy(settingsPanel.gameObject);
             settingsPanel = null;
         }
+        if (settingsWasOpen)
+        {
+            BuildSettingsPanel(canvas.transform);
+            RefreshSettingsLabels();
+            settingsPanel.gameObject.SetActive(true);
+        }
+
+        bool statsWasOpen = IsStatsOpen();
         if (statsPanel != null)
         {
             Destroy(statsPanel.gameObject);
             statsPanel = null;
+        }
+        if (statsWasOpen)
+        {
+            BuildStatsPanel(canvas.transform);
+            RefreshStatsLabels();
+            statsPanel.gameObject.SetActive(true);
         }
     }
 
