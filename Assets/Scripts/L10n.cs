@@ -98,6 +98,29 @@ public static class L10n
         return "";
     }
 
+    // Month abbreviations for the leaderboard date column. IL2CPP on iOS/Android
+    // ships the invariant culture only, so DateTime.ToString("MMM") always returns
+    // English regardless of the system locale — so we route month names through
+    // this table like any other localized string.
+    public static string MonthAbbr(int monthOneBased)
+    {
+        if (monthOneBased < 1 || monthOneBased > 12) return "";
+        string[] arr;
+        if (sMonths.TryGetValue(sCurrent, out arr)) return arr[monthOneBased - 1];
+        return sMonths[Lang.English][monthOneBased - 1];
+    }
+
+    private static readonly Dictionary<Lang, string[]> sMonths = new Dictionary<Lang, string[]>
+    {
+        { Lang.English,      new[] { "JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC" } },
+        { Lang.German,       new[] { "JAN","FEB","MÄR","APR","MAI","JUN","JUL","AUG","SEP","OKT","NOV","DEZ" } },
+        { Lang.Spanish,      new[] { "ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC" } },
+        { Lang.French,       new[] { "JAN","FÉV","MAR","AVR","MAI","JUN","JUL","AOÛ","SEP","OCT","NOV","DÉC" } },
+        { Lang.Italian,      new[] { "GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC" } },
+        { Lang.Russian,      new[] { "ЯНВ","ФЕВ","МАР","АПР","МАЙ","ИЮН","ИЮЛ","АВГ","СЕН","ОКТ","НОЯ","ДЕК" } },
+        { Lang.PortugueseBR, new[] { "JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ" } },
+    };
+
     // ── TABLE ──────────────────────────────────────────────────
     private static readonly Dictionary<Lang, Dictionary<string, string>> sTable = BuildTable();
 

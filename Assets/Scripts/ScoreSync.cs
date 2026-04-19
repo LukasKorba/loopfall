@@ -531,7 +531,7 @@ public class ScoreSync : MonoBehaviour
         var dt = new System.DateTimeOffset(1970, 1, 1, 0, 0, 0, System.TimeSpan.Zero)
             .AddSeconds(unixSeconds).LocalDateTime;
         var now = System.DateTime.Now;
-        string month = dt.ToString("MMM").ToUpper();
+        string month = L10n.MonthAbbr(dt.Month);
         if (dt.Year != now.Year)
             return month + " '" + (dt.Year % 100).ToString("D2");
         return month + " " + dt.Day;
@@ -2294,33 +2294,18 @@ public class ScoreSync : MonoBehaviour
             string scoreStr = FormatModeScore(score);
             goLeaderboardTexts[i].text = (i + 1) + ".   " + scoreStr;
 
-            // Color hierarchy: new best = gold, current run = cyan, #1 = gold, rest = dim
-            Color rowColor;
+            // Color hierarchy: gold = the run that just ended (only if it's in the top 5),
+            // cyan = everything else. Rank #1 gets bold regardless of current-run status so
+            // it still reads as "the best" even when the player didn't land in the top 5.
+            Color rowColor = isCurrent ? NEON_GOLD : NEON_CYAN;
             float maxAlpha;
-            if (isCurrent && isNewBest)
-            {
-                rowColor = NEON_GOLD;
-                maxAlpha = 1.0f;
-            }
-            else if (isCurrent)
-            {
-                rowColor = NEON_CYAN;
-                maxAlpha = 0.95f;
-            }
-            else if (i == 0)
-            {
-                rowColor = NEON_GOLD;
-                maxAlpha = 0.7f;
-            }
-            else
-            {
-                rowColor = DIM_TEXT;
-                maxAlpha = 0.5f;
-            }
+            if (isCurrent)        maxAlpha = 1.0f;
+            else if (i == 0)      maxAlpha = 0.85f;
+            else                  maxAlpha = 0.55f;
 
             goLeaderboardTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
                 rowAlpha * maxAlpha);
-            goLeaderboardTexts[i].fontStyle = (isCurrent && isNewBest)
+            goLeaderboardTexts[i].fontStyle = (i == 0)
                 ? FontStyles.Bold : FontStyles.Normal;
 
             // Slide in from right
