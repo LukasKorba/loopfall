@@ -349,9 +349,8 @@ public class SceneSetup : MonoBehaviour
         blitzConnectionMaterial.renderQueue = 3000;
 
         // Blitz orb materials — additive glow (TrailGlow) for semi-transparent look.
-        // Intensity 2.5 still clears the DepthHueShift bright-exemption threshold
-        // (lum-0.5)*4 so orbs keep their identity color at all depths, but less
-        // clamping means the base hue shows through closer to the UI slot color.
+        // Intensity 2.5 keeps orb luminance well above the DepthHueShift bright-exemption
+        // threshold (lum > 0.6) so orbs stay color-stable at all depths.
         Shader orbShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
         blitzOrbGunMaterial = new Material(orbShader);
         blitzOrbGunMaterial.SetColor("_Color", new Color(1.0f, 0.85f, 0.1f));

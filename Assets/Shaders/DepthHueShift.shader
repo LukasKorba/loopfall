@@ -84,11 +84,12 @@ Shader "Loopfall/DepthHueShift"
 
                 float t = saturate((eyeDepth - _DepthStartWorld) / (_DepthEndWorld - _DepthStartWorld));
 
-                // Bright emissive pixels (orbs, beams, gates) keep their true color.
-                // Threshold lowered to let high-intensity pickups (orbs) stay color-stable
-                // at all depths — identity > atmospheric effect.
+                // HDR pickups (orbs/beams at intensity 2+) keep their identity color.
+                // Threshold 1.0 lets regular emissive obstacles (Pure Hell gates, lum ~0.85)
+                // hue-shift with depth for the rainbow tunnel look; only pixels pushed past
+                // unity-RGB by high-intensity additive blending stay stable.
                 float lum = dot(col.rgb, float3(0.299, 0.587, 0.114));
-                float brightReduce = saturate((lum - 0.5) * 4.0);
+                float brightReduce = saturate((lum - 1.0) * 4.0);
                 t *= (1.0 - brightReduce);
 
                 float3 hsv = rgb2hsv(col.rgb);

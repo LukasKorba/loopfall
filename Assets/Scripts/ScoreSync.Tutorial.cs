@@ -17,16 +17,6 @@ public partial class ScoreSync
 #endif
         tutorialGroup.gameObject.SetActive(false);
 
-        // Center vertical line — visually divides the screen into left/right halves.
-        tutorialCenterLine = CreateImage(tutorialGroup.transform, "TutorialCenterLine",
-            new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.25f));
-        RectTransform lineRT = tutorialCenterLine.rectTransform;
-        lineRT.anchorMin = new Vector2(0.5f, 0.12f);
-        lineRT.anchorMax = new Vector2(0.5f, 0.78f);
-        lineRT.pivot = new Vector2(0.5f, 0.5f);
-        lineRT.anchoredPosition = Vector2.zero;
-        lineRT.sizeDelta = new Vector2(2f, 0f);
-
         // Left / right arrows flanking the line. Unicode arrows keep the TMP path
         // simple and scale cleanly; we tint them when their direction has fired.
         tutorialLeftArrow = CreateText(tutorialGroup, "TutorialLeftArrow", "\u2B05",
@@ -42,14 +32,14 @@ public partial class ScoreSync
         // Primary instruction — modality-agnostic, reads left AND right as input actions.
         tutorialInstructionText = CreateText(tutorialGroup, "TutorialInstruction", GetTutorialInstruction(),
             42, FontStyles.Bold, Color.white);
-        SetAnchored(tutorialInstructionText.rectTransform, new Vector2(0.5f, 0.76f), new Vector2(1400, 90));
+        SetAnchored(tutorialInstructionText.rectTransform, new Vector2(0.5f, 0.84f), new Vector2(1400, 90));
         tutorialInstructionText.characterSpacing = 6f;
         ApplyDropShadow(tutorialInstructionText);
 
         // Nudge — only surfaces if the player uses one direction and stops.
         tutorialNudgeText = CreateText(tutorialGroup, "TutorialNudge", "",
             30, FontStyles.Italic, NEON_GOLD);
-        SetAnchored(tutorialNudgeText.rectTransform, new Vector2(0.5f, 0.68f), new Vector2(1400, 60));
+        SetAnchored(tutorialNudgeText.rectTransform, new Vector2(0.5f, 0.1f), new Vector2(1400, 60));
         tutorialNudgeText.characterSpacing = 4f;
         tutorialNudgeText.color = new Color(NEON_GOLD.r, NEON_GOLD.g, NEON_GOLD.b, 0f);
 
@@ -67,26 +57,52 @@ public partial class ScoreSync
         tutorialReadyHintText.characterSpacing = 6f;
         tutorialReadyHintText.color = new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0f);
 
-        // Platform image placeholder — user will swap in per-platform sprites (iOS/tvOS/
-        // keyboard/gamepad) later. Empty image keeps the slot allocated for future art.
+        // Platform-specific input hint (touch / remote / keyboard / gamepad). Sprites live in
+        // Resources/UI and are picked per build target — desktop falls back to keyboard unless
+        // a joystick is connected at scene start.
+        Sprite platformSprite = GetTutorialPlatformSprite();
         tutorialPlatformImage = CreateImage(tutorialGroup.transform, "TutorialPlatformImage",
-            new Color(1f, 1f, 1f, 0f));
+            platformSprite != null ? new Color(1f, 1f, 1f, 0.85f) : new Color(1f, 1f, 1f, 0f));
+        if (platformSprite != null)
+        {
+            tutorialPlatformImage.sprite = platformSprite;
+            tutorialPlatformImage.preserveAspect = true;
+        }
         RectTransform pImgRT = tutorialPlatformImage.rectTransform;
-        pImgRT.anchorMin = new Vector2(0.5f, 0.22f);
-        pImgRT.anchorMax = new Vector2(0.5f, 0.22f);
+        pImgRT.anchorMin = new Vector2(0.5f, 0.5f);
+        pImgRT.anchorMax = new Vector2(0.5f, 0.5f);
         pImgRT.pivot = new Vector2(0.5f, 0.5f);
         pImgRT.anchoredPosition = Vector2.zero;
-        pImgRT.sizeDelta = new Vector2(400f, 160f);
+        pImgRT.sizeDelta = new Vector2(480f, 900f);
+    }
+
+    Sprite GetTutorialPlatformSprite()
+    {
+#if UNITY_IOS || UNITY_ANDROID
+        return Resources.Load<Sprite>("UI/touch");
+#elif UNITY_TVOS
+        return HasGamepadConnected()
+            ? Resources.Load<Sprite>("UI/remote_gamepad")
+            : Resources.Load<Sprite>("UI/remote");
+#else
+        return HasGamepadConnected()
+            ? Resources.Load<Sprite>("UI/keyboard_gamepad")
+            : Resources.Load<Sprite>("UI/keyboard");
+#endif
+    }
+
+    bool HasGamepadConnected()
+    {
+        string[] joys = Input.GetJoystickNames();
+        if (joys == null) return false;
+        for (int i = 0; i < joys.Length; i++)
+            if (!string.IsNullOrEmpty(joys[i])) return true;
+        return false;
     }
 
     void AnimateTutorial()
     {
         if (mSphere == null) return;
-
-        // Breathe the center line a little so the empty stage doesn't feel dead.
-        float pulse = 0.25f + Mathf.Sin(Time.time * 2.2f) * 0.10f;
-        if (tutorialCenterLine != null)
-            tutorialCenterLine.color = new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, pulse);
 
         bool leftDone = mSphere.WasTutorialLeftFired();
         bool rightDone = mSphere.WasTutorialRightFired();
@@ -125,6 +141,9 @@ public partial class ScoreSync
             rightDone = false;
             mTutorialSinceBothSeenTimer = -1f;
             mTutorialReady = false;
+            // Restore the platform hint if the Ready phase had faded it out.
+            if (tutorialPlatformImage != null && tutorialPlatformImage.sprite != null)
+                tutorialPlatformImage.color = new Color(1f, 1f, 1f, 0.85f);
         }
 
         // Instruction line — replaced by death message for a short window.
@@ -197,6 +216,12 @@ public partial class ScoreSync
                     Color rc = tutorialRightArrow.color;
                     rc.a = Mathf.Max(0f, rc.a - Time.deltaTime * 3f);
                     tutorialRightArrow.color = rc;
+                }
+                if (tutorialPlatformImage != null)
+                {
+                    Color pc = tutorialPlatformImage.color;
+                    pc.a = Mathf.Max(0f, pc.a - Time.deltaTime * 3f);
+                    tutorialPlatformImage.color = pc;
                 }
                 if (tutorialReadyText != null)
                 {

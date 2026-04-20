@@ -218,7 +218,7 @@ Critical for understanding all positioning code.
 ### Shader gotchas
 - **NEVER use Unity Standard shader on iOS.** Mobile variants compile differently — darker, flatter results. Always use custom shaders (Gate, TrailGlow, etc.).
 - **`Shader.Find()` gets stripped on iOS** for shaders only used in `Graphics.Blit()`. Use serialized shader references (public field on MonoBehaviour) instead.
-- **`DepthHueShift` luminance threshold:** bright emissive pixels (`lum > 0.6`) resist hue shift and fog. Added specifically so orbs/beams/gates keep their true color at distance — without it, all colors blend together.
+- **`DepthHueShift` luminance threshold:** HDR-bright pixels (`lum > 1.0`) resist hue shift and fog. Keeps BLITZ orbs/beams (intensity 2.0+) color-stable for identity while letting regular emissive obstacles (Pure Hell gates) hue-shift with depth.
 
 ### Geometry gotchas
 - **BlitzOrb arc mesh had absolute torus coordinates** (vertices at `y ≈ -11`). Any `localScale` change moved the mesh off the surface entirely → "blink out" bug. Fixed by moving to local-space floating 3D objects where `localScale` works correctly.

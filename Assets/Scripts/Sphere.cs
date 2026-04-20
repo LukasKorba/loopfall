@@ -357,17 +357,7 @@ public class Sphere : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.JoystickButton6)) return -1; // L2
         if (Input.GetKeyDown(KeyCode.JoystickButton7)) return 1;  // R2
 
-        // Face buttons A/B/X/Y — right side of controller
-        // Skip on tvOS to avoid conflict with Siri Remote clickpad/play-pause
-#if !UNITY_TVOS
-        if (Input.GetKeyDown(KeyCode.JoystickButton14) ||
-            Input.GetKeyDown(KeyCode.JoystickButton13) ||
-            Input.GetKeyDown(KeyCode.JoystickButton15) ||
-            Input.GetKeyDown(KeyCode.JoystickButton12))
-            return 1;
-#endif
-
-        // D-pad / left stick — edge triggered
+        // D-pad / left stick — silent fallback, not advertised in tutorial art. Edge triggered.
         float h = Input.GetAxis("Horizontal");
         if (h < -PAD_THRESHOLD && !mPadLeftFired)
         {

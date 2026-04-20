@@ -204,10 +204,10 @@ public class GameAudio : MonoBehaviour
 
     void LoadSfx()
     {
-        gameOverClips = LoadVariants("Audio/sfx_gameover", "Audio/sfx_gameover2");
-        rollClips = LoadVariants("Audio/sfx_roll", "Audio/sfx_roll2", "Audio/sfx_roll3");
-        rewindClips = LoadVariants("Audio/sfx_rewind", "Audio/sfx_rewind2", "Audio/sfx_rewind3");
-        tapClips = LoadVariants("Audio/sfx_tap", "Audio/sfx_tap3");
+        gameOverClips = LoadVariants("Audio/sfx_gameover");
+        rollClips = LoadVariants("Audio/sfx_roll");
+        rewindClips = LoadVariants("Audio/sfx_rewind");
+        tapClips = LoadVariants("Audio/sfx_tap");
         glitchClip = Resources.Load<AudioClip>("Audio/sfx_glitch");
         countClip = Resources.Load<AudioClip>("Audio/sfx_count");
         gateClip = Resources.Load<AudioClip>("Audio/sfx_gate");

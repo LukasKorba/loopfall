@@ -38,6 +38,9 @@ public partial class ScoreSync : MonoBehaviour
     private int goRank = 0;
     private bool isFirstRun = false;
     private const string PREF_FIRST_RUN = "HasPlayed";
+    // Toggle in the Inspector to force-play the tutorial on the next run (clears
+    // HasSeenTutorial + HasPlayed at Start). Handy for design review without a rebuild.
+    [SerializeField] private bool debugForceTutorial = false;
     private bool isPaused = false;
     // Set by OnModesTap so the state machine shows the title instead of skipping to Playing.
     private bool forceShowTitle = false;
@@ -238,7 +241,6 @@ public partial class ScoreSync : MonoBehaviour
     // First-run onboarding: stationary torus, no obstacles, UI walks the player through
     // left + right swing. Stashed mode re-enters the normal flow once both fired + tap.
     private RectTransform tutorialGroup;
-    private Image tutorialCenterLine;
     private TMP_Text tutorialLeftArrow;
     private TMP_Text tutorialRightArrow;
     private TMP_Text tutorialInstructionText;
@@ -276,6 +278,12 @@ public partial class ScoreSync : MonoBehaviour
 #if UNITY_EDITOR
         PlayerPrefs.DeleteKey("HasPlayed");
 #endif
+        if (debugForceTutorial)
+        {
+            PlayerPrefs.DeleteKey("HasPlayed");
+            PlayerPrefs.DeleteKey("HasSeenTutorial");
+            PlayerPrefs.Save();
+        }
         LoadScores();
         L10n.Initialize();
         L10n.OnLanguageChanged += OnLanguageChanged;

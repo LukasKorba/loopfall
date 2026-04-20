@@ -256,7 +256,17 @@ public partial class ScoreSync
 
         Image bg = container.AddComponent<Image>();
         bg.color = new Color(1f, 1f, 1f, 0.04f);
-        bg.raycastTarget = true; // Absorb taps so they don't fall through to the dim close-on-tap layer
+        bg.raycastTarget = true;
+
+        // Tapping the row cycles forward (same as `>`). Without a Button, pointer clicks
+        // bubble up the hierarchy to the panel's close-on-tap Button and dismiss settings.
+        Button rowBtn = container.AddComponent<Button>();
+        ColorBlock rowColors = rowBtn.colors;
+        rowColors.normalColor = Color.white;
+        rowColors.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+        rowColors.pressedColor = new Color(1f, 1f, 1f, 0.18f);
+        rowBtn.colors = rowColors;
+        rowBtn.onClick.AddListener(onNext);
 
         // Left accent bar — always cyan (cycles are always "active")
         GameObject accent = new GameObject("Accent");

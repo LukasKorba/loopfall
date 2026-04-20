@@ -11,9 +11,7 @@ public partial class ScoreSync
 
     string GetTapPrompt()
     {
-#if UNITY_IOS && !UNITY_TVOS
-        return L10n.T("tap_prompt.swipe");
-#elif UNITY_STANDALONE
+#if UNITY_STANDALONE
         return L10n.T("tap_prompt.keyboard");
 #else
         return L10n.T("tap_prompt.tap");
@@ -33,9 +31,7 @@ public partial class ScoreSync
 
     string GetTutorialInstruction()
     {
-#if UNITY_IOS && !UNITY_TVOS
-        return L10n.T("tutorial.instruction.swipe");
-#elif UNITY_STANDALONE
+#if UNITY_STANDALONE
         return L10n.T("tutorial.instruction.keyboard");
 #else
         return L10n.T("tutorial.instruction.tap");
