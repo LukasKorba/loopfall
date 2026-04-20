@@ -146,7 +146,19 @@ public class Sphere : MonoBehaviour
 
     bool IsPointerOverUI()
     {
-        return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        var es = EventSystem.current;
+        if (es == null) return false;
+        // Mouse pointer (editor, desktop)
+        if (es.IsPointerOverGameObject()) return true;
+        // Touch: the no-arg overload ignores fingers, so check each active touch by id.
+        // Without this, taps on game-over buttons on iOS fire the button AND the "any tap
+        // → DoReset" handler below, making Blitz buttons feel broken.
+        for (int i = 0; i < Input.touchCount; i++)
+        {
+            if (es.IsPointerOverGameObject(Input.touches[i].fingerId))
+                return true;
+        }
+        return false;
     }
 
     void Update()

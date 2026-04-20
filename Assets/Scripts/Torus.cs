@@ -134,7 +134,7 @@ public class Torus : MonoBehaviour
     private const float STREAK_BAR_CAP = 5f;
     private const int STREAK_MAX_TIER = 4;
     private const float STREAK_GRACE = 3f;
-    private const float STREAK_DRAIN_RATE = 0.5f;
+    private const float STREAK_DRAIN_RATE = 1.0f;
 
     // Full-tube spectacle — Blitz-only sections where the upper tube fades in as pure
     // ambient decoration (ball physics stays bound to the half-tube, so the ceiling is
@@ -1658,8 +1658,8 @@ public class Torus : MonoBehaviour
             if (mStreakTier > 1)
             {
                 mStreakTier--;
-                // Refill to full on drain-drop so each tier gets its own 10s drain cycle
-                // (5 units ÷ 0.5/s). Plus a fresh grace so the player gets a breather.
+                // Refill to full on drain-drop so each tier gets its own 5s drain cycle
+                // (5 units ÷ 1.0/s). Plus a fresh grace so the player gets a breather.
                 mStreakBar = STREAK_BAR_CAP;
                 mStreakGraceTimer = STREAK_GRACE;
             }

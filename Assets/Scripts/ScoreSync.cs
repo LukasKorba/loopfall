@@ -1020,20 +1020,20 @@ public partial class ScoreSync : MonoBehaviour
         // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
         CreateDockStrip(gameOverGroup, "GODockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(560, 140));
 
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(160, 160),
             "trophy", NEON_GOLD, out goLBIcon);
         goLBBtn.onClick.AddListener(OnLeaderboardTap);
 
         goStatsBtn = CreateIconButton(gameOverGroup, "GOStatsBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(160, 160),
             "stats", NEON_CYAN, out goStatsIcon);
         goStatsBtn.onClick.AddListener(OnStatsTap);
 
         goSettingsBtn = CreateIconButton(gameOverGroup, "GOSettingsBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(160, 160),
             "gear", DIM_TEXT, out goSettingsIcon);
         goSettingsBtn.onClick.AddListener(OnSettingsTap);
 #endif
@@ -1041,10 +1041,10 @@ public partial class ScoreSync : MonoBehaviour
         // Back to modes — cross-platform (all platforms get this on game over).
 #if !UNITY_TVOS
         CreateDockStrip(gameOverGroup, "GODockL",
-            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(180, 100));
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(220, 140));
 
         goBackBtn = CreateIconButton(gameOverGroup, "GOBackBtn",
-            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(120, 120),
+            new Vector2(0, 1), new Vector2(0, 1), new Vector2(170, -140), new Vector2(160, 160),
             "back", NEON_CYAN, out goBackIcon);
         goBackBtn.onClick.AddListener(OnModesTap);
 #endif
