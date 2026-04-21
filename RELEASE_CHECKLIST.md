@@ -79,7 +79,7 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 
 - [ ] **Achievement list finalization.** Walk the current set, kill dead ones, add Blitz-specific ones. Make sure IDs match across Apple Game Center / Google Play Games / Steam.
 - [ ] **Leaderboard list finalization.** Per mode (Gates to Hell, Path to Redemption). Per-mode stats already flow through — confirm IDs and display names translated where the platform supports it.
-- [ ] **iCloud sync (iOS/macOS/tvOS).** Key-value store for best scores + stats + settings. Critical for cross-device continuity and for not losing progress on device loss.
+- [x] **iCloud sync (iOS/macOS/tvOS).** NSUbiquitousKeyValueStore syncs best-score lists (per mode) and lifetime counters (taps, runs, blitz obstacles). Settings stay device-local.
 - [ ] **Google Play Games save sync (Android).**
 - [ ] **Steam Cloud save sync (Steam).**
 - [ ] **Save schema versioning.** Add a `SaveVersion` PlayerPrefs key now so 1.0.x → 1.1.x migrations are clean.

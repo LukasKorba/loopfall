@@ -436,10 +436,10 @@ public partial class ScoreSync
             case "star":    BuildStarIcon(iconRT, iconColor); break;
             case "bars":    BuildBarsIcon(iconRT, iconColor); break;
             case "gear":    BuildPhosphorIcon(iconRT, PHOSPHOR_GEAR, iconColor, false); break;
-            case "power":   BuildPowerIcon(iconRT, iconColor); break;
+            case "power":   BuildPhosphorIcon(iconRT, PHOSPHOR_POWER, iconColor, false); break;
             case "back":    BuildPhosphorIcon(iconRT, PHOSPHOR_CARET_LEFT, iconColor, false); break;
             case "trophy":  BuildPhosphorIcon(iconRT, PHOSPHOR_TROPHY, iconColor, false); break;
-            case "stats":   BuildPhosphorIcon(iconRT, PHOSPHOR_LIST_BULLET, iconColor, true); break;
+            case "stats":   BuildPhosphorIcon(iconRT, PHOSPHOR_LIST_BULLET, iconColor, true, true); break;
         }
 
         return btn;
@@ -490,15 +490,6 @@ public partial class ScoreSync
         if (circleSprite != null) dot.sprite = circleSprite;
     }
 
-    void BuildPowerIcon(RectTransform parent, Color color)
-    {
-        // X shape — two crossed bars
-        Image d1 = CreateIconBar(parent, "X1", color, 0.8f, 0.18f);
-        d1.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-        Image d2 = CreateIconBar(parent, "X2", color, 0.8f, 0.18f);
-        d2.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -45f);
-    }
-
     void BuildBackIcon(RectTransform parent, Color color)
     {
         // Left-pointing chevron — two short bars meeting at a left-facing point.
@@ -510,7 +501,7 @@ public partial class ScoreSync
         bot.rectTransform.anchoredPosition = new Vector2(-3f, -10f);
     }
 
-    void BuildPhosphorIcon(RectTransform parent, string glyph, Color color, bool flipY)
+    void BuildPhosphorIcon(RectTransform parent, string glyph, Color color, bool flipY, bool flipX = false)
     {
         GameObject obj = new GameObject("Glyph");
         RectTransform rt = obj.AddComponent<RectTransform>();
@@ -519,7 +510,7 @@ public partial class ScoreSync
         rt.anchorMax = Vector2.one;
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
-        if (flipY) rt.localScale = new Vector3(1f, -1f, 1f);
+        rt.localScale = new Vector3(flipX ? -1f : 1f, flipY ? -1f : 1f, 1f);
 
         TextMeshProUGUI tmp = obj.AddComponent<TextMeshProUGUI>();
         if (phosphorFont != null) tmp.font = phosphorFont;

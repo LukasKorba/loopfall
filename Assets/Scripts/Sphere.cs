@@ -801,6 +801,7 @@ public class Sphere : MonoBehaviour
         if (GameConfig.IsBlitz())
             PlayerPrefs.SetInt(STAT_RUNS_BLITZ, PlayerPrefs.GetInt(STAT_RUNS_BLITZ, 0) + 1);
         PlayerPrefs.Save();
+        CloudSync.PushAll();
     }
 
     void SaveTaps()
@@ -810,6 +811,7 @@ public class Sphere : MonoBehaviour
             PlayerPrefs.SetInt(STAT_TAPS_BLITZ, PlayerPrefs.GetInt(STAT_TAPS_BLITZ, 0) + mSessionTaps);
         PlayerPrefs.Save();
         mSessionTaps = 0;
+        CloudSync.PushAll();
     }
 
     void OnApplicationPause(bool paused)

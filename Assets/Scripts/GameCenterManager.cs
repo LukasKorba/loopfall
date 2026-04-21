@@ -129,15 +129,17 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
 
     public void SaveToCloud(string key, string data)
     {
-        // GameCenter does not support cloud key-value storage.
-        // iCloud KeyValue store requires native plugin — not implemented here.
-        Debug.Log($"[GameCenter] Cloud save not supported (key={key})");
+        // Routed through ICloudKVStore → NSUbiquitousKeyValueStore.
+        // CloudSync uses this store directly; this IPlatformService method exists for parity with Steam.
+        if (ICloudKVStore.Instance == null) return;
+        ICloudKVStore.Instance.SetString(key, data);
+        ICloudKVStore.Instance.Synchronize();
     }
 
     public string LoadFromCloud(string key)
     {
-        Debug.Log($"[GameCenter] Cloud load not supported (key={key})");
-        return null;
+        if (ICloudKVStore.Instance == null) return null;
+        return ICloudKVStore.Instance.GetString(key);
     }
 
     public bool IsAuthenticated() { return mAuthenticated; }

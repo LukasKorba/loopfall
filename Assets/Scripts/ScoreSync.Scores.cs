@@ -9,6 +9,15 @@ public partial class ScoreSync
 {
     // ── LEADERBOARD PERSISTENCE ──────────────────────────────
 
+    /// <summary>
+    /// Public entry for CloudSync's external-change callback: re-reads PlayerPrefs
+    /// (already merged with cloud by CloudSync.MergeToLocal) and rebuilds the in-memory list.
+    /// </summary>
+    public void RefreshFromStorage()
+    {
+        LoadScores();
+    }
+
     void LoadScores()
     {
         topScores.Clear();
@@ -44,6 +53,7 @@ public partial class ScoreSync
         }
         PlayerPrefs.SetString(GameConfig.GetScoresKey(), string.Join(",", entries));
         PlayerPrefs.Save();
+        CloudSync.PushAll();
     }
 
     void SortScoresWithTimestamps()
@@ -102,6 +112,7 @@ public partial class ScoreSync
         topTimestamps.Clear();
         PlayerPrefs.DeleteKey(GameConfig.GetScoresKey());
         PlayerPrefs.Save();
+        CloudSync.PushAll();
     }
 
 }

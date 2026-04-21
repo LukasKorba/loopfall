@@ -496,10 +496,10 @@ public partial class ScoreSync
 
     void BuildBlitzUpgradeHUD(RectTransform parent)
     {
-        const float SLOT_SIZE = 14f;
-        const float SLOT_GAP = 4f;
-        const float ROW_GAP = 6f;
-        const float LABEL_WIDTH = 86f;
+        const float SLOT_SIZE = 14f * PHONE_HUD_SCALE;
+        const float SLOT_GAP = 4f * PHONE_HUD_SCALE;
+        const float ROW_GAP = 6f * PHONE_HUD_SCALE;
+        const float LABEL_WIDTH = 86f * PHONE_HUD_SCALE;
         const float MARGIN_X = 30f;
         const float MARGIN_Y = 30f;
 
@@ -510,7 +510,7 @@ public partial class ScoreSync
         blitzUpgradeGroup.anchorMax = new Vector2(0f, 1f);
         blitzUpgradeGroup.pivot = new Vector2(0f, 1f);
         blitzUpgradeGroup.anchoredPosition = new Vector2(MARGIN_X, -MARGIN_Y);
-        blitzUpgradeGroup.sizeDelta = new Vector2(240f, 80f);
+        blitzUpgradeGroup.sizeDelta = new Vector2(240f * PHONE_HUD_SCALE, 80f * PHONE_HUD_SCALE);
 
         Color gunColor = new Color(1f, 0.85f, 0.1f);
         Color cadencyColor = new Color(0.2f, 0.7f, 1.0f);
@@ -532,9 +532,12 @@ public partial class ScoreSync
     {
         const float MARGIN_X = 30f;
         const float MARGIN_Y = 30f;
-        const float GROUP_W = 120f;
-        const float GROUP_H = 54f;
-        const float BAR_H = 6f;
+        const float GROUP_W = 120f * PHONE_HUD_SCALE;
+        const float GROUP_H = 54f * PHONE_HUD_SCALE;
+        const float BAR_H = 6f * PHONE_HUD_SCALE;
+        const float TIER_FONT = 26f * PHONE_HUD_SCALE;
+        const float TIER_ROW_H = 32f * PHONE_HUD_SCALE;
+        const float BAR_Y = -36f * PHONE_HUD_SCALE;
 
         GameObject grp = new GameObject("BlitzStreakHUD");
         blitzStreakGroup = grp.AddComponent<RectTransform>();
@@ -549,14 +552,14 @@ public partial class ScoreSync
 
         // Tier readout — right-aligned hero label, same size as upgrade labels but bigger.
         blitzStreakTierLabel = CreateText(blitzStreakGroup, "StreakTier", "x1",
-            26f, FontStyles.Bold, new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
+            TIER_FONT, FontStyles.Bold, new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
         blitzStreakTierLabel.alignment = TextAlignmentOptions.TopRight;
         RectTransform lrt = blitzStreakTierLabel.rectTransform;
         lrt.anchorMin = new Vector2(1f, 1f);
         lrt.anchorMax = new Vector2(1f, 1f);
         lrt.pivot = new Vector2(1f, 1f);
         lrt.anchoredPosition = new Vector2(0f, 0f);
-        lrt.sizeDelta = new Vector2(GROUP_W, 32f);
+        lrt.sizeDelta = new Vector2(GROUP_W, TIER_ROW_H);
 
         // Bar track (dim)
         blitzStreakBarTrack = CreateImage(blitzStreakGroup, "StreakBarTrack",
@@ -565,7 +568,7 @@ public partial class ScoreSync
         trt.anchorMin = new Vector2(1f, 1f);
         trt.anchorMax = new Vector2(1f, 1f);
         trt.pivot = new Vector2(1f, 1f);
-        trt.anchoredPosition = new Vector2(0f, -36f);
+        trt.anchoredPosition = new Vector2(0f, BAR_Y);
         trt.sizeDelta = new Vector2(GROUP_W, BAR_H);
 
         // Bar fill (bright) — grows from the right side so it visually aligns with the label.
@@ -575,7 +578,7 @@ public partial class ScoreSync
         frt.anchorMin = new Vector2(1f, 1f);
         frt.anchorMax = new Vector2(1f, 1f);
         frt.pivot = new Vector2(1f, 1f);
-        frt.anchoredPosition = new Vector2(0f, -36f);
+        frt.anchoredPosition = new Vector2(0f, BAR_Y);
         frt.sizeDelta = new Vector2(0f, BAR_H);
 
         ApplyDropShadow(blitzStreakTierLabel);
@@ -629,7 +632,7 @@ public partial class ScoreSync
             if (blitzStreakBarFill != null)
             {
                 RectTransform frt = blitzStreakBarFill.rectTransform;
-                frt.sizeDelta = new Vector2(120f * barP, frt.sizeDelta.y);
+                frt.sizeDelta = new Vector2(120f * PHONE_HUD_SCALE * barP, frt.sizeDelta.y);
             }
         }
         if (blitzStreakBarFill != null)
@@ -642,7 +645,7 @@ public partial class ScoreSync
     TMP_Text CreateRowLabel(RectTransform parent, string name, string content, int rowIndex,
         Color color, float slotSize, float rowGap, float width)
     {
-        TMP_Text t = CreateText(parent, name, content, 13f, FontStyles.Bold,
+        TMP_Text t = CreateText(parent, name, content, 13f * PHONE_HUD_SCALE, FontStyles.Bold,
             new Color(color.r, color.g, color.b, 0.9f));
         t.alignment = TextAlignmentOptions.MidlineLeft;
         RectTransform rt = t.rectTransform;
@@ -1122,10 +1125,12 @@ public partial class ScoreSync
             // cyan = everything else. Rank #1 gets bold regardless of current-run status so
             // it still reads as "the best" even when the player didn't land in the top 5.
             Color rowColor = isCurrent ? NEON_GOLD : NEON_CYAN;
+            // Keep the hierarchy via color + bold only; alphas stay near-opaque so every row
+            // is comfortably readable (earlier 0.55 for rows 2–5 was unreadable in daylight).
             float maxAlpha;
             if (isCurrent)        maxAlpha = 1.0f;
-            else if (i == 0)      maxAlpha = 0.85f;
-            else                  maxAlpha = 0.55f;
+            else if (i == 0)      maxAlpha = 1.0f;
+            else                  maxAlpha = 0.9f;
 
             goLeaderboardTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
                 rowAlpha * maxAlpha);
@@ -1141,7 +1146,7 @@ public partial class ScoreSync
             {
                 long ts = i < topTimestamps.Count ? topTimestamps[i] : 0;
                 goLeaderboardDateTexts[i].text = FormatTimestamp(ts);
-                float dateAlpha = maxAlpha * 0.6f; // Subtler than score
+                float dateAlpha = maxAlpha * 0.75f; // Subtler than score, still readable
                 goLeaderboardDateTexts[i].color = new Color(rowColor.r, rowColor.g, rowColor.b,
                     rowAlpha * dateAlpha);
                 goLeaderboardDateTexts[i].rectTransform.anchoredPosition = new Vector2(slideX, 0f);

@@ -27,7 +27,9 @@ public class Torus : MonoBehaviour
     private float mAngle = 0.0f;
     private float mAngleScore = 0.0f;
     // MANUAL PARAM: Rotation speed — original constant speed from the version you loved
-    private float mAngleStep = 0.17f;
+    private const float PURE_HELL_SPEED = 0.17f;
+    private float mAngleStep = PURE_HELL_SPEED;
+
     private int mRounds = 0;
     private float mObstacleStep = 4.0f;
     private float mObstacleStepInv;
@@ -441,6 +443,9 @@ public class Torus : MonoBehaviour
             }
             else
             {
+                // Pure Hell runs at a fixed speed. Reset explicitly in case we're
+                // returning from a Blitz run where mAngleStep ramped up to BLITZ_PEAK_SPEED.
+                mAngleStep = PURE_HELL_SPEED;
                 UpdateObstacles();
             }
         }

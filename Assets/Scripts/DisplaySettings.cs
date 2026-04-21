@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// PC display settings — resolution, fullscreen, vsync.
+/// PC display settings — resolution and fullscreen.
 /// Only active on standalone (Windows/macOS/Linux) builds.
 /// Persists choices via PlayerPrefs.
 /// Created by SceneSetup; ScoreSync calls BuildUI() to add toggles to the settings panel.
@@ -11,7 +11,6 @@ public class DisplaySettings : MonoBehaviour
     public static DisplaySettings Instance { get; private set; }
 
     private const string PREF_FULLSCREEN = "DisplayFullscreen";
-    private const string PREF_VSYNC = "DisplayVSync";
     private const string PREF_RES_W = "DisplayResW";
     private const string PREF_RES_H = "DisplayResH";
 
@@ -25,7 +24,6 @@ public class DisplaySettings : MonoBehaviour
 
     private int mCurrentResIndex = 1; // default 1920x1080
     private bool mFullscreen;
-    private bool mVSync;
 
     void Awake()
     {
@@ -48,7 +46,6 @@ public class DisplaySettings : MonoBehaviour
     void LoadPrefs()
     {
         mFullscreen = PlayerPrefs.GetInt(PREF_FULLSCREEN, 1) == 1;
-        mVSync = PlayerPrefs.GetInt(PREF_VSYNC, 0) == 1;
 
         int savedW = PlayerPrefs.GetInt(PREF_RES_W, 1920);
         int savedH = PlayerPrefs.GetInt(PREF_RES_H, 1080);
@@ -67,7 +64,6 @@ public class DisplaySettings : MonoBehaviour
     void SavePrefs()
     {
         PlayerPrefs.SetInt(PREF_FULLSCREEN, mFullscreen ? 1 : 0);
-        PlayerPrefs.SetInt(PREF_VSYNC, mVSync ? 1 : 0);
         PlayerPrefs.SetInt(PREF_RES_W, RESOLUTIONS[mCurrentResIndex].x);
         PlayerPrefs.SetInt(PREF_RES_H, RESOLUTIONS[mCurrentResIndex].y);
         PlayerPrefs.Save();
@@ -77,9 +73,11 @@ public class DisplaySettings : MonoBehaviour
     {
         Vector2Int res = RESOLUTIONS[mCurrentResIndex];
         Screen.SetResolution(res.x, res.y, mFullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
-        QualitySettings.vSyncCount = mVSync ? 1 : 0;
-        if (!mVSync)
-            Application.targetFrameRate = 60;
+        // Lock to 60 fps without vsync: on ProMotion/120 Hz macs, vSyncCount=1 renders at
+        // refresh rate and ignores targetFrameRate, which made the game run at double speed.
+        // Metal's own frame pacing is tear-free at this cap.
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = 60;
     }
 
     // ── PUBLIC API (called by ScoreSync settings UI) ─────────
@@ -92,15 +90,6 @@ public class DisplaySettings : MonoBehaviour
     }
 
     public bool IsFullscreen() { return mFullscreen; }
-
-    public void ToggleVSync()
-    {
-        mVSync = !mVSync;
-        SavePrefs();
-        ApplySettings();
-    }
-
-    public bool IsVSync() { return mVSync; }
 
     public void CycleResolution()
     {

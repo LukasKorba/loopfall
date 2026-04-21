@@ -46,11 +46,13 @@ public class SceneSetup : MonoBehaviour
         CreateBall();
         CreateCamera();
         CreateLighting();
+        // Platform services (and iCloud reconcile) must run before CreateUI so that
+        // ScoreSync.LoadScores() reads merged-from-cloud PlayerPrefs, not stale local values.
+        CreatePlatformServices();
         CreateUI();
         CreateBackground();
         CreateRewindSystem();
         CreateAudio();
-        CreatePlatformServices();
         CreateDisplaySettings();
         if (useSplineTrack) CreateSplineTrack();
 #if UNITY_EDITOR
@@ -782,7 +784,17 @@ public class SceneSetup : MonoBehaviour
         SteamService steamSvc = steamSvcObj.AddComponent<SteamService>();
         pm.SetService(steamSvc);
 #else
-        // Apple builds (iOS, tvOS, macOS App Store): GameCenter
+        // Apple builds (iOS, tvOS, macOS App Store): GameCenter + iCloud KVS
+        GameObject kvObj = new GameObject("ICloudKVStore");
+        kvObj.AddComponent<ICloudKVStore>();
+        // Defer the reconcile so ScoreSync exists by the time the external-change
+        // callback tries to refresh it.
+        CloudSync.InitAndReconcile(() =>
+        {
+            var ss = FindAnyObjectByType<ScoreSync>();
+            if (ss != null) ss.RefreshFromStorage();
+        });
+
         GameObject gcObj = new GameObject("GameCenterManager");
         GameCenterManager gc = gcObj.AddComponent<GameCenterManager>();
         pm.SetService(gc);

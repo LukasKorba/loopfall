@@ -109,6 +109,14 @@ public partial class ScoreSync : MonoBehaviour
     private int currentStreak = 0;
     private float streakFlashTimer = -1f;
 
+    // Phones (iPhone + Android) get a larger powerup / multiplier HUD — the default
+    // tvOS/desktop/iPad sizes read too small at phone screen distances.
+#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
+    private const float PHONE_HUD_SCALE = 1.33f;
+#else
+    private const float PHONE_HUD_SCALE = 1.0f;
+#endif
+
     // ── BLITZ UPGRADE HUD ────────────────────────────────────
     private RectTransform blitzUpgradeGroup;
     private Image[] blitzGunSlots;
@@ -168,7 +176,6 @@ public partial class ScoreSync : MonoBehaviour
     private TMP_Text settingsThemeLabel;
     private TMP_Text settingsLanguageLabel;
     private TMP_Text settingsFullscreenLabel;
-    private TMP_Text settingsVSyncLabel;
     private TMP_Text settingsResLabel;
 
     // ── QUIT BUTTON (desktop only) + BACK BUTTON (game over, all platforms) ────
@@ -268,6 +275,7 @@ public partial class ScoreSync : MonoBehaviour
     private const string PHOSPHOR_LIST_BULLET   = "\uE2F2";
     private const string PHOSPHOR_SPEAKER_HIGH  = "\uE44A";
     private const string PHOSPHOR_SPEAKER_X     = "\uE45C";
+    private const string PHOSPHOR_POWER         = "\uE3DA";
 
     // ── CACHED REFS ─────────────────────────────────────────
     private Sphere mSphere;
@@ -912,8 +920,8 @@ public partial class ScoreSync : MonoBehaviour
         // Pure Hell streak dots — pair with swing/no-tap multiplier.
         streakDots = new Image[STREAK_COUNT];
         {
-            float dotSize = 10f;
-            float dotSpacing = 20f;
+            float dotSize = 10f * PHONE_HUD_SCALE;
+            float dotSpacing = 20f * PHONE_HUD_SCALE;
             float totalWidth = (STREAK_COUNT - 1) * dotSpacing;
             float startX = -totalWidth * 0.5f;
 

@@ -91,24 +91,20 @@ public partial class ScoreSync
                 new Vector2(0.5f, 0.43f), out settingsFullscreenLabel);
             fullBtn.onClick.AddListener(OnToggleFullscreen);
 
-            Button vsyncBtn = CreateSettingsToggle(cardRT, "VSyncBtn",
-                new Vector2(0.5f, 0.35f), out settingsVSyncLabel);
-            vsyncBtn.onClick.AddListener(OnToggleVSync);
-
             // ── PREFERENCES SECTION ──
-            CreateSettingsDivider(cardRT, 0.30f, DIM_TEXT, 0.08f);
+            CreateSettingsDivider(cardRT, 0.38f, DIM_TEXT, 0.08f);
 
             TMP_Text prefsHeader = CreateText(cardRT, "PrefsHeader", L10n.T("settings.section.preferences"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.26f), new Vector2(400, 28));
+            SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.34f), new Vector2(400, 28));
             prefsHeader.characterSpacing = 6f;
             prefsHeader.raycastTarget = false;
 
             CreateSettingsCycleRow(cardRT, "ThemeRow", L10n.T("settings.theme"),
-                new Vector2(0.5f, 0.19f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
+                new Vector2(0.5f, 0.27f), OnThemePrev, OnThemeNext, out settingsThemeLabel);
 
             CreateSettingsCycleRow(cardRT, "LanguageRow", L10n.T("settings.language"),
-                new Vector2(0.5f, 0.11f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
+                new Vector2(0.5f, 0.19f), OnLanguagePrev, OnLanguageNext, out settingsLanguageLabel);
         }
         else
         {
@@ -647,13 +643,6 @@ public partial class ScoreSync
     {
         if (DisplaySettings.Instance == null) return;
         DisplaySettings.Instance.ToggleFullscreen();
-        RefreshSettingsLabels();
-    }
-
-    void OnToggleVSync()
-    {
-        if (DisplaySettings.Instance == null) return;
-        DisplaySettings.Instance.ToggleVSync();
         RefreshSettingsLabels();
     }
 

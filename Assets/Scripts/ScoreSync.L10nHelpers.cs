@@ -125,12 +125,6 @@ public partial class ScoreSync
                 settingsFullscreenLabel.text = L10n.T("settings.fullscreen") + "   " + L10n.T(fs ? "settings.on" : "settings.off");
                 StyleSettingsToggle(settingsFullscreenLabel, fs);
             }
-            if (settingsVSyncLabel != null)
-            {
-                bool vs = DisplaySettings.Instance.IsVSync();
-                settingsVSyncLabel.text = L10n.T("settings.vsync") + "   " + L10n.T(vs ? "settings.on" : "settings.off");
-                StyleSettingsToggle(settingsVSyncLabel, vs);
-            }
         }
 
         if (settingsThemeLabel != null)
