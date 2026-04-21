@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loopfall — a hypnotic neon descent</title>
+
+  <meta name="description" content="Loopfall is a one-tap arcade runner set inside a neon torus. Dodge gates in Pure Hell, blast through obstacles in Blitz. On iPhone, iPad, Apple TV, Mac, and Steam.">
+  <meta name="theme-color" content="#05050a">
+
+  <!-- Open Graph / social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Loopfall — a hypnotic neon descent">
+  <meta property="og:description" content="A one-tap arcade runner set inside a neon torus. Two modes. Endless descent.">
+  <meta property="og:image" content="assets/icons/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Favicon (replace with real icon) -->
+  <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- =================== NAV =================== -->
+  <nav class="nav" aria-label="Primary">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <span class="nav__mark" aria-hidden="true"></span>
+        <span>LOOPFALL</span>
+      </a>
+      <div class="nav__links">
+        <a href="#trailer">Trailer</a>
+        <a href="#features">Features</a>
+        <a href="#gallery">Gallery</a>
+        <a href="#press">Press</a>
+        <a href="support.html">Support</a>
+        <a class="nav__cta" href="#download">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- =================== HERO =================== -->
+  <header class="hero">
+    <!-- Animated torus — echoes the game's torus-track geometry -->
+    <svg class="hero__torus" viewBox="0 0 600 600" aria-hidden="true">
+      <defs>
+        <linearGradient id="grad-torus" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.8"/>
+          <stop offset="50%" stop-color="#8b5cf6" stop-opacity="0.6"/>
+          <stop offset="100%" stop-color="#ff2bd6" stop-opacity="0.8"/>
+        </linearGradient>
+        <filter id="glow"><feGaussianBlur stdDeviation="3"/></filter>
+      </defs>
+      <g fill="none" stroke="url(#grad-torus)" stroke-width="1" filter="url(#glow)">
+        <ellipse cx="300" cy="300" rx="260" ry="80"/>
+        <ellipse cx="300" cy="300" rx="240" ry="75"/>
+        <ellipse cx="300" cy="300" rx="220" ry="70"/>
+        <ellipse cx="300" cy="300" rx="200" ry="65" transform="rotate(8 300 300)"/>
+        <ellipse cx="300" cy="300" rx="180" ry="60" transform="rotate(-6 300 300)"/>
+        <ellipse cx="300" cy="300" rx="160" ry="55"/>
+        <ellipse cx="300" cy="300" rx="140" ry="50" transform="rotate(12 300 300)"/>
+      </g>
+      <g fill="none" stroke="url(#grad-torus)" stroke-width="0.6" opacity="0.5">
+        <circle cx="300" cy="300" r="270"/>
+        <circle cx="300" cy="300" r="230"/>
+        <circle cx="300" cy="300" r="190"/>
+      </g>
+    </svg>
+
+    <div class="hero__inner">
+      <span class="hero__eyebrow">Arcade · Endless · One-Tap</span>
+      <h1 class="hero__title" data-text="LOOPFALL">LOOPFALL</h1>
+      <p class="hero__tagline">
+        A hypnotic descent through a neon torus. <strong>Dodge, blast, survive.</strong>
+        Two modes. One relentless fall.
+      </p>
+
+      <div class="hero__ctas" id="download">
+        <!-- Apple App Store badge — replace href with live listing -->
+        <a class="appstore-badge" href="#" aria-label="Download on the App Store">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+          </svg>
+          <span>
+            <span class="appstore-badge__kicker">Download on the</span>
+            <span class="appstore-badge__label">App Store</span>
+          </span>
+        </a>
+
+        <a class="btn-ghost" href="#trailer" aria-label="Watch the trailer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Watch Trailer
+        </a>
+      </div>
+
+      <div class="hero__platforms" aria-label="Available platforms">
+        <span>iPhone</span>
+        <span>·</span>
+        <span>iPad</span>
+        <span>·</span>
+        <span>Apple TV</span>
+        <span>·</span>
+        <span>Mac</span>
+        <span>·</span>
+        <span>Steam</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- =================== TRAILER =================== -->
+  <section class="section" id="trailer">
+    <div class="section__head reveal">
+      <p class="section__eyebrow">Watch</p>
+      <h2 class="section__title">See it in motion</h2>
+      <p class="section__lede">Sixty seconds of what Loopfall actually feels like when the speed starts climbing.</p>
+    </div>
+
+    <div class="trailer__frame reveal">
+      <!-- PLACEHOLDER VIDEO ID — replace `VIDEO_ID` with the real YouTube ID -->
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/VIDEO_ID?rel=0&modestbranding=1"
+        title="Loopfall — gameplay trailer"
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen>
+      </iframe>
+    </div>
+  </section>
+
+  <!-- =================== FEATURES =================== -->
+  <section class="section" id="features">
+    <div class="section__head reveal">
+      <p class="section__eyebrow">What you're in for</p>
+      <h2 class="section__title">A new kind of descent.</h2>
+      <p class="section__lede">Every run is short, every death is your fault, every restart is one tap away.</p>
+    </div>
+
+    <div class="features">
+      <!-- F1: Two modes -->
+      <article class="feature reveal">
+        <div class="feature__icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20M2 12h20"/>
+          </svg>
+        </div>
+        <h3 class="feature__title">Two modes. One obsession.</h3>
+        <p class="feature__desc">
+          <strong>Pure Hell</strong> is the purest form: endless, constant speed, dodge or die.
+          <strong>Blitz</strong> turns the tube into a gauntlet — shoot buttons, open gates, chase the tier.
+        </p>
+      </article>
+
+      <!-- F2: Chromatic neon identity -->
+      <article class="feature reveal">
+        <div class="feature__icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="12" r="6"/>
+            <circle cx="15" cy="12" r="6"/>
+          </svg>
+        </div>
+        <h3 class="feature__title">Chromatic, hypnotic, loud.</h3>
+        <p class="feature__desc">
+          Custom shaders, CMYK channel splits, and eight handcrafted themes — from <em>Void</em> to <em>Acid</em> —
+          auto-cycle as you play. Flat-shaded geometry, zero compromise on mobile.
+        </p>
+      </article>
+
+      <!-- F3: One-tap controls -->
+      <article class="feature reveal">
+        <div class="feature__icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11V6a3 3 0 0 1 6 0v5"/>
+            <path d="M7 11h10l1 10H6z"/>
+          </svg>
+        </div>
+        <h3 class="feature__title">One tap. That's it.</h3>
+        <p class="feature__desc">
+          Tap left, tap right, nudge the ball along the torus. The skill ceiling is real — the learning curve isn't.
+          Same inputs on phone, tablet, remote, keyboard, or controller.
+        </p>
+      </article>
+
+      <!-- F4: Cross-device -->
+      <article class="feature reveal">
+        <div class="feature__icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="14" height="10" rx="1"/>
+            <rect x="11" y="10" width="10" height="10" rx="1"/>
+          </svg>
+        </div>
+        <h3 class="feature__title">Five platforms. One score.</h3>
+        <p class="feature__desc">
+          iPhone, iPad, Apple TV, Mac, and Steam. Apple devices sync via iCloud, Steam via Steam Cloud —
+          your best run follows you home.
+        </p>
+      </article>
+
+      <!-- F5: Localized -->
+      <article class="feature reveal">
+        <div class="feature__icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>
+          </svg>
+        </div>
+        <h3 class="feature__title">Seven languages, globally native.</h3>
+        <p class="feature__desc">
+          English, German, Spanish, French, Italian, Russian, Brazilian Portuguese —
+          auto-detected from your system. Game Center &amp; Steam leaderboards wired in.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <!-- =================== SCREENSHOTS =================== -->
+  <section class="section" id="gallery">
+    <div class="section__head reveal">
+      <p class="section__eyebrow">Gallery</p>
+      <h2 class="section__title">Caught mid-descent.</h2>
+      <p class="section__lede">Drag or scroll horizontally — click any shot to enlarge.</p>
+    </div>
+
+    <div class="gallery reveal" role="region" aria-label="Screenshot gallery">
+      <div class="gallery__track">
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-1.png" alt="Loopfall screenshot 1" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-1.png</div>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-2.png" alt="Loopfall screenshot 2" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-2.png</div>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-3.png" alt="Loopfall screenshot 3" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-3.png</div>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-4.png" alt="Loopfall screenshot 4" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-4.png</div>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-5.png" alt="Loopfall screenshot 5" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-5.png</div>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screenshots/screenshot-6.png" alt="Loopfall screenshot 6" loading="lazy"
+               onerror="this.remove();">
+          <div class="shot__placeholder">screenshot-6.png</div>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox overlay -->
+  <div class="lightbox" role="dialog" aria-modal="true" aria-label="Expanded screenshot">
+    <button class="lightbox__close" aria-label="Close">&times;</button>
+    <img src="" alt="">
+  </div>
+
+  <!-- =================== PRESS KIT =================== -->
+  <section class="section" id="press">
+    <div class="section__head reveal">
+      <p class="section__eyebrow">For Press &amp; Creators</p>
+      <h2 class="section__title">Press kit.</h2>
+      <p class="section__lede">Everything you need to cover Loopfall. Grab what you need; email us if you need more.</p>
+    </div>
+
+    <div class="press">
+      <!-- App icon -->
+      <div class="press__card reveal">
+        <h3>App icon</h3>
+        <p>1024×1024 PNG, transparent &amp; solid variants.</p>
+        <a class="press__link" href="assets/press/loopfall-icon.zip" download>
+          Download icon pack →
+        </a>
+      </div>
+
+      <!-- Screenshots -->
+      <div class="press__card reveal">
+        <h3>Screenshot pack</h3>
+        <p>All store resolutions: iPhone, iPad, Apple TV, Mac, Steam.</p>
+        <a class="press__link" href="assets/press/loopfall-screenshots.zip" download>
+          Download screenshots →
+        </a>
+      </div>
+
+      <!-- Logo -->
+      <div class="press__card reveal">
+        <h3>Logo &amp; wordmark</h3>
+        <p>SVG + PNG. Light and dark versions.</p>
+        <a class="press__link" href="assets/press/loopfall-logo.zip" download>
+          Download logos →
+        </a>
+      </div>
+
+      <!-- Short description -->
+      <div class="press__card reveal" style="grid-column: span 1;">
+        <h3>Short description</h3>
+        <pre class="press__copy" id="desc-short">Loopfall is a one-tap arcade runner set inside a neon torus. Dodge gates in Pure Hell, blast through obstacles in Blitz mode. Hypnotic visuals, handcrafted themes, and a skill ceiling that keeps you coming back. On iPhone, iPad, Apple TV, Mac, and Steam.</pre>
+        <button class="copy-btn" data-copy-target="desc-short">Copy</button>
+      </div>
+
+      <!-- Long description -->
+      <div class="press__card reveal" style="grid-column: span 2;">
+        <h3>Long description</h3>
+        <pre class="press__copy" id="desc-long">Loopfall is a hypnotic arcade runner that drops you inside a neon torus and dares you to keep rolling. Tap left, tap right — that's the whole game. But the speed climbs, the gates multiply, and the descent never ends.
+
+Two modes push you in different directions. Pure Hell is the original: constant speed, constant gates, survive as long as you can. Blitz turns the torus into a shooting gallery — buttons to blast, gates to open, tiers to climb, and a streak to keep alive.
+
+Built on custom shaders that mimic CMYK channel separation, Loopfall is unapologetically loud — eight handcrafted themes auto-cycle as you play, from cool indigo voids to acid-green fever dreams. It runs at 60fps on every supported device and remembers exactly nothing about you beyond your high scores.
+
+Available on iPhone, iPad, Apple TV, Mac, and Steam, with iCloud and Steam Cloud sync, seven languages, and Game Center / Steam leaderboards out of the box.</pre>
+        <button class="copy-btn" data-copy-target="desc-long">Copy</button>
+      </div>
+
+      <!-- Developer info -->
+      <div class="press__card reveal">
+        <h3>Developer</h3>
+        <p>
+          <strong>Lukas Korba</strong><br>
+          Solo developer, independent studio.<br>
+          Based in Prague.
+        </p>
+      </div>
+
+      <!-- Contact -->
+      <div class="press__card reveal">
+        <h3>Contact</h3>
+        <p>Press inquiries, review codes, interviews:</p>
+        <a class="press__link" href="mailto:press@loopfall.game">press@loopfall.game →</a>
+      </div>
+
+      <!-- Fact sheet -->
+      <div class="press__card reveal">
+        <h3>Fact sheet</h3>
+        <p>
+          Developer: Lukas Korba<br>
+          Release: <em>TBA</em><br>
+          Platforms: iOS 15+, iPadOS, tvOS, macOS, Steam<br>
+          Engine: Unity 6<br>
+          Languages: EN, DE, ES, FR, IT, RU, PT-BR
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== CTA STRIP =================== -->
+  <section class="cta-strip reveal">
+    <h2>Ready to fall?</h2>
+    <p>Free to try. Endless to master.</p>
+    <div class="hero__ctas" style="justify-content: center;">
+      <a class="appstore-badge" href="#" aria-label="Download on the App Store">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+        </svg>
+        <span>
+          <span class="appstore-badge__kicker">Download on the</span>
+          <span class="appstore-badge__label">App Store</span>
+        </span>
+      </a>
+      <a class="btn-ghost" href="#" aria-label="Available on Steam">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.46.09.66-.2.66-.45 0-.22-.01-.8-.01-1.57-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02.79-.22 1.64-.33 2.49-.33.85 0 1.7.11 2.49.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85 0 1.34-.01 2.42-.01 2.75 0 .26.18.55.68.45C19.14 20.16 22 16.42 22 12c0-5.52-4.48-10-10-10z"/>
+        </svg>
+        Available on Steam
+      </a>
+    </div>
+  </section>
+
+  <!-- =================== FOOTER =================== -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <span class="footer__title">LOOPFALL</span>
+        <span class="footer__meta">
+          © <span id="js-year">2026</span> Lukas Korba. All rights reserved.
+        </span>
+        <span class="footer__meta">
+          Made in Unity. Built with a lot of coffee.
+        </span>
+      </div>
+      <div class="footer__right">
+        <div class="footer__links">
+          <a href="index.html">Home</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="support.html">Support</a>
+          <a href="#press">Press</a>
+        </div>
+        <div class="footer__social" aria-label="Social links">
+          <a href="#" aria-label="Twitter / X" title="Twitter / X">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
+          <a href="#" aria-label="Instagram" title="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="5"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </a>
+          <a href="#" aria-label="YouTube" title="YouTube">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </a>
+          <a href="#" aria-label="Discord" title="Discord">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20.317 4.369A19.79 19.79 0 0 0 16.558 3.2a.075.075 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.69 12.69 0 0 0-.617-1.25.078.078 0 0 0-.079-.037A19.74 19.74 0 0 0 5.93 4.369a.069.069 0 0 0-.032.027C2.533 9.046 1.605 13.58 2.06 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.105 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.373-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.099.247.197.373.291a.077.077 0 0 1-.006.128c-.598.349-1.22.645-1.873.892a.076.076 0 0 0-.04.106c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.548-13.66a.061.061 0 0 0-.03-.028zM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.976 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.156 2.42 0 1.333-.946 2.418-2.156 2.418z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
