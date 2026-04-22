@@ -32,3 +32,8 @@ steam_appid.txt
 
 # Local session state (handoff notes for AI assistants)
 .remember/
+
+# CJK source fonts (64MB; only needed to re-bake SDF atlases; redownload from
+# Google Fonts if needed — the baked atlases in Resources/ are what ships).
+/Assets/Editor/CJKFonts/
+/Assets/Editor/CJKFonts.meta

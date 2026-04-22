@@ -19,7 +19,11 @@ public static class L10n
         Dutch,
         Polish,
         Turkish,
-        Ukrainian
+        Ukrainian,
+        ChineseSimplified,
+        ChineseTraditional,
+        Japanese,
+        Korean
     }
 
     private const string PREF_KEY = "Language";
@@ -35,7 +39,8 @@ public static class L10n
     {
         Lang.System, Lang.English, Lang.German, Lang.Spanish,
         Lang.French, Lang.Italian, Lang.Russian, Lang.PortugueseBR,
-        Lang.Dutch, Lang.Polish, Lang.Turkish, Lang.Ukrainian
+        Lang.Dutch, Lang.Polish, Lang.Turkish, Lang.Ukrainian,
+        Lang.ChineseSimplified, Lang.ChineseTraditional, Lang.Japanese, Lang.Korean
     };
 
     public static void Initialize()
@@ -51,17 +56,25 @@ public static class L10n
         if (p != Lang.System) return p;
         switch (Application.systemLanguage)
         {
-            case SystemLanguage.German:     return Lang.German;
-            case SystemLanguage.Spanish:    return Lang.Spanish;
-            case SystemLanguage.French:     return Lang.French;
-            case SystemLanguage.Italian:    return Lang.Italian;
-            case SystemLanguage.Russian:    return Lang.Russian;
-            case SystemLanguage.Portuguese: return Lang.PortugueseBR;
-            case SystemLanguage.Dutch:      return Lang.Dutch;
-            case SystemLanguage.Polish:     return Lang.Polish;
-            case SystemLanguage.Turkish:    return Lang.Turkish;
-            case SystemLanguage.Ukrainian:  return Lang.Ukrainian;
-            default:                        return Lang.English;
+            case SystemLanguage.German:             return Lang.German;
+            case SystemLanguage.Spanish:            return Lang.Spanish;
+            case SystemLanguage.French:             return Lang.French;
+            case SystemLanguage.Italian:            return Lang.Italian;
+            case SystemLanguage.Russian:            return Lang.Russian;
+            case SystemLanguage.Portuguese:         return Lang.PortugueseBR;
+            case SystemLanguage.Dutch:              return Lang.Dutch;
+            case SystemLanguage.Polish:             return Lang.Polish;
+            case SystemLanguage.Turkish:            return Lang.Turkish;
+            case SystemLanguage.Ukrainian:          return Lang.Ukrainian;
+            // Legacy SystemLanguage.Chinese is ambiguous — default to Simplified
+            // (mainland + Singapore audience; Traditional users almost always have
+            // their OS set to ChineseTraditional explicitly).
+            case SystemLanguage.Chinese:            return Lang.ChineseSimplified;
+            case SystemLanguage.ChineseSimplified:  return Lang.ChineseSimplified;
+            case SystemLanguage.ChineseTraditional: return Lang.ChineseTraditional;
+            case SystemLanguage.Japanese:           return Lang.Japanese;
+            case SystemLanguage.Korean:             return Lang.Korean;
+            default:                                return Lang.English;
         }
     }
 
@@ -103,10 +116,14 @@ public static class L10n
             case Lang.Italian:      return "ITALIANO";
             case Lang.Russian:      return "РУССКИЙ";
             case Lang.PortugueseBR: return "PORTUGUÊS";
-            case Lang.Dutch:        return "NEDERLANDS";
-            case Lang.Polish:       return "POLSKI";
-            case Lang.Turkish:      return "TÜRKÇE";
-            case Lang.Ukrainian:    return "УКРАЇНСЬКА";
+            case Lang.Dutch:              return "NEDERLANDS";
+            case Lang.Polish:             return "POLSKI";
+            case Lang.Turkish:            return "TÜRKÇE";
+            case Lang.Ukrainian:          return "УКРАЇНСЬКА";
+            case Lang.ChineseSimplified:  return "简体中文";
+            case Lang.ChineseTraditional: return "繁體中文";
+            case Lang.Japanese:           return "日本語";
+            case Lang.Korean:             return "한국어";
         }
         return "";
     }
@@ -136,6 +153,10 @@ public static class L10n
         { Lang.Polish,       new[] { "STY","LUT","MAR","KWI","MAJ","CZE","LIP","SIE","WRZ","PAŹ","LIS","GRU" } },
         { Lang.Turkish,      new[] { "OCA","ŞUB","MAR","NİS","MAY","HAZ","TEM","AĞU","EYL","EKİ","KAS","ARA" } },
         { Lang.Ukrainian,    new[] { "СІЧ","ЛЮТ","БЕР","КВІ","ТРА","ЧЕР","ЛИП","СЕР","ВЕР","ЖОВ","ЛИС","ГРУ" } },
+        { Lang.ChineseSimplified,  new[] { "1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月" } },
+        { Lang.ChineseTraditional, new[] { "1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月" } },
+        { Lang.Japanese,           new[] { "1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月" } },
+        { Lang.Korean,             new[] { "1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월" } },
     };
 
     // ── TABLE ──────────────────────────────────────────────────
@@ -715,6 +736,214 @@ public static class L10n
             { "stats.total_gates",                  "ВОРОТА" },
             { "stats.obstacles",                    "ПЕРЕШКОДИ" },
             { "lang.system",                        "СИСТЕМА" },
+        };
+
+        t[Lang.ChineseSimplified] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "呈献" },
+            { "title.select_mode",                  "选择模式" },
+            { "title.best",                         "最佳" },
+            { "title.no_runs_yet",                  "尚无记录" },
+            { "tap_prompt.keyboard",                "按键开始" },
+            { "tap_prompt.tap",                     "点击开始" },
+            { "pause.paused",                       "已暂停" },
+            { "pause.resume.keyboard",              "按 ESC 继续" },
+            { "pause.resume.tv",                    "按 MENU 继续" },
+            { "pause.resume.tap",                   "点击继续" },
+            { "tutorial.instruction.keyboard",      "按左和右" },
+            { "tutorial.instruction.tap",           "点击左和右" },
+            { "tutorial.hit_walls",                 "不要撞墙 — 重试" },
+            { "tutorial.ready",                     "准备好了吗?" },
+            { "tutorial.ready_hint.keyboard",       "点击或选择方向" },
+            { "tutorial.ready_hint.tap",            "点击开始" },
+            { "tutorial.nudge_left",                "现在向左" },
+            { "tutorial.nudge_right",               "现在向右" },
+            { "gameover.new_best",                  "新纪录" },
+            { "gameover.top_five",                  "前五名" },
+            { "hud.beams",                          "光束" },
+            { "hud.cadency",                        "节奏" },
+            { "settings.title",                     "设置" },
+            { "settings.section.audio",             "音频" },
+            { "settings.section.display",           "显示" },
+            { "settings.section.preferences",       "偏好" },
+            { "settings.sounds",                    "音效" },
+            { "settings.music",                     "音乐" },
+            { "settings.theme",                     "主题" },
+            { "settings.language",                  "语言" },
+            { "settings.fullscreen",                "全屏" },
+            { "settings.res",                       "分辨率" },
+            { "settings.motion",                    "减少动态效果" },
+            { "settings.motion.system",             "系统" },
+            { "settings.on",                        "开" },
+            { "settings.off",                       "关" },
+            { "settings.theme.auto",                "自动" },
+            { "settings.close.keyboard",            "点击外部关闭" },
+            { "settings.close.tv",                  "按 MENU 关闭" },
+            { "settings.close.tap",                 "点击外部关闭" },
+            { "stats.title",                        "统计" },
+            { "stats.total_runs",                   "总局数" },
+            { "stats.total_taps",                   "总点击" },
+            { "stats.best_score",                   "最佳分数" },
+            { "stats.avg_score",                    "平均分数" },
+            { "stats.total_gates",                  "总门数" },
+            { "stats.obstacles",                    "障碍" },
+            { "lang.system",                        "系统" },
+        };
+
+        t[Lang.ChineseTraditional] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "呈獻" },
+            { "title.select_mode",                  "選擇模式" },
+            { "title.best",                         "最佳" },
+            { "title.no_runs_yet",                  "尚無記錄" },
+            { "tap_prompt.keyboard",                "按鍵開始" },
+            { "tap_prompt.tap",                     "點擊開始" },
+            { "pause.paused",                       "已暫停" },
+            { "pause.resume.keyboard",              "按 ESC 繼續" },
+            { "pause.resume.tv",                    "按 MENU 繼續" },
+            { "pause.resume.tap",                   "點擊繼續" },
+            { "tutorial.instruction.keyboard",      "按左和右" },
+            { "tutorial.instruction.tap",           "點擊左和右" },
+            { "tutorial.hit_walls",                 "不要撞牆 — 重試" },
+            { "tutorial.ready",                     "準備好了嗎?" },
+            { "tutorial.ready_hint.keyboard",       "點擊或選擇方向" },
+            { "tutorial.ready_hint.tap",            "點擊開始" },
+            { "tutorial.nudge_left",                "現在向左" },
+            { "tutorial.nudge_right",               "現在向右" },
+            { "gameover.new_best",                  "新紀錄" },
+            { "gameover.top_five",                  "前五名" },
+            { "hud.beams",                          "光束" },
+            { "hud.cadency",                        "節奏" },
+            { "settings.title",                     "設定" },
+            { "settings.section.audio",             "音訊" },
+            { "settings.section.display",           "顯示" },
+            { "settings.section.preferences",       "偏好" },
+            { "settings.sounds",                    "音效" },
+            { "settings.music",                     "音樂" },
+            { "settings.theme",                     "主題" },
+            { "settings.language",                  "語言" },
+            { "settings.fullscreen",                "全螢幕" },
+            { "settings.res",                       "解析度" },
+            { "settings.motion",                    "減少動態效果" },
+            { "settings.motion.system",             "系統" },
+            { "settings.on",                        "開" },
+            { "settings.off",                       "關" },
+            { "settings.theme.auto",                "自動" },
+            { "settings.close.keyboard",            "點擊外部關閉" },
+            { "settings.close.tv",                  "按 MENU 關閉" },
+            { "settings.close.tap",                 "點擊外部關閉" },
+            { "stats.title",                        "統計" },
+            { "stats.total_runs",                   "總局數" },
+            { "stats.total_taps",                   "總點擊" },
+            { "stats.best_score",                   "最佳分數" },
+            { "stats.avg_score",                    "平均分數" },
+            { "stats.total_gates",                  "總門數" },
+            { "stats.obstacles",                    "障礙" },
+            { "lang.system",                        "系統" },
+        };
+
+        t[Lang.Japanese] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "提供" },
+            { "title.select_mode",                  "モード選択" },
+            { "title.best",                         "ベスト" },
+            { "title.no_runs_yet",                  "記録なし" },
+            { "tap_prompt.keyboard",                "キーを押してプレイ" },
+            { "tap_prompt.tap",                     "タップしてプレイ" },
+            { "pause.paused",                       "一時停止" },
+            { "pause.resume.keyboard",              "ESC で再開" },
+            { "pause.resume.tv",                    "MENU で再開" },
+            { "pause.resume.tap",                   "タップで再開" },
+            { "tutorial.instruction.keyboard",      "左右を押す" },
+            { "tutorial.instruction.tap",           "左右をタップ" },
+            { "tutorial.hit_walls",                 "壁に当たらないで — 再挑戦" },
+            { "tutorial.ready",                     "準備OK?" },
+            { "tutorial.ready_hint.keyboard",       "タップまたは方向を選択" },
+            { "tutorial.ready_hint.tap",            "タップで開始" },
+            { "tutorial.nudge_left",                "左を押して" },
+            { "tutorial.nudge_right",               "右を押して" },
+            { "gameover.new_best",                  "新記録" },
+            { "gameover.top_five",                  "トップ5" },
+            { "hud.beams",                          "ビーム" },
+            { "hud.cadency",                        "リズム" },
+            { "settings.title",                     "設定" },
+            { "settings.section.audio",             "オーディオ" },
+            { "settings.section.display",           "画面" },
+            { "settings.section.preferences",       "環境設定" },
+            { "settings.sounds",                    "サウンド" },
+            { "settings.music",                     "ミュージック" },
+            { "settings.theme",                     "テーマ" },
+            { "settings.language",                  "言語" },
+            { "settings.fullscreen",                "フルスクリーン" },
+            { "settings.res",                       "解像度" },
+            { "settings.motion",                    "モーション軽減" },
+            { "settings.motion.system",             "システム" },
+            { "settings.on",                        "オン" },
+            { "settings.off",                       "オフ" },
+            { "settings.theme.auto",                "自動" },
+            { "settings.close.keyboard",            "外側をクリックで閉じる" },
+            { "settings.close.tv",                  "MENU で閉じる" },
+            { "settings.close.tap",                 "外側をタップで閉じる" },
+            { "stats.title",                        "統計" },
+            { "stats.total_runs",                   "総プレイ" },
+            { "stats.total_taps",                   "総タップ" },
+            { "stats.best_score",                   "ベストスコア" },
+            { "stats.avg_score",                    "平均スコア" },
+            { "stats.total_gates",                  "総ゲート" },
+            { "stats.obstacles",                    "障害" },
+            { "lang.system",                        "システム" },
+        };
+
+        t[Lang.Korean] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "제공" },
+            { "title.select_mode",                  "모드 선택" },
+            { "title.best",                         "최고" },
+            { "title.no_runs_yet",                  "기록 없음" },
+            { "tap_prompt.keyboard",                "키를 눌러 시작" },
+            { "tap_prompt.tap",                     "탭하여 시작" },
+            { "pause.paused",                       "일시정지" },
+            { "pause.resume.keyboard",              "ESC로 계속" },
+            { "pause.resume.tv",                    "MENU로 계속" },
+            { "pause.resume.tap",                   "탭하여 계속" },
+            { "tutorial.instruction.keyboard",      "좌우를 누르세요" },
+            { "tutorial.instruction.tap",           "좌우를 탭하세요" },
+            { "tutorial.hit_walls",                 "벽에 부딪히지 마세요 — 재시도" },
+            { "tutorial.ready",                     "준비됐나요?" },
+            { "tutorial.ready_hint.keyboard",       "탭 또는 방향 선택" },
+            { "tutorial.ready_hint.tap",            "탭하여 시작" },
+            { "tutorial.nudge_left",                "이제 왼쪽" },
+            { "tutorial.nudge_right",               "이제 오른쪽" },
+            { "gameover.new_best",                  "신기록" },
+            { "gameover.top_five",                  "톱 5" },
+            { "hud.beams",                          "빔" },
+            { "hud.cadency",                        "리듬" },
+            { "settings.title",                     "설정" },
+            { "settings.section.audio",             "오디오" },
+            { "settings.section.display",           "화면" },
+            { "settings.section.preferences",       "환경설정" },
+            { "settings.sounds",                    "사운드" },
+            { "settings.music",                     "음악" },
+            { "settings.theme",                     "테마" },
+            { "settings.language",                  "언어" },
+            { "settings.fullscreen",                "전체화면" },
+            { "settings.res",                       "해상도" },
+            { "settings.motion",                    "모션 줄이기" },
+            { "settings.motion.system",             "시스템" },
+            { "settings.on",                        "켜기" },
+            { "settings.off",                       "끄기" },
+            { "settings.theme.auto",                "자동" },
+            { "settings.close.keyboard",            "외부 클릭하여 닫기" },
+            { "settings.close.tv",                  "MENU로 닫기" },
+            { "settings.close.tap",                 "외부 탭하여 닫기" },
+            { "stats.title",                        "통계" },
+            { "stats.total_runs",                   "총 플레이" },
+            { "stats.total_taps",                   "총 탭" },
+            { "stats.best_score",                   "최고 점수" },
+            { "stats.avg_score",                    "평균 점수" },
+            { "stats.total_gates",                  "총 게이트" },
+            { "stats.obstacles",                    "장애물" },
+            { "lang.system",                        "시스템" },
         };
 
         return t;

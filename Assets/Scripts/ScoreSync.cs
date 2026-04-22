@@ -271,6 +271,7 @@ public partial class ScoreSync : MonoBehaviour
     // ── FONT ─────────────────────────────────────────────────
     private TMP_FontAsset defaultFont;
     private TMP_FontAsset phosphorFont;
+    private readonly List<TMP_FontAsset> cjkFallbacks = new List<TMP_FontAsset>(4);
     private Sprite circleSprite;
     private Sprite ringSprite;
 
@@ -307,6 +308,7 @@ public partial class ScoreSync : MonoBehaviour
         // rasterized on demand from the underlying TTF. Translations pull in German,
         // French, Spanish, Italian, Portuguese, and Russian character sets at runtime.
         if (defaultFont != null) defaultFont.atlasPopulationMode = AtlasPopulationMode.Dynamic;
+        ApplyCJKFallback();
         Font phosphorSource = Resources.Load<Font>("Fonts/Phosphor-Thin");
         if (phosphorSource != null)
             phosphorFont = TMP_FontAsset.CreateFontAsset(phosphorSource);
@@ -323,8 +325,58 @@ public partial class ScoreSync : MonoBehaviour
         L10n.OnLanguageChanged -= OnLanguageChanged;
     }
 
+    // Install all 4 CJK atlases as fallbacks on defaultFont so every locale's
+    // native language name renders in the language picker (Chinese mode still
+    // needs to show "日本語", Japanese mode still needs to show "한국어", etc.).
+    // Order the list by current language so shared CJK codepoints prefer the
+    // locale-correct glyph form (e.g. 言 renders differently in JP vs SC).
+    void ApplyCJKFallback()
+    {
+        if (defaultFont == null) return;
+        if (cjkFallbacks.Count == 0)
+        {
+            TryAddCjkFont("Fonts & Materials/NotoSansCJK-SC SDF");
+            TryAddCjkFont("Fonts & Materials/NotoSansCJK-TC SDF");
+            TryAddCjkFont("Fonts & Materials/NotoSansCJK-JP SDF");
+            TryAddCjkFont("Fonts & Materials/NotoSansCJK-KR SDF");
+        }
+        var table = defaultFont.fallbackFontAssetTable;
+        if (table == null)
+        {
+            table = new List<TMP_FontAsset>();
+            defaultFont.fallbackFontAssetTable = table;
+        }
+        foreach (var f in cjkFallbacks) table.Remove(f);
+        TMP_FontAsset preferred = PreferredCjkFont(L10n.Current);
+        if (preferred != null) table.Add(preferred);
+        foreach (var f in cjkFallbacks) if (f != preferred) table.Add(f);
+        TMPro_EventManager.ON_FONT_PROPERTY_CHANGED(true, defaultFont);
+    }
+
+    void TryAddCjkFont(string resourcePath)
+    {
+        var loaded = Resources.Load<TMP_FontAsset>(resourcePath);
+        if (loaded != null) cjkFallbacks.Add(loaded);
+    }
+
+    TMP_FontAsset PreferredCjkFont(L10n.Lang lang)
+    {
+        string needle;
+        switch (lang)
+        {
+            case L10n.Lang.ChineseSimplified:  needle = "SC"; break;
+            case L10n.Lang.ChineseTraditional: needle = "TC"; break;
+            case L10n.Lang.Japanese:           needle = "JP"; break;
+            case L10n.Lang.Korean:             needle = "KR"; break;
+            default: return null;
+        }
+        foreach (var f in cjkFallbacks) if (f != null && f.name.Contains(needle)) return f;
+        return null;
+    }
+
     void OnLanguageChanged()
     {
+        ApplyCJKFallback();
         RefreshLocalizedLabels();
         // Rebuild any panel that's currently visible so the swap lands in-place
         // instead of kicking the player back out. Hidden panels just get dropped
