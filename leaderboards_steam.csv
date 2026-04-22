@@ -1,0 +1,5 @@
+id,name,sort,format
+PureHell_HighScore,Gates to Hell,desc,integer
+Blitz_HighScore,Path to Redemption,desc,integer
+TapMaster_Total,Total Taps,desc,integer
+Runs_Total,Total Runs,desc,integer

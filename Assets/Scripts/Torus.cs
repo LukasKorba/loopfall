@@ -208,9 +208,12 @@ public class Torus : MonoBehaviour
             return;
 
         // Constant speed — no acceleration (the version you loved)
-        // MANUAL PARAM: mAngleStep controls game speed
-        mAngle += mAngleStep;
-        mAngleScore += mAngleStep;
+        // MANUAL PARAM: mAngleStep is degrees per frame at 60fps. Scale by
+        // Time.deltaTime * 60 so world-speed stays consistent on devices that
+        // can't hit 60 — otherwise rotation slows and stutters on fps dips.
+        float frameStep = mAngleStep * Time.deltaTime * 60.0f;
+        mAngle += frameStep;
+        mAngleScore += frameStep;
 
         if (mAngleScore >= 360.0f)
         {
@@ -219,7 +222,7 @@ public class Torus : MonoBehaviour
         }
 
         // Rotate mesh
-        transform.Rotate(0.0f, 0.0f, -mAngleStep);
+        transform.Rotate(0.0f, 0.0f, -frameStep);
 
         // Blitz: boxes, electric gates, points scoring
         if (GameConfig.IsBlitz())

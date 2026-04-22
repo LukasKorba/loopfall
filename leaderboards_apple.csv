@@ -1,0 +1,5 @@
+id,name,sort,format
+com.lukaskorba.loopfall.purehell,Gates to Hell,desc,integer
+com.lukaskorba.loopfall.blitz,Path to Redemption,desc,integer
+com.lukaskorba.loopfall.tapmaster,Total Taps,desc,integer
+com.lukaskorba.loopfall.runs,Total Runs,desc,integer

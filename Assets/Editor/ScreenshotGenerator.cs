@@ -12,7 +12,7 @@ using UnityEngine;
 ///   3) Invoke "Loopfall/Screenshots/Capture Paused Frame" (shortcut: Cmd+Shift+9).
 ///
 /// Each preset allocates its own RenderTexture and calls Camera.Render(), so
-/// post-processing (chromatic aberration, DepthHueShift, BlackHoleWarp, etc.)
+/// post-processing (chromatic aberration, LoopfallPostProcess, etc.)
 /// runs at the target resolution rather than being scaled up from the viewport.
 /// Aspect ratio differs per target, so the framing will not be identical across
 /// presets from one capture; that's expected — re-pose and re-capture if a

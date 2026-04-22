@@ -1,16 +1,17 @@
-#if UNITY_IOS || UNITY_TVOS
+#if UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX
 using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.iOS.Xcode;
 
 /// <summary>
-/// After Unity generates the iOS / tvOS Xcode project, enable the iCloud Key-Value Storage
+/// After Unity generates the iOS / tvOS / macOS Xcode project, enable the iCloud Key-Value Storage
 /// entitlement so NSUbiquitousKeyValueStore (used by ICloudKVStore.cs) is allowed at runtime.
 ///
-/// The developer still owns the iCloud container + provisioning profile setup in Apple Developer
-/// and in Xcode's Signing &amp; Capabilities tab; this post-processor only writes the entitlement
-/// key that the OS checks when the app asks for the ubiquity KV store.
+/// macOS requires "Create Xcode Project" in Player Settings — direct .app builds have no
+/// project to post-process. The developer still owns the App ID's iCloud capability toggle
+/// in Apple Developer portal and the matching provisioning profile; this post-processor
+/// only writes the entitlement key that the OS checks when the app asks for the ubiquity KV store.
 /// </summary>
 public static class ICloudPostProcess
 {
@@ -20,7 +21,7 @@ public static class ICloudPostProcess
     [PostProcessBuild(900)]
     public static void OnPostprocessBuild(BuildTarget target, string pathToBuiltProject)
     {
-        if (target != BuildTarget.iOS && target != BuildTarget.tvOS) return;
+        if (target != BuildTarget.iOS && target != BuildTarget.tvOS && target != BuildTarget.StandaloneOSX) return;
 
         string projectPath = PBXProject.GetPBXProjectPath(pathToBuiltProject);
         PBXProject proj = new PBXProject();
@@ -33,9 +34,10 @@ public static class ICloudPostProcess
         // the existing one, producing "First.entitlements Second.entitlements" — a malformed path
         // that breaks code signing and the Signing & Capabilities UI.
         string existing = proj.GetBuildPropertyForAnyConfig(mainTargetGuid, "CODE_SIGN_ENTITLEMENTS");
-        string entitlementsFileName = !string.IsNullOrEmpty(existing)
-            ? existing
+        string defaultName = target == BuildTarget.StandaloneOSX
+            ? PlayerSettings.productName + ".entitlements"
             : "Unity-iPhone.entitlements";
+        string entitlementsFileName = !string.IsNullOrEmpty(existing) ? existing : defaultName;
 
         string entitlementsPath = Path.Combine(pathToBuiltProject, entitlementsFileName);
 

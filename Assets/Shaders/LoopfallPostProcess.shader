@@ -1,4 +1,4 @@
-Shader "Loopfall/DepthHueShift"
+Shader "Loopfall/PostProcess"
 {
     Properties
     {
@@ -11,6 +11,11 @@ Shader "Loopfall/DepthHueShift"
         _FogAmount ("Fog Amount", Range(0, 1)) = 0.6
         _FogStart ("Fog Start (units)", Float) = 3.0
         _FogEnd ("Fog End (units)", Float) = 18.0
+        _FocalPointX ("Focal Point X", Float) = 0.5
+        _FocalPointY ("Focal Point Y", Float) = 0.88
+        _WarpStrength ("Warp Strength", Float) = 0.15
+        _WarpRadius ("Warp Radius", Float) = 0.5
+        _WarpFalloff ("Warp Falloff", Float) = 1.5
     }
     SubShader
     {
@@ -46,6 +51,11 @@ Shader "Loopfall/DepthHueShift"
             float _FogAmount;
             float _FogStart;
             float _FogEnd;
+            float _FocalPointX;
+            float _FocalPointY;
+            float _WarpStrength;
+            float _WarpRadius;
+            float _WarpFalloff;
 
             v2f vert(appdata v)
             {
@@ -74,8 +84,29 @@ Shader "Loopfall/DepthHueShift"
 
             half4 frag(v2f i) : SV_Target
             {
-                half4 col = tex2D(_MainTex, i.uv);
+                // ── BLACK HOLE WARP (was first pass) ─────────────────────
+                // Aspect-corrected distance from focal point gives a circular
+                // influence regardless of screen shape; pull sample point AWAY
+                // from center so pixels show content from further out → visual
+                // convergence toward the focal point.
+                float2 center = float2(_FocalPointX, _FocalPointY);
+                float2 delta = i.uv - center;
+                float aspect = _ScreenParams.x / _ScreenParams.y;
+                float cx = delta.x * aspect;
+                float dist = sqrt(cx * cx + delta.y * delta.y);
+                float rawDist = length(delta);
+                float2 dir = (rawDist > 0.001) ? (delta / rawDist) : float2(0, 0);
+                float tWarp = saturate(dist / _WarpRadius);
+                float influence = pow(1.0 - tWarp, _WarpFalloff);
+                float2 warpedUV = i.uv + dir * influence * _WarpStrength;
+                warpedUV = clamp(warpedUV, float2(0.001, 0.001), float2(0.999, 0.999));
 
+                half4 col = tex2D(_MainTex, warpedUV);
+
+                // ── DEPTH HUE SHIFT + FOG (was second pass) ──────────────
+                // Depth is sampled at the ORIGINAL screen UV, not warped —
+                // depth buffer is pre-warp and the hue/fog gradient keys off
+                // where the pixel is on screen, not what's drawn into it.
                 float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
                 float eyeDepth = LinearEyeDepth(rawDepth);
 

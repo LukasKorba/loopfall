@@ -22,9 +22,8 @@ public class SceneSetup : MonoBehaviour
     public bool blitzDebugMaxPower = false;
 
     // Direct references — ensures shaders are included in builds
-    public Shader depthHueShiftRef;
+    public Shader postProcessRef; // Merged BlackHoleWarp + DepthHueShift; was two separate shaders
     public Shader gateShaderRef;
-    public Shader blackHoleWarpRef;
     public Shader obstacleShadowShaderRef;
     public Shader ballShaderRef;
     public Shader trackGridShaderRef;
@@ -64,11 +63,17 @@ public class SceneSetup : MonoBehaviour
 
         // Force high quality rendering on all platforms
         QualitySettings.shadows = ShadowQuality.All;
+#if UNITY_IOS && !UNITY_TVOS
+        // iPad 6 / A10-class devices are fill-rate bound; VeryHigh (2048) + soft PCF
+        // costs ~15-20% of frame budget for a small ball shadow nobody inspects.
+        QualitySettings.shadowResolution = ShadowResolution.High;
+#else
         QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
+#endif
         QualitySettings.shadowDistance = 15.0f; // Tight range — shadow map texels focused on visible area
         QualitySettings.shadowCascades = 1;
         QualitySettings.shadowProjection = ShadowProjection.StableFit; // Prevents cascade shifting
-        QualitySettings.pixelLightCount = 4;
+        QualitySettings.pixelLightCount = 2; // Matches actual light count (Key + Fill)
     }
 
     Material trackMaterial;
@@ -88,8 +93,8 @@ public class SceneSetup : MonoBehaviour
     Material blitzOrbCadencyMaterial;
     Material blitzOrbShieldMaterial;
     Material blitzShieldVisualMaterial;
-    Shader depthHueShiftShader;
     BackgroundRings backgroundRings;
+    ReflectionProbe mReflectionProbe;
 
     public static ThemeData activeTheme;
 
@@ -159,6 +164,12 @@ public class SceneSetup : MonoBehaviour
 
         Camera cam = Camera.main;
         if (cam != null) cam.backgroundColor = t.cameraBg;
+
+#if UNITY_IOS && !UNITY_TVOS
+        // Probe is OnAwake on iOS — re-bake when colors change so the chrome ball
+        // reflects the new palette instead of the startup one.
+        if (mReflectionProbe != null) mReflectionProbe.RenderProbe();
+#endif
     }
 
     /// <summary>Begin AUTO mode: crossfade from the currently-shown theme to a random different one.</summary>
@@ -375,8 +386,6 @@ public class SceneSetup : MonoBehaviour
         blitzShieldVisualMaterial.SetColor("_Color", new Color(0.1f, 1.0f, 0.4f));
         blitzShieldVisualMaterial.SetFloat("_Intensity", 1.5f);
 
-        // Use direct scene reference (Shader.Find gets stripped on iOS)
-        depthHueShiftShader = depthHueShiftRef;
     }
 
     void CreateTorus()
@@ -668,14 +677,10 @@ public class SceneSetup : MonoBehaviour
         // Death effect (shake + particles)
         mainCam.gameObject.AddComponent<DeathEffect>();
 
-        // Depth-based hue shift — rainbow color variation over distance
-        DepthHueShift depthHue = mainCam.gameObject.AddComponent<DepthHueShift>();
-        depthHue.depthShader = depthHueShiftShader;
-
-        // Black hole warp — gravitational lens at top of screen
-        BlackHoleWarp warp = mainCam.gameObject.AddComponent<BlackHoleWarp>();
-        if (blackHoleWarpRef != null)
-            warp.warpShader = blackHoleWarpRef;
+        // Merged post-process: gravitational warp + depth-based hue/fog in a single blit.
+        // Was two components (DepthHueShift + BlackHoleWarp) → one OnRenderImage pass.
+        LoopfallPostProcess post = mainCam.gameObject.AddComponent<LoopfallPostProcess>();
+        post.postShader = postProcessRef;
 
         // Wire camera to ball
         GameObject ball = GameObject.Find("Ball");
@@ -708,7 +713,11 @@ public class SceneSetup : MonoBehaviour
         keyLight.shadowStrength = 0.8f;
         keyLight.shadowBias = 0.005f;
         keyLight.shadowNormalBias = 0.05f;
+#if UNITY_IOS && !UNITY_TVOS
+        keyLight.shadowResolution = UnityEngine.Rendering.LightShadowResolution.High;
+#else
         keyLight.shadowResolution = UnityEngine.Rendering.LightShadowResolution.VeryHigh;
+#endif
         keyObj.transform.rotation = Quaternion.Euler(90, 0, 0);
 
         // Fill from ahead along the track — reveals tube depth, no shadows
@@ -728,9 +737,17 @@ public class SceneSetup : MonoBehaviour
         probeObj.transform.position = new Vector3(0, -10.5f, 0);
         ReflectionProbe probe = probeObj.AddComponent<ReflectionProbe>();
         probe.mode = UnityEngine.Rendering.ReflectionProbeMode.Realtime;
+#if UNITY_IOS && !UNITY_TVOS
+        // Per-frame cubemap render (6 faces) costs ~8-12% on A10. Bake once at scene
+        // start — ball reflection is a color hint only at 64px, static looks identical.
+        // RefreshReflection() can be called from theme transitions to rebuild.
+        probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.OnAwake;
+#else
         probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.EveryFrame;
+#endif
         probe.size = new Vector3(6, 4, 4);
         probe.resolution = 64; // Low res is fine, just need color hints
+        mReflectionProbe = probe;
     }
 
     void CreateUI()

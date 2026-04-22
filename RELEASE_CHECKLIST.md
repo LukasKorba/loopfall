@@ -36,12 +36,12 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 ## 4. Platform-Specific
 
 ### iOS
-- [ ] **iPad adaptive layout.** Run on an iPad to confirm UI isn't just a stretched iPhone view. Verify safe-area on 11"/13".
+- [x] **iPad adaptive layout.** Run on an iPad to confirm UI isn't just a stretched iPhone view. Verify safe-area on 11"/13".
 - [ ] **Audio interruption handling.** Incoming call mid-run → auto-pause + audio session reactivation on return.
 - [ ] **Background/foreground lifecycle.** Home button mid-run should pause state correctly; returning shouldn't re-count a "dead" run.
-- [ ] **Landscape/portrait lock.** Decide and enforce in Info.plist.
-- [ ] **CoreHaptics polish.** Confirm gate-hit / death haptics fire on supported devices (iPhone 8+).
-- [ ] **Dynamic Island / notch handling.** Already have safe-area HUD insets — verify on iPhone 15/16 Pro.
+- [x] **Landscape/portrait lock.** Decide and enforce in Info.plist.
+- [x] **CoreHaptics polish.** Confirm gate-hit / death haptics fire on supported devices (iPhone 8+).
+- [x] **Dynamic Island / notch handling.** Already have safe-area HUD insets — verify on iPhone 15/16 Pro.
 - [ ] **Low Power Mode detection.** Optionally drop post-processing / chromatic aberration intensity when enabled.
 
 ### tvOS
@@ -77,8 +77,8 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 
 ## 5. Services & Data
 
-- [ ] **Achievement list finalization.** Walk the current set, kill dead ones, add Blitz-specific ones. Make sure IDs match across Apple Game Center / Google Play Games / Steam.
-- [ ] **Leaderboard list finalization.** Per mode (Gates to Hell, Path to Redemption). Per-mode stats already flow through — confirm IDs and display names translated where the platform supports it.
+- [x] **Achievement list finalization.** Walk the current set, kill dead ones, add Blitz-specific ones. Make sure IDs match across Apple Game Center / Google Play Games / Steam.
+- [x] **Leaderboard list finalization.** Per mode (Gates to Hell, Path to Redemption). Per-mode stats already flow through — confirm IDs and display names translated where the platform supports it.
 - [x] **iCloud sync (iOS/macOS/tvOS).** NSUbiquitousKeyValueStore syncs best-score lists (per mode) and lifetime counters (taps, runs, blitz obstacles). Settings stay device-local.
 - [ ] **Google Play Games save sync (Android).**
 - [ ] **Steam Cloud save sync (Steam).**
@@ -87,8 +87,8 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 
 ## 6. Accessibility & Settings
 
-- [ ] **Reduce-motion toggle.** Chromatic aberration + camera swing is the game identity, but offer an escape hatch. Settings → Preferences. Keep default ON.
-- [ ] **Reduce-flash toggle** (optional). For photosensitive players — dampen the bright death flashes.
+- [x] **Reduce-motion toggle.** Chromatic aberration + camera swing is the game identity, but offer an escape hatch. Settings → Preferences. Keep default ON.
+- [x] **Reduce-flash toggle** (optional). For photosensitive players — dampen the bright death flashes.
 - [ ] **Color-blind-aware theme option.** Or at least verify existing themes pass a quick CB simulator pass — gates, trail, and track must stay distinguishable under protan/deutan/tritan.
 - [ ] **Haptics on/off toggle** (mobile).
 - [ ] **Subtitle / caption support** for voice lines? Probably skip at 1.0, but flag for 1.1.
