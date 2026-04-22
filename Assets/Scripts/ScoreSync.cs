@@ -871,8 +871,11 @@ public partial class ScoreSync : MonoBehaviour
         titleHintText.characterSpacing = 6f;
         titleHintText.alignment = TextAlignmentOptions.Center;
 
-        // Icon dock — top-right: Leaderboards + Achievements + Settings (no stats on title).
+        // Icon dock — top-right. Leaderboard + Achievements only appear where a real
+        // backing service is wired (Apple Game Center or Steam overlay). Non-Steam
+        // Windows/Linux standalone + Android would show dead buttons otherwise.
 #if !UNITY_TVOS
+#if UNITY_IOS || UNITY_STANDALONE_OSX || STEAMWORKS
         CreateDockStrip(titleGroup, "TitleDockR",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
 
@@ -885,6 +888,11 @@ public partial class ScoreSync : MonoBehaviour
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
             "trophy", NEON_GOLD, out titleAchIcon);
         titleAchBtn.onClick.AddListener(OnAchievementsTap);
+#else
+        // Slim dock — Settings only.
+        CreateDockStrip(titleGroup, "TitleDockR",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(160, 100));
+#endif
 
         titleSettingsBtn = CreateIconButton(titleGroup, "TitleSettingsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
@@ -1039,8 +1047,10 @@ public partial class ScoreSync : MonoBehaviour
         SetAnchored(goTapText.rectTransform, new Vector2(0.5f, 0.12f), new Vector2(600, 55));
         goTapText.characterSpacing = 8f;
 
-        // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
+        // Icon dock — grouped strip with shared background (hidden on tvOS — no touch).
+        // LB + Ach only on platforms with a real backing service; Stats + Settings always.
 #if !UNITY_TVOS
+#if UNITY_IOS || UNITY_STANDALONE_OSX || STEAMWORKS
         CreateDockStrip(gameOverGroup, "GODockR",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-450, -140), new Vector2(740, 140));
 
@@ -1053,6 +1063,11 @@ public partial class ScoreSync : MonoBehaviour
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(160, 160),
             "trophy", NEON_GOLD, out goAchIcon);
         goAchBtn.onClick.AddListener(OnAchievementsTap);
+#else
+        // Slim dock — Stats + Settings only.
+        CreateDockStrip(gameOverGroup, "GODockR",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-270, -140), new Vector2(380, 140));
+#endif
 
         goStatsBtn = CreateIconButton(gameOverGroup, "GOStatsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(160, 160),
