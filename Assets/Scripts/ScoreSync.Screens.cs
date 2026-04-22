@@ -127,8 +127,8 @@ public partial class ScoreSync
         float nameFade = Mathf.Clamp01((t - 0.3f) / 0.6f);
         SetAlpha(splashNameText, nameFade);
 
-        // Chromatic aberration on name
-        float chromaAlpha = nameFade * 0.55f;
+        // Chromatic aberration on name — suppressed when Reduce Motion is active.
+        float chromaAlpha = nameFade * 0.55f * (AccessibilitySettings.IsReduceMotionActive() ? 0f : 1f);
         float spread = 5f + Mathf.Sin(t * 0.8f) * 3f;
 
         Vector2 cyanOff = new Vector2(
@@ -214,9 +214,9 @@ public partial class ScoreSync
         vignetteImage.color = new Color(1f, 1f, 1f, backdropFade * 0.55f);
         scanlinesImage.color = new Color(1f, 1f, 1f, backdropFade * 0.9f);
 
-        // Chromatic aberration — bold CMYK separation
+        // Chromatic aberration — bold CMYK separation, suppressed when Reduce Motion is active.
         float chromaFade = Mathf.Clamp01((stateTimer - 0.4f) / 0.6f);
-        float chromaAlpha = chromaFade * 0.65f;
+        float chromaAlpha = chromaFade * 0.65f * (AccessibilitySettings.IsReduceMotionActive() ? 0f : 1f);
 
         float t = Time.time;
         float spread = 7f + Mathf.Sin(t * 0.7f) * 3f;
@@ -292,6 +292,7 @@ public partial class ScoreSync
         // Icon buttons — fade in with best score
         float lbFade = Mathf.Clamp01((stateTimer - 0.8f) / 0.6f);
         SetGlyphAlpha(titleLBIcon, lbFade * 0.75f);
+        SetGlyphAlpha(titleAchIcon, lbFade * 0.75f);
         SetGlyphAlpha(titleSettingsIcon, lbFade * 0.75f);
         SetGlyphAlpha(titleQuitIcon, lbFade * 0.75f);
     }
@@ -496,7 +497,7 @@ public partial class ScoreSync
 
     void BuildBlitzUpgradeHUD(RectTransform parent)
     {
-        const float SLOT_SIZE = 14f * PHONE_HUD_SCALE;
+        const float SLOT_SIZE = 9.4f * PHONE_HUD_SCALE;
         const float SLOT_GAP = 4f * PHONE_HUD_SCALE;
         const float ROW_GAP = 6f * PHONE_HUD_SCALE;
         const float LABEL_WIDTH = 86f * PHONE_HUD_SCALE;
@@ -525,19 +526,20 @@ public partial class ScoreSync
         blitzShieldSlots = CreateSlotRow(blitzUpgradeGroup, 2, 5, shieldColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
     }
 
-    // Top-right mirror of the upgrade HUD. "x1" tier label + thin fill bar underneath —
+    // Top-right mirror of the upgrade HUD. Fill bar on top + "x1" tier label below it —
     // bar shows progress to the next tier (or stays full at x4 max). Magenta palette
-    // differentiates it from the gold/cyan/green upgrade tracks.
+    // differentiates it from the gold/cyan/green upgrade tracks. Label sized to match
+    // the upgrade row labels so the multiplier reads as a peer, not a hero element.
     void BuildBlitzStreakHUD(RectTransform parent)
     {
         const float MARGIN_X = 30f;
         const float MARGIN_Y = 30f;
         const float GROUP_W = 120f * PHONE_HUD_SCALE;
-        const float GROUP_H = 54f * PHONE_HUD_SCALE;
         const float BAR_H = 6f * PHONE_HUD_SCALE;
-        const float TIER_FONT = 26f * PHONE_HUD_SCALE;
-        const float TIER_ROW_H = 32f * PHONE_HUD_SCALE;
-        const float BAR_Y = -36f * PHONE_HUD_SCALE;
+        const float LABEL_GAP = 4f * PHONE_HUD_SCALE;
+        const float TIER_FONT = 13f * PHONE_HUD_SCALE;
+        const float LABEL_ROW_H = 16f * PHONE_HUD_SCALE;
+        const float GROUP_H = BAR_H + LABEL_GAP + LABEL_ROW_H;
 
         GameObject grp = new GameObject("BlitzStreakHUD");
         blitzStreakGroup = grp.AddComponent<RectTransform>();
@@ -550,25 +552,14 @@ public partial class ScoreSync
 
         Color tierColor = NEON_MAGENTA;
 
-        // Tier readout — right-aligned hero label, same size as upgrade labels but bigger.
-        blitzStreakTierLabel = CreateText(blitzStreakGroup, "StreakTier", "x1",
-            TIER_FONT, FontStyles.Bold, new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
-        blitzStreakTierLabel.alignment = TextAlignmentOptions.TopRight;
-        RectTransform lrt = blitzStreakTierLabel.rectTransform;
-        lrt.anchorMin = new Vector2(1f, 1f);
-        lrt.anchorMax = new Vector2(1f, 1f);
-        lrt.pivot = new Vector2(1f, 1f);
-        lrt.anchoredPosition = new Vector2(0f, 0f);
-        lrt.sizeDelta = new Vector2(GROUP_W, TIER_ROW_H);
-
-        // Bar track (dim)
+        // Bar track (dim) — top of the group
         blitzStreakBarTrack = CreateImage(blitzStreakGroup, "StreakBarTrack",
             new Color(tierColor.r, tierColor.g, tierColor.b, 0.15f));
         RectTransform trt = blitzStreakBarTrack.rectTransform;
         trt.anchorMin = new Vector2(1f, 1f);
         trt.anchorMax = new Vector2(1f, 1f);
         trt.pivot = new Vector2(1f, 1f);
-        trt.anchoredPosition = new Vector2(0f, BAR_Y);
+        trt.anchoredPosition = new Vector2(0f, 0f);
         trt.sizeDelta = new Vector2(GROUP_W, BAR_H);
 
         // Bar fill (bright) — grows from the right side so it visually aligns with the label.
@@ -578,10 +569,19 @@ public partial class ScoreSync
         frt.anchorMin = new Vector2(1f, 1f);
         frt.anchorMax = new Vector2(1f, 1f);
         frt.pivot = new Vector2(1f, 1f);
-        frt.anchoredPosition = new Vector2(0f, BAR_Y);
+        frt.anchoredPosition = new Vector2(0f, 0f);
         frt.sizeDelta = new Vector2(0f, BAR_H);
 
-        ApplyDropShadow(blitzStreakTierLabel);
+        // Tier readout — right-aligned under the bar, peer-sized to BEAMS/CADENCE/SHIELD.
+        blitzStreakTierLabel = CreateText(blitzStreakGroup, "StreakTier", "x1",
+            TIER_FONT, FontStyles.Bold, new Color(tierColor.r, tierColor.g, tierColor.b, 0.9f));
+        blitzStreakTierLabel.alignment = TextAlignmentOptions.TopRight;
+        RectTransform lrt = blitzStreakTierLabel.rectTransform;
+        lrt.anchorMin = new Vector2(1f, 1f);
+        lrt.anchorMax = new Vector2(1f, 1f);
+        lrt.pivot = new Vector2(1f, 1f);
+        lrt.anchoredPosition = new Vector2(0f, -(BAR_H + LABEL_GAP));
+        lrt.sizeDelta = new Vector2(GROUP_W, LABEL_ROW_H);
     }
 
     void UpdateBlitzStreakHUD()
@@ -661,25 +661,38 @@ public partial class ScoreSync
     Image[] CreateSlotRow(RectTransform parent, int rowIndex, int count, Color color,
         float slotSize, float slotGap, float rowGap, float xOffset)
     {
-        Image[] slots = new Image[count];
+        // Circles match the game's aesthetic (ball + orb rings). Each slot: ring sprite
+        // always visible at low alpha + inner filled circle toggled by UpdateSlotRow.
+        // Uncollected = hollow ring; collected = solid disc (fill covers the ring).
+        Image[] fills = new Image[count];
         float y = -(rowIndex * (slotSize + rowGap));
+        Color strokeColor = new Color(color.r, color.g, color.b, 0.55f);
 
         for (int i = 0; i < count; i++)
         {
             float x = xOffset + i * (slotSize + slotGap);
 
-            Image img = CreateImage(parent, "Slot_" + rowIndex + "_" + i,
-                new Color(color.r, color.g, color.b, 0.15f));
-            RectTransform rt = img.rectTransform;
+            Image ring = CreateImage(parent, "Slot_" + rowIndex + "_" + i, strokeColor);
+            if (ringSprite != null) ring.sprite = ringSprite;
+            RectTransform rt = ring.rectTransform;
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(x, y);
             rt.sizeDelta = new Vector2(slotSize, slotSize);
-            slots[i] = img;
+
+            Image fill = CreateImage(rt, "Fill",
+                new Color(color.r, color.g, color.b, 0f));
+            if (circleSprite != null) fill.sprite = circleSprite;
+            RectTransform frt = fill.rectTransform;
+            frt.anchorMin = new Vector2(0f, 0f);
+            frt.anchorMax = new Vector2(1f, 1f);
+            frt.offsetMin = Vector2.zero;
+            frt.offsetMax = Vector2.zero;
+            fills[i] = fill;
         }
 
-        return slots;
+        return fills;
     }
 
     void UpdateBlitzUpgradeHUD()
@@ -722,7 +735,7 @@ public partial class ScoreSync
         if (slots == null) return;
         for (int i = 0; i < slots.Length; i++)
         {
-            float alpha = i < filledCount ? 1f : 0.15f;
+            float alpha = i < filledCount ? 1f : 0f;
             slots[i].color = new Color(color.r, color.g, color.b, alpha);
         }
     }
@@ -954,7 +967,7 @@ public partial class ScoreSync
                     Mathf.Cos(ct * 0.5f + 4.19f) * chromaSpread,
                     Mathf.Sin(ct * 0.6f + 4.19f) * chromaSpread * 0.5f);
 
-                float chromaAlpha = fadeEased * 0.4f;
+                float chromaAlpha = fadeEased * 0.4f * (AccessibilitySettings.IsReduceMotionActive() ? 0f : 1f);
                 SetAlpha(goScoreCyanText, chromaAlpha);
                 SetAlpha(goScoreMagentaText, chromaAlpha);
                 SetAlpha(goScoreYellowText, chromaAlpha);
@@ -1061,6 +1074,7 @@ public partial class ScoreSync
             SetGlyphAlpha(goSettingsIcon, p * 0.65f);
             SetGlyphAlpha(goStatsIcon, p * 0.65f);
             SetGlyphAlpha(goLBIcon, p * 0.65f);
+            SetGlyphAlpha(goAchIcon, p * 0.65f);
             SetGlyphAlpha(goBackIcon, p * 0.65f);
         }
         else
@@ -1068,6 +1082,7 @@ public partial class ScoreSync
             SetGlyphAlpha(goSettingsIcon, 0f);
             SetGlyphAlpha(goStatsIcon, 0f);
             SetGlyphAlpha(goLBIcon, 0f);
+            SetGlyphAlpha(goAchIcon, 0f);
             SetGlyphAlpha(goBackIcon, 0f);
         }
 

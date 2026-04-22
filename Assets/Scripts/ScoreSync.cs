@@ -80,6 +80,8 @@ public partial class ScoreSync : MonoBehaviour
     private Image bestScoreLine;
     private Button titleLBBtn;
     private CanvasGroup titleLBIcon;
+    private Button titleAchBtn;
+    private CanvasGroup titleAchIcon;
     private Button titleSettingsBtn;
     private CanvasGroup titleSettingsIcon;
     private TMP_Text titleTapText;
@@ -112,9 +114,9 @@ public partial class ScoreSync : MonoBehaviour
     // Phones (iPhone + Android) get a larger powerup / multiplier HUD — the default
     // tvOS/desktop/iPad sizes read too small at phone screen distances.
 #if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
-    private const float PHONE_HUD_SCALE = 1.33f;
+    private const float PHONE_HUD_SCALE = 2.66f;
 #else
-    private const float PHONE_HUD_SCALE = 1.0f;
+    private const float PHONE_HUD_SCALE = 2.0f;
 #endif
 
     // ── BLITZ UPGRADE HUD ────────────────────────────────────
@@ -166,6 +168,8 @@ public partial class ScoreSync : MonoBehaviour
     private CanvasGroup goSettingsIcon;
     private Button goLBBtn;
     private CanvasGroup goLBIcon;
+    private Button goAchBtn;
+    private CanvasGroup goAchIcon;
     private RectTransform[] goCornerBrackets;
     private Image goScoreDivider;
 
@@ -177,6 +181,7 @@ public partial class ScoreSync : MonoBehaviour
     private TMP_Text settingsLanguageLabel;
     private TMP_Text settingsFullscreenLabel;
     private TMP_Text settingsResLabel;
+    private TMP_Text settingsMotionLabel;
 
     // ── QUIT BUTTON (desktop only) + BACK BUTTON (game over, all platforms) ────
     private Button titleQuitBtn;
@@ -267,9 +272,11 @@ public partial class ScoreSync : MonoBehaviour
     private TMP_FontAsset defaultFont;
     private TMP_FontAsset phosphorFont;
     private Sprite circleSprite;
+    private Sprite ringSprite;
 
     // Phosphor Icons codepoints (Private Use Area).
     private const string PHOSPHOR_TROPHY        = "\uE67E";
+    private const string PHOSPHOR_CHART_BAR     = "\uE150";
     private const string PHOSPHOR_GEAR          = "\uE270";
     private const string PHOSPHOR_CARET_LEFT    = "\uE138";
     private const string PHOSPHOR_LIST_BULLET   = "\uE2F2";
@@ -304,6 +311,7 @@ public partial class ScoreSync : MonoBehaviour
         if (phosphorSource != null)
             phosphorFont = TMP_FontAsset.CreateFontAsset(phosphorSource);
         circleSprite = CreateCircleSprite(32);
+        ringSprite = CreateRingSprite(32, 3f);
         mSphere = FindAnyObjectByType<Sphere>();
         mAudio = FindAnyObjectByType<GameAudio>();
         isFirstRun = PlayerPrefs.GetInt(PREF_FIRST_RUN, 0) == 0;
@@ -646,6 +654,7 @@ public partial class ScoreSync : MonoBehaviour
         for (int i = 0; i < MAX_SPARKS; i++)
         {
             Image img = CreateImage(parent, "OrbSpark_" + i, Color.white);
+            if (circleSprite != null) img.sprite = circleSprite;
             RectTransform srt = img.rectTransform;
             srt.anchorMin = new Vector2(0.5f, 0.5f);
             srt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -862,15 +871,20 @@ public partial class ScoreSync : MonoBehaviour
         titleHintText.characterSpacing = 6f;
         titleHintText.alignment = TextAlignmentOptions.Center;
 
-        // Icon dock — top-right: Leaderboards + Settings only (no stats on title).
+        // Icon dock — top-right: Leaderboards + Achievements + Settings (no stats on title).
 #if !UNITY_TVOS
         CreateDockStrip(titleGroup, "TitleDockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-270, -140), new Vector2(340, 100));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(520, 100));
 
         titleLBBtn = CreateIconButton(titleGroup, "TitleLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
-            "trophy", NEON_GOLD, out titleLBIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(120, 120),
+            "chart", NEON_GOLD, out titleLBIcon);
         titleLBBtn.onClick.AddListener(OnLeaderboardTap);
+
+        titleAchBtn = CreateIconButton(titleGroup, "TitleAchBtn",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(120, 120),
+            "trophy", NEON_GOLD, out titleAchIcon);
+        titleAchBtn.onClick.AddListener(OnAchievementsTap);
 
         titleSettingsBtn = CreateIconButton(titleGroup, "TitleSettingsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-180, -140), new Vector2(120, 120),
@@ -1028,12 +1042,17 @@ public partial class ScoreSync : MonoBehaviour
         // Icon dock — grouped strip with shared background (hidden on tvOS — no touch)
 #if !UNITY_TVOS
         CreateDockStrip(gameOverGroup, "GODockR",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(560, 140));
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-450, -140), new Vector2(740, 140));
 
         goLBBtn = CreateIconButton(gameOverGroup, "GOLBBtn",
-            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(160, 160),
-            "trophy", NEON_GOLD, out goLBIcon);
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-720, -140), new Vector2(160, 160),
+            "chart", NEON_GOLD, out goLBIcon);
         goLBBtn.onClick.AddListener(OnLeaderboardTap);
+
+        goAchBtn = CreateIconButton(gameOverGroup, "GOAchBtn",
+            new Vector2(1, 1), new Vector2(1, 1), new Vector2(-540, -140), new Vector2(160, 160),
+            "trophy", NEON_GOLD, out goAchIcon);
+        goAchBtn.onClick.AddListener(OnAchievementsTap);
 
         goStatsBtn = CreateIconButton(gameOverGroup, "GOStatsBtn",
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-360, -140), new Vector2(160, 160),

@@ -143,6 +143,19 @@ public partial class ScoreSync
             settingsLanguageLabel.text = L10n.LanguageDisplayName(L10n.CurrentPref);
             settingsLanguageLabel.color = Color.white;
         }
+
+        if (settingsMotionLabel != null)
+        {
+            string motionKey;
+            switch (AccessibilitySettings.CurrentMode)
+            {
+                case AccessibilitySettings.Mode.On:  motionKey = "settings.on"; break;
+                case AccessibilitySettings.Mode.Off: motionKey = "settings.off"; break;
+                default:                             motionKey = "settings.motion.system"; break;
+            }
+            settingsMotionLabel.text = L10n.T(motionKey);
+            settingsMotionLabel.color = Color.white;
+        }
     }
 
     void StyleSettingsToggle(TMP_Text label, bool isOn)
@@ -184,6 +197,12 @@ public partial class ScoreSync
     {
         if (PlatformManager.Instance != null)
             PlatformManager.Instance.ShowLeaderboard();
+    }
+
+    void OnAchievementsTap()
+    {
+        if (PlatformManager.Instance != null)
+            PlatformManager.Instance.ShowAchievements();
     }
 
     void SetGroupActive(RectTransform group, bool active)

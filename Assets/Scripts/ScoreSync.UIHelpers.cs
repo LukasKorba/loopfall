@@ -79,6 +79,26 @@ public partial class ScoreSync
         return Sprite.Create(tex, new Rect(0, 0, size, size), Vector2.one * 0.5f);
     }
 
+    Sprite CreateRingSprite(int size, float strokeThickness)
+    {
+        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        float half = size * 0.5f;
+        float outerR = half - 1f;
+        float innerR = outerR - strokeThickness;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dist = Vector2.Distance(new Vector2(x, y), new Vector2(half, half));
+                float outerA = 1f - Mathf.Clamp01(dist - outerR);
+                float innerA = Mathf.Clamp01(dist - innerR);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, outerA * innerA));
+            }
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), Vector2.one * 0.5f);
+    }
+
     // ── HELPERS: UI CREATION ─────────────────────────────────
 
     TMP_Text CreateText(Transform parent, string name, string content,
@@ -439,6 +459,7 @@ public partial class ScoreSync
             case "power":   BuildPhosphorIcon(iconRT, PHOSPHOR_POWER, iconColor, false); break;
             case "back":    BuildPhosphorIcon(iconRT, PHOSPHOR_CARET_LEFT, iconColor, false); break;
             case "trophy":  BuildPhosphorIcon(iconRT, PHOSPHOR_TROPHY, iconColor, false); break;
+            case "chart":   BuildPhosphorIcon(iconRT, PHOSPHOR_CHART_BAR, iconColor, false); break;
             case "stats":   BuildPhosphorIcon(iconRT, PHOSPHOR_LIST_BULLET, iconColor, true, true); break;
         }
 

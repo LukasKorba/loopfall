@@ -37,10 +37,6 @@ public class SteamService : MonoBehaviour, IPlatformService
     private CallResult<LeaderboardFindResult_t> mFindTapMaster;
     private CallResult<LeaderboardFindResult_t> mFindRuns;
     private CallResult<LeaderboardScoreUploaded_t> mUploadResult;
-
-    // Achievement tracking
-    private int mSwingCount = 0;
-    private const string PREF_SWING_COUNT = "SteamSwingCount";
 #endif
 
     void Awake()
@@ -85,9 +81,6 @@ public class SteamService : MonoBehaviour, IPlatformService
             ELeaderboardSortMethod.k_ELeaderboardSortMethodDescending,
             ELeaderboardDisplayType.k_ELeaderboardDisplayTypeNumeric);
         mFindRuns.Set(call4);
-
-        // Load persisted swing count for achievement tracking
-        mSwingCount = PlayerPrefs.GetInt(PREF_SWING_COUNT, 0);
 
         // Request current stats from Steam
         SteamUserStats.RequestCurrentStats();
@@ -194,18 +187,9 @@ public class SteamService : MonoBehaviour, IPlatformService
     {
 #if STEAMWORKS
         if (score <= 0 || !SteamManager.Initialized) return;
-
-        if (GameConfig.IsBlitz())
-        {
-            UploadScore(mLBBlitz, mLBBlitzReady, score);
-            // Blitz achievements will be wired separately — gate-based Pure Hell
-            // milestones must NOT fire from Blitz points.
-        }
-        else
-        {
-            UploadScore(mLBPureHell, mLBPureHellReady, score);
-            CheckPureHellAchievements(score);
-        }
+        UploadScore(GameConfig.IsBlitz() ? mLBBlitz : mLBPureHell,
+                    GameConfig.IsBlitz() ? mLBBlitzReady : mLBPureHellReady,
+                    score);
 #endif
     }
 
@@ -214,9 +198,6 @@ public class SteamService : MonoBehaviour, IPlatformService
 #if STEAMWORKS
         if (totalTaps <= 0 || !SteamManager.Initialized) return;
         UploadScore(mLBTapMaster, mLBTapMasterReady, totalTaps);
-
-        if (totalTaps >= 1000)
-            UnlockAchievement(PlatformManager.ACH_TAP_MASTER);
 #endif
     }
 
@@ -225,14 +206,6 @@ public class SteamService : MonoBehaviour, IPlatformService
 #if STEAMWORKS
         if (totalRuns <= 0 || !SteamManager.Initialized) return;
         UploadScore(mLBRuns, mLBRunsReady, totalRuns);
-
-        // Career achievements
-        if (totalRuns >= 1)
-            UnlockAchievement(PlatformManager.ACH_FIRST_STEPS);
-        if (totalRuns >= 100)
-            UnlockAchievement(PlatformManager.ACH_DEDICATED);
-        if (totalRuns >= 500)
-            UnlockAchievement(PlatformManager.ACH_OBSESSED);
 #endif
     }
 
@@ -302,31 +275,4 @@ public class SteamService : MonoBehaviour, IPlatformService
         return null;
     }
 
-    // ── SWING TRACKING (for achievement) ─────────────────────
-
-    /// <summary>
-    /// Called by Torus when a swing event is detected. Tracks toward ACH_SWING_KING.
-    /// </summary>
-    public void OnSwingDetected()
-    {
-#if STEAMWORKS
-        mSwingCount++;
-        PlayerPrefs.SetInt(PREF_SWING_COUNT, mSwingCount);
-        if (mSwingCount >= 10)
-            UnlockAchievement(PlatformManager.ACH_SWING_KING);
-#endif
-    }
-
-    // ── ACHIEVEMENT CHECKS ───────────────────────────────────
-
-#if STEAMWORKS
-    void CheckPureHellAchievements(int gates)
-    {
-        if (gates >= 10)  UnlockAchievement(PlatformManager.ACH_GETTING_HANG);
-        if (gates >= 25)  UnlockAchievement(PlatformManager.ACH_FLOW_STATE);
-        if (gates >= 50)  UnlockAchievement(PlatformManager.ACH_TUNNEL_VISION);
-        if (gates >= 100) UnlockAchievement(PlatformManager.ACH_EVENT_HORIZON);
-    }
-
-#endif
 }

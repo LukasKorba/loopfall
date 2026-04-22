@@ -268,8 +268,8 @@ public class Torus : MonoBehaviour
                         mSwingCooldown = SWING_COOLDOWN;
 
                         // Track swing for achievement
-                        if (SteamService.Instance != null)
-                            SteamService.Instance.OnSwingDetected();
+                        if (PlatformManager.Instance != null)
+                            PlatformManager.Instance.OnSwingDetected();
                     }
                 }
                 else
@@ -1467,6 +1467,8 @@ public class Torus : MonoBehaviour
                 {
                     ApplyGunUpgrade(2);
                     if (mAudio != null) mAudio.PlayVoiceCannonFull();
+                    if (PlatformManager.Instance != null)
+                        PlatformManager.Instance.OnCannonFull();
                 }
                 else
                 {
@@ -1489,6 +1491,8 @@ public class Torus : MonoBehaviour
                 {
                     ApplyCadencyUpgrade(2);
                     if (mAudio != null) mAudio.PlayVoiceCadenceFull();
+                    if (PlatformManager.Instance != null)
+                        PlatformManager.Instance.OnCadenceFull();
                 }
                 else
                 {
@@ -1506,6 +1510,8 @@ public class Torus : MonoBehaviour
                 {
                     ApplyShieldUpgrade();
                     if (mAudio != null) mAudio.PlayVoiceShieldOn();
+                    if (PlatformManager.Instance != null)
+                        PlatformManager.Instance.OnShieldDeployed();
                 }
                 else
                 {

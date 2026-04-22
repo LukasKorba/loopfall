@@ -14,7 +14,7 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 
 ## 2. Store Metadata
 
-- [ ] **App Store Connect metadata in all 7 locales.** Title, subtitle, keywords, description, what's new. Keywords especially — each locale has its own search.
+- [x] **App Store Connect metadata in all 7 locales.** Title, subtitle, keywords, description, what's new. Keywords especially — each locale has its own search.
 - [ ] **Google Play Store listing in 7 locales.** Same fields.
 - [ ] **Steam store page copy** (English only is fine at launch; add locales later).
 - [ ] **Screenshots per locale** (or at minimum per-orientation English set with localized overlays if scope is tight). Apple requires 6.9" + 6.5" iPhone, 13" iPad, tvOS 4K, macOS; Google wants phone + 7"/10" tablet.

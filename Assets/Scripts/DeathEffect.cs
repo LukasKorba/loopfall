@@ -14,10 +14,11 @@ public class DeathEffect : MonoBehaviour
         transform.position -= shakeOffset;
         shakeOffset = Vector3.zero;
 
-        shaking = true;
-        shakeTimer = shakeDuration;
+        // Shockwave on the grid always plays — only the camera shake is gated,
+        // since the shake is what motion-sensitive players asked to suppress.
+        shaking = !AccessibilitySettings.IsReduceMotionActive();
+        shakeTimer = shaking ? shakeDuration : 0f;
 
-        // Dual shockwave rings on the grid
         Shader.SetGlobalFloat("_DeathPulseTime", Time.time);
         Shader.SetGlobalVector("_DeathPulsePos", ballWorldPos);
 
