@@ -421,6 +421,7 @@ public partial class ScoreSync : MonoBehaviour
         if (tutorialInstructionText != null) tutorialInstructionText.text = GetTutorialInstruction();
         if (tutorialReadyText != null) tutorialReadyText.text = L10n.T("tutorial.ready");
         if (tutorialReadyHintText != null) tutorialReadyHintText.text = GetTutorialReadyHint();
+        if (blitzShieldLabel != null) blitzShieldLabel.text = L10n.T("hud.shield");
         // Force the Blitz HUD labels to re-emit from their cached levels on the next tick.
         blitzLastGunLevel = -1;
         blitzLastCadencyLevel = -1;

@@ -519,7 +519,7 @@ public partial class ScoreSync
 
         blitzGunLabel = CreateRowLabel(blitzUpgradeGroup, "GunLabel", L10n.T("hud.beams") + " 1/3", 0, gunColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
         blitzCadencyLabel = CreateRowLabel(blitzUpgradeGroup, "CadencyLabel", L10n.T("hud.cadency") + " 1x", 1, cadencyColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
-        blitzShieldLabel = CreateRowLabel(blitzUpgradeGroup, "ShieldLabel", "Shield", 2, shieldColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
+        blitzShieldLabel = CreateRowLabel(blitzUpgradeGroup, "ShieldLabel", L10n.T("hud.shield"), 2, shieldColor, SLOT_SIZE, ROW_GAP, LABEL_WIDTH);
 
         blitzGunSlots = CreateSlotRow(blitzUpgradeGroup, 0, 5, gunColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
         blitzCadencySlots = CreateSlotRow(blitzUpgradeGroup, 1, 5, cadencyColor, SLOT_SIZE, SLOT_GAP, ROW_GAP, LABEL_WIDTH);
