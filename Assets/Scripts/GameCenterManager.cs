@@ -21,6 +21,13 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
     private const string LB_TAP_MASTER = "com.lukaskorba.loopfall.tapmaster";
     private const string LB_RUNS = "com.lukaskorba.loopfall.runs";
 
+    // Game Center group prefix. Set on Apple after group registration — every
+    // leaderboard/achievement ID submitted to GKLeaderboard/GKAchievement APIs
+    // must carry it. CSVs + Steam/Android stay bare; fastlane prepends at push
+    // time for App Store Connect metadata.
+    private const string APPLE_GROUP_PREFIX = "grp.";
+    static string AppleID(string bareID) => APPLE_GROUP_PREFIX + bareID;
+
     private bool mAuthenticated = false;
 
     void Awake()
@@ -77,7 +84,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
 #if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         if (!mAuthenticated) return;
 
-        Social.ReportScore(value, leaderboardID, (bool success) =>
+        Social.ReportScore(value, AppleID(leaderboardID), (bool success) =>
         {
             if (success)
                 Debug.Log($"[GameCenter] {leaderboardID}: {value} reported");
@@ -98,7 +105,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
             return;
         }
 
-        GameCenterPlatform.ShowLeaderboardUI(GameConfig.GetLeaderboardID(), UnityEngine.SocialPlatforms.TimeScope.AllTime);
+        GameCenterPlatform.ShowLeaderboardUI(AppleID(GameConfig.GetLeaderboardID()), UnityEngine.SocialPlatforms.TimeScope.AllTime);
 #else
         Debug.Log("[GameCenter] (Editor) Would show leaderboard");
 #endif
@@ -108,7 +115,7 @@ public class GameCenterManager : MonoBehaviour, IPlatformService
     {
 #if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
         if (!mAuthenticated) return;
-        Social.ReportProgress(achievementID, 100.0, (bool success) =>
+        Social.ReportProgress(AppleID(achievementID), 100.0, (bool success) =>
         {
             Debug.Log($"[GameCenter] Achievement {achievementID}: {(success ? "unlocked" : "failed")}");
         });
