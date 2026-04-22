@@ -15,7 +15,11 @@ public static class L10n
         French,
         Italian,
         Russian,
-        PortugueseBR
+        PortugueseBR,
+        Dutch,
+        Polish,
+        Turkish,
+        Ukrainian
     }
 
     private const string PREF_KEY = "Language";
@@ -30,7 +34,8 @@ public static class L10n
     public static readonly Lang[] AllPrefs =
     {
         Lang.System, Lang.English, Lang.German, Lang.Spanish,
-        Lang.French, Lang.Italian, Lang.Russian, Lang.PortugueseBR
+        Lang.French, Lang.Italian, Lang.Russian, Lang.PortugueseBR,
+        Lang.Dutch, Lang.Polish, Lang.Turkish, Lang.Ukrainian
     };
 
     public static void Initialize()
@@ -52,6 +57,10 @@ public static class L10n
             case SystemLanguage.Italian:    return Lang.Italian;
             case SystemLanguage.Russian:    return Lang.Russian;
             case SystemLanguage.Portuguese: return Lang.PortugueseBR;
+            case SystemLanguage.Dutch:      return Lang.Dutch;
+            case SystemLanguage.Polish:     return Lang.Polish;
+            case SystemLanguage.Turkish:    return Lang.Turkish;
+            case SystemLanguage.Ukrainian:  return Lang.Ukrainian;
             default:                        return Lang.English;
         }
     }
@@ -94,6 +103,10 @@ public static class L10n
             case Lang.Italian:      return "ITALIANO";
             case Lang.Russian:      return "РУССКИЙ";
             case Lang.PortugueseBR: return "PORTUGUÊS";
+            case Lang.Dutch:        return "NEDERLANDS";
+            case Lang.Polish:       return "POLSKI";
+            case Lang.Turkish:      return "TÜRKÇE";
+            case Lang.Ukrainian:    return "УКРАЇНСЬКА";
         }
         return "";
     }
@@ -119,6 +132,10 @@ public static class L10n
         { Lang.Italian,      new[] { "GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC" } },
         { Lang.Russian,      new[] { "ЯНВ","ФЕВ","МАР","АПР","МАЙ","ИЮН","ИЮЛ","АВГ","СЕН","ОКТ","НОЯ","ДЕК" } },
         { Lang.PortugueseBR, new[] { "JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ" } },
+        { Lang.Dutch,        new[] { "JAN","FEB","MRT","APR","MEI","JUN","JUL","AUG","SEP","OKT","NOV","DEC" } },
+        { Lang.Polish,       new[] { "STY","LUT","MAR","KWI","MAJ","CZE","LIP","SIE","WRZ","PAŹ","LIS","GRU" } },
+        { Lang.Turkish,      new[] { "OCA","ŞUB","MAR","NİS","MAY","HAZ","TEM","AĞU","EYL","EKİ","KAS","ARA" } },
+        { Lang.Ukrainian,    new[] { "СІЧ","ЛЮТ","БЕР","КВІ","ТРА","ЧЕР","ЛИП","СЕР","ВЕР","ЖОВ","ЛИС","ГРУ" } },
     };
 
     // ── TABLE ──────────────────────────────────────────────────
@@ -490,6 +507,214 @@ public static class L10n
             { "stats.total_gates",                  "PORTAIS" },
             { "stats.obstacles",                    "OBSTÁCULOS" },
             { "lang.system",                        "SISTEMA" },
+        };
+
+        t[Lang.Dutch] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "PRESENTEERT" },
+            { "title.select_mode",                  "KIES MODUS" },
+            { "title.best",                         "BESTE" },
+            { "title.no_runs_yet",                  "NOG GEEN RUNS" },
+            { "tap_prompt.keyboard",                "DRUK EEN TOETS OM TE SPELEN" },
+            { "tap_prompt.tap",                     "TIK OM TE SPELEN" },
+            { "pause.paused",                       "GEPAUZEERD" },
+            { "pause.resume.keyboard",              "DRUK ESC OM HERVATTEN" },
+            { "pause.resume.tv",                    "DRUK MENU OM HERVATTEN" },
+            { "pause.resume.tap",                   "TIK OM HERVATTEN" },
+            { "tutorial.instruction.keyboard",      "DRUK LINKS EN RECHTS" },
+            { "tutorial.instruction.tap",           "TIK LINKS EN RECHTS" },
+            { "tutorial.hit_walls",                 "RAAK DE MUREN NIET — OPNIEUW" },
+            { "tutorial.ready",                     "KLAAR?" },
+            { "tutorial.ready_hint.keyboard",       "TIK OF KIES EEN RICHTING" },
+            { "tutorial.ready_hint.tap",            "TIK OM TE STARTEN" },
+            { "tutorial.nudge_left",                "NU LINKS" },
+            { "tutorial.nudge_right",               "NU RECHTS" },
+            { "gameover.new_best",                  "NIEUW RECORD" },
+            { "gameover.top_five",                  "TOP 5" },
+            { "hud.beams",                          "Stralen" },
+            { "hud.cadency",                        "Cadans" },
+            { "settings.title",                     "INSTELLINGEN" },
+            { "settings.section.audio",             "AUDIO" },
+            { "settings.section.display",           "BEELD" },
+            { "settings.section.preferences",       "VOORKEUREN" },
+            { "settings.sounds",                    "GELUIDEN" },
+            { "settings.music",                     "MUZIEK" },
+            { "settings.theme",                     "THEMA" },
+            { "settings.language",                  "TAAL" },
+            { "settings.fullscreen",                "VOLLEDIG SCHERM" },
+            { "settings.res",                       "RES" },
+            { "settings.motion",                    "BEWEGING BEPERKEN" },
+            { "settings.motion.system",             "SYSTEEM" },
+            { "settings.on",                        "AAN" },
+            { "settings.off",                       "UIT" },
+            { "settings.theme.auto",                "AUTO" },
+            { "settings.close.keyboard",            "KLIK BUITEN OM TE SLUITEN" },
+            { "settings.close.tv",                  "DRUK MENU OM TE SLUITEN" },
+            { "settings.close.tap",                 "TIK BUITEN OM TE SLUITEN" },
+            { "stats.title",                        "STATISTIEKEN" },
+            { "stats.total_runs",                   "TOTAAL RUNS" },
+            { "stats.total_taps",                   "TOTAAL TIKS" },
+            { "stats.best_score",                   "BESTE SCORE" },
+            { "stats.avg_score",                    "GEM SCORE" },
+            { "stats.total_gates",                  "TOTAAL POORTEN" },
+            { "stats.obstacles",                    "OBSTAKELS" },
+            { "lang.system",                        "SYSTEEM" },
+        };
+
+        t[Lang.Polish] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "PREZENTUJE" },
+            { "title.select_mode",                  "WYBIERZ TRYB" },
+            { "title.best",                         "NAJLEPSZY" },
+            { "title.no_runs_yet",                  "BRAK GIER" },
+            { "tap_prompt.keyboard",                "NACIŚNIJ KLAWISZ ABY GRAĆ" },
+            { "tap_prompt.tap",                     "DOTKNIJ ABY GRAĆ" },
+            { "pause.paused",                       "PAUZA" },
+            { "pause.resume.keyboard",              "ESC ABY WZNOWIĆ" },
+            { "pause.resume.tv",                    "MENU ABY WZNOWIĆ" },
+            { "pause.resume.tap",                   "DOTKNIJ ABY WZNOWIĆ" },
+            { "tutorial.instruction.keyboard",      "NACIŚNIJ W LEWO I W PRAWO" },
+            { "tutorial.instruction.tap",           "DOTKNIJ LEWO I PRAWO" },
+            { "tutorial.hit_walls",                 "NIE UDERZAJ W ŚCIANY — SPRÓBUJ PONOWNIE" },
+            { "tutorial.ready",                     "GOTOWY?" },
+            { "tutorial.ready_hint.keyboard",       "DOTKNIJ LUB WYBIERZ KIERUNEK" },
+            { "tutorial.ready_hint.tap",            "DOTKNIJ ABY ZACZĄĆ" },
+            { "tutorial.nudge_left",                "TERAZ W LEWO" },
+            { "tutorial.nudge_right",               "TERAZ W PRAWO" },
+            { "gameover.new_best",                  "NOWY REKORD" },
+            { "gameover.top_five",                  "TOP 5" },
+            { "hud.beams",                          "Promienie" },
+            { "hud.cadency",                        "Kadencja" },
+            { "settings.title",                     "USTAWIENIA" },
+            { "settings.section.audio",             "DŹWIĘK" },
+            { "settings.section.display",           "EKRAN" },
+            { "settings.section.preferences",       "PREFERENCJE" },
+            { "settings.sounds",                    "DŹWIĘKI" },
+            { "settings.music",                     "MUZYKA" },
+            { "settings.theme",                     "MOTYW" },
+            { "settings.language",                  "JĘZYK" },
+            { "settings.fullscreen",                "PEŁNY EKRAN" },
+            { "settings.res",                       "ROZDZ" },
+            { "settings.motion",                    "ZMNIEJSZ RUCH" },
+            { "settings.motion.system",             "SYSTEM" },
+            { "settings.on",                        "WŁ" },
+            { "settings.off",                       "WYŁ" },
+            { "settings.theme.auto",                "AUTO" },
+            { "settings.close.keyboard",            "KLIKNIJ NA ZEWNĄTRZ ABY ZAMKNĄĆ" },
+            { "settings.close.tv",                  "MENU ABY ZAMKNĄĆ" },
+            { "settings.close.tap",                 "DOTKNIJ NA ZEWNĄTRZ ABY ZAMKNĄĆ" },
+            { "stats.title",                        "STATYSTYKI" },
+            { "stats.total_runs",                   "ŁĄCZNIE GIER" },
+            { "stats.total_taps",                   "ŁĄCZNIE DOTKNIĘĆ" },
+            { "stats.best_score",                   "NAJLEPSZY WYNIK" },
+            { "stats.avg_score",                    "ŚREDNI WYNIK" },
+            { "stats.total_gates",                  "ŁĄCZNIE BRAM" },
+            { "stats.obstacles",                    "PRZESZKODY" },
+            { "lang.system",                        "SYSTEM" },
+        };
+
+        t[Lang.Turkish] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "SUNAR" },
+            { "title.select_mode",                  "MOD SEÇ" },
+            { "title.best",                         "EN İYİ" },
+            { "title.no_runs_yet",                  "HENÜZ OYUN YOK" },
+            { "tap_prompt.keyboard",                "OYNAMAK İÇİN BİR TUŞA BAS" },
+            { "tap_prompt.tap",                     "OYNAMAK İÇİN DOKUN" },
+            { "pause.paused",                       "DURAKLATILDI" },
+            { "pause.resume.keyboard",              "DEVAM İÇİN ESC" },
+            { "pause.resume.tv",                    "DEVAM İÇİN MENU" },
+            { "pause.resume.tap",                   "DEVAM İÇİN DOKUN" },
+            { "tutorial.instruction.keyboard",      "SOL VE SAĞ TUŞA BAS" },
+            { "tutorial.instruction.tap",           "SOLA VE SAĞA DOKUN" },
+            { "tutorial.hit_walls",                 "DUVARA ÇARPMA — TEKRAR DENE" },
+            { "tutorial.ready",                     "HAZIR MISIN?" },
+            { "tutorial.ready_hint.keyboard",       "DOKUN YA DA BİR YÖN SEÇ" },
+            { "tutorial.ready_hint.tap",            "BAŞLAMAK İÇİN DOKUN" },
+            { "tutorial.nudge_left",                "ŞİMDİ SOL" },
+            { "tutorial.nudge_right",               "ŞİMDİ SAĞ" },
+            { "gameover.new_best",                  "YENİ REKOR" },
+            { "gameover.top_five",                  "TOP 5" },
+            { "hud.beams",                          "Işınlar" },
+            { "hud.cadency",                        "Ritim" },
+            { "settings.title",                     "AYARLAR" },
+            { "settings.section.audio",             "SES" },
+            { "settings.section.display",           "EKRAN" },
+            { "settings.section.preferences",       "TERCİHLER" },
+            { "settings.sounds",                    "SESLER" },
+            { "settings.music",                     "MÜZİK" },
+            { "settings.theme",                     "TEMA" },
+            { "settings.language",                  "DİL" },
+            { "settings.fullscreen",                "TAM EKRAN" },
+            { "settings.res",                       "ÇÖZ" },
+            { "settings.motion",                    "HAREKETİ AZALT" },
+            { "settings.motion.system",             "SİSTEM" },
+            { "settings.on",                        "AÇIK" },
+            { "settings.off",                       "KAPALI" },
+            { "settings.theme.auto",                "OTO" },
+            { "settings.close.keyboard",            "KAPATMAK İÇİN DIŞARI TIKLA" },
+            { "settings.close.tv",                  "KAPATMAK İÇİN MENU" },
+            { "settings.close.tap",                 "KAPATMAK İÇİN DIŞARI DOKUN" },
+            { "stats.title",                        "İSTATİSTİKLER" },
+            { "stats.total_runs",                   "TOPLAM OYUN" },
+            { "stats.total_taps",                   "TOPLAM DOKUNUŞ" },
+            { "stats.best_score",                   "EN İYİ SKOR" },
+            { "stats.avg_score",                    "ORT SKOR" },
+            { "stats.total_gates",                  "TOPLAM KAPI" },
+            { "stats.obstacles",                    "ENGELLER" },
+            { "lang.system",                        "SİSTEM" },
+        };
+
+        t[Lang.Ukrainian] = new Dictionary<string, string>
+        {
+            { "splash.presents",                    "ПРЕДСТАВЛЯЄ" },
+            { "title.select_mode",                  "ВИБІР РЕЖИМУ" },
+            { "title.best",                         "НАЙКРАЩИЙ" },
+            { "title.no_runs_yet",                  "ІГОР ЩЕ НЕМАЄ" },
+            { "tap_prompt.keyboard",                "КЛАВІША — ГРА" },
+            { "tap_prompt.tap",                     "ТАП — ГРА" },
+            { "pause.paused",                       "ПАУЗА" },
+            { "pause.resume.keyboard",              "ESC — ПРОДОВЖИТИ" },
+            { "pause.resume.tv",                    "MENU — ПРОДОВЖИТИ" },
+            { "pause.resume.tap",                   "ТАП — ПРОДОВЖИТИ" },
+            { "tutorial.instruction.keyboard",      "ВЛІВО ТА ВПРАВО" },
+            { "tutorial.instruction.tap",           "ТАП ВЛІВО ТА ВПРАВО" },
+            { "tutorial.hit_walls",                 "НЕ ВРІЖСЯ — ЩЕ РАЗ" },
+            { "tutorial.ready",                     "ГОТОВИЙ?" },
+            { "tutorial.ready_hint.keyboard",       "ТАП АБО НАПРЯМОК" },
+            { "tutorial.ready_hint.tap",            "ТАП — СТАРТ" },
+            { "tutorial.nudge_left",                "ТЕПЕР ВЛІВО" },
+            { "tutorial.nudge_right",               "ТЕПЕР ВПРАВО" },
+            { "gameover.new_best",                  "НОВИЙ РЕКОРД" },
+            { "gameover.top_five",                  "ТОП-5" },
+            { "hud.beams",                          "Промені" },
+            { "hud.cadency",                        "Темп" },
+            { "settings.title",                     "НАЛАШТУВАННЯ" },
+            { "settings.section.audio",             "ЗВУК" },
+            { "settings.section.display",           "ЕКРАН" },
+            { "settings.section.preferences",       "ПАРАМЕТРИ" },
+            { "settings.sounds",                    "ЗВУКИ" },
+            { "settings.music",                     "МУЗИКА" },
+            { "settings.theme",                     "ТЕМА" },
+            { "settings.language",                  "МОВА" },
+            { "settings.fullscreen",                "ПОВНИЙ ЕКРАН" },
+            { "settings.res",                       "РОЗД" },
+            { "settings.motion",                    "ЗМЕНШИТИ РУХ" },
+            { "settings.motion.system",             "СИСТЕМА" },
+            { "settings.on",                        "УВІМК" },
+            { "settings.off",                       "ВИМК" },
+            { "settings.theme.auto",                "АВТО" },
+            { "settings.close.keyboard",            "КЛІК ПОЗА — ЗАКРИТИ" },
+            { "settings.close.tv",                  "MENU — ЗАКРИТИ" },
+            { "settings.close.tap",                 "ТАП ПОЗА — ЗАКРИТИ" },
+            { "stats.title",                        "СТАТИСТИКА" },
+            { "stats.total_runs",                   "ІГРИ" },
+            { "stats.total_taps",                   "ТАПИ" },
+            { "stats.best_score",                   "НАЙКРАЩИЙ РАХ" },
+            { "stats.avg_score",                    "СЕРЕДНІЙ РАХ" },
+            { "stats.total_gates",                  "ВОРОТА" },
+            { "stats.obstacles",                    "ПЕРЕШКОДИ" },
+            { "lang.system",                        "СИСТЕМА" },
         };
 
         return t;

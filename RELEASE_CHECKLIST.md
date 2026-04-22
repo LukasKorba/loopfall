@@ -6,8 +6,8 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 
 ## 1. Content & Copy
 
-- [ ] **Final string freeze.** Lock all in-game text in `Assets/Scripts/L10n.cs`. After freeze, adding a new string means re-translating 7 languages, so this gate matters.
-- [ ] **Tier 2 languages (after freeze).** Add Latin/Cyrillic sets that are cheap: Turkish, Polish, Dutch, Ukrainian. Same file, same keys.
+- [x] **Final string freeze.** Lock all in-game text in `Assets/Scripts/L10n.cs`. After freeze, adding a new string means re-translating 11 languages, so this gate matters.
+- [x] **Tier 2 languages (after freeze).** Add Latin/Cyrillic sets that are cheap: Turkish, Polish, Dutch, Ukrainian. Same file, same keys.
 - [x] **Tutorial PNG set.** Per-platform sprites for the tutorial platform image slot (`tutorialPlatformImage` in `ScoreSync.cs`). Needed: iOS tap, iPad tap, tvOS Siri Remote, keyboard, MFi gamepad. One each.
 - [ ] **Voice line variants.** Record and wire the v1/v2 alternates that were designed but not delivered. Round-robin selection so the same line doesn't repeat in a session.
 - [ ] **Proofread translations.** Machine-quality output from this pass; a native reviewer per language catches the obvious misfires before they hit store reviews.
