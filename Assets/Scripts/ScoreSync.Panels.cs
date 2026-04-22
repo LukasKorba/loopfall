@@ -34,7 +34,7 @@ public partial class ScoreSync
 #if UNITY_STANDALONE && !UNITY_EDITOR
         showDisplay = true;
 #endif
-        cardRT.sizeDelta = showDisplay ? new Vector2(720, 800) : new Vector2(720, 580);
+        cardRT.sizeDelta = showDisplay ? new Vector2(792, 880) : new Vector2(792, 640);
 
         Image cardBg = card.AddComponent<Image>();
         cardBg.color = new Color(0.06f, 0.03f, 0.10f, 0.96f);
@@ -49,7 +49,7 @@ public partial class ScoreSync
         // Title
         TMP_Text title = CreateText(cardRT, "Title", L10n.T("settings.title"),
             36, FontStyles.Bold, NEON_CYAN);
-        SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.93f : 0.88f), new Vector2(576, 50));
+        SetAnchored(title.rectTransform, new Vector2(0.5f, showDisplay ? 0.93f : 0.88f), new Vector2(640,50));
         title.characterSpacing = 8f;
         title.raycastTarget = false;
 
@@ -61,7 +61,7 @@ public partial class ScoreSync
             // ── AUDIO SECTION ──
             TMP_Text audioHeader = CreateText(cardRT, "AudioHeader", L10n.T("settings.section.audio"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.83f), new Vector2(576, 28));
+            SetAnchored(audioHeader.rectTransform, new Vector2(0.5f, 0.83f), new Vector2(640,28));
             audioHeader.characterSpacing = 6f;
             audioHeader.raycastTarget = false;
 
@@ -79,7 +79,7 @@ public partial class ScoreSync
             // ── DISPLAY SECTION ──
             TMP_Text displayHeader = CreateText(cardRT, "DisplayHeader", L10n.T("settings.section.display"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(576, 28));
+            SetAnchored(displayHeader.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(640,28));
             displayHeader.characterSpacing = 6f;
             displayHeader.raycastTarget = false;
 
@@ -96,7 +96,7 @@ public partial class ScoreSync
 
             TMP_Text prefsHeader = CreateText(cardRT, "PrefsHeader", L10n.T("settings.section.preferences"),
                 18, FontStyles.Bold, new Color(0.45f, 0.48f, 0.55f));
-            SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.34f), new Vector2(576, 28));
+            SetAnchored(prefsHeader.rectTransform, new Vector2(0.5f, 0.34f), new Vector2(640,28));
             prefsHeader.characterSpacing = 6f;
             prefsHeader.raycastTarget = false;
 
@@ -135,7 +135,7 @@ public partial class ScoreSync
         // Close label
         TMP_Text closeLabel = CreateText(cardRT, "Close", GetCloseHint(),
             16, FontStyles.Normal, new Color(DIM_TEXT.r, DIM_TEXT.g, DIM_TEXT.b, 0.5f));
-        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.04f : 0.05f), new Vector2(576, 30));
+        SetAnchored(closeLabel.rectTransform, new Vector2(0.5f, showDisplay ? 0.04f : 0.05f), new Vector2(640,30));
         closeLabel.characterSpacing = 3f;
         closeLabel.raycastTarget = false;
     }
@@ -181,7 +181,7 @@ public partial class ScoreSync
         rt.anchorMin = anchor;
         rt.anchorMax = anchor;
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(576, 55);
+        rt.sizeDelta = new Vector2(640,55);
 
         Image bg = btnObj.AddComponent<Image>();
         bg.color = new Color(1f, 1f, 1f, 0.04f);
@@ -254,7 +254,7 @@ public partial class ScoreSync
         crt.anchorMin = anchor;
         crt.anchorMax = anchor;
         crt.pivot = new Vector2(0.5f, 0.5f);
-        crt.sizeDelta = new Vector2(576, 55);
+        crt.sizeDelta = new Vector2(640,55);
 
         Image bg = container.AddComponent<Image>();
         bg.color = new Color(1f, 1f, 1f, 0.04f);
@@ -296,8 +296,9 @@ public partial class ScoreSync
         // Right-side cluster: < VALUE >
         // Right arrow — anchored to right edge
         CreateCycleArrow(crt, "Next", ">", new Vector2(-8f, 0f), onNext);
-        // Left arrow — sits to the left of the 130px value label
-        CreateCycleArrow(crt, "Prev", "<", new Vector2(-8f - 44f - 130f, 0f), onPrev);
+        // Left arrow — sits to the left of the 200px value label (widened to fit
+        // 10-char language names like NEDERLANDS / УКРАЇНСЬКА without clipping).
+        CreateCycleArrow(crt, "Prev", "<", new Vector2(-8f - 44f - 200f, 0f), onPrev);
 
         // Value label — centered between the two arrows
         valueLabel = CreateText(crt, "Value", "", 22, FontStyles.Normal, Color.white);
@@ -306,7 +307,7 @@ public partial class ScoreSync
         vrt.anchorMax = new Vector2(1f, 1f);
         vrt.pivot = new Vector2(1f, 0.5f);
         vrt.anchoredPosition = new Vector2(-8f - 44f, 0f);
-        vrt.sizeDelta = new Vector2(130f, 0f);
+        vrt.sizeDelta = new Vector2(200f, 0f);
         valueLabel.alignment = TextAlignmentOptions.Center;
         valueLabel.characterSpacing = 4f;
         valueLabel.raycastTarget = false;
@@ -348,7 +349,7 @@ public partial class ScoreSync
         rt.anchorMin = anchor;
         rt.anchorMax = anchor;
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(576, 55);
+        rt.sizeDelta = new Vector2(640,55);
 
         Image bg = btnObj.AddComponent<Image>();
         bg.color = new Color(1f, 1f, 1f, 0.04f);

@@ -10,12 +10,12 @@ Everything that needs to land before we cut v1.0.0. Tick items as they're done; 
 - [x] **Tier 2 languages (after freeze).** Add Latin/Cyrillic sets that are cheap: Turkish, Polish, Dutch, Ukrainian. Same file, same keys.
 - [x] **Tutorial PNG set.** Per-platform sprites for the tutorial platform image slot (`tutorialPlatformImage` in `ScoreSync.cs`). Needed: iOS tap, iPad tap, tvOS Siri Remote, keyboard, MFi gamepad. One each.
 - [ ] **Voice line variants.** Record and wire the v1/v2 alternates that were designed but not delivered. Round-robin selection so the same line doesn't repeat in a session.
-- [ ] **Proofread translations.** Machine-quality output from this pass; a native reviewer per language catches the obvious misfires before they hit store reviews.
+- [x] **Proofread translations.** Machine-quality output from this pass; a native reviewer per language catches the obvious misfires before they hit store reviews.
 
 ## 2. Store Metadata
 
-- [x] **App Store Connect metadata in all 7 locales.** Title, subtitle, keywords, description, what's new. Keywords especially — each locale has its own search.
-- [ ] **Google Play Store listing in 7 locales.** Same fields.
+- [ ] **App Store Connect metadata in all 11 locales.** Title, subtitle, keywords, description, what's new. Keywords especially — each locale has its own search.
+- [ ] **Google Play Store listing in 11 locales.** Same fields.
 - [ ] **Steam store page copy** (English only is fine at launch; add locales later).
 - [ ] **Screenshots per locale** (or at minimum per-orientation English set with localized overlays if scope is tight). Apple requires 6.9" + 6.5" iPhone, 13" iPad, tvOS 4K, macOS; Google wants phone + 7"/10" tablet.
 - [ ] **Feature graphic / capsule art.** Steam header + capsule + library hero + library logo. Play Store feature graphic (1024×500). App Store promotional text (170 chars).
