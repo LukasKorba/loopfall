@@ -5,8 +5,8 @@ Shader "Loopfall/Shield"
         _Color ("Shield Color", Color) = (0.2, 1.0, 0.4, 1)
         _Intensity ("Glow Intensity", Range(0, 5)) = 5.0
         _FresnelPower ("Fresnel Power", Range(0.5, 8)) = 1.58
-        _RimBoost ("Rim Boost", Range(0, 3)) = 0.33
-        _NoiseScale ("Noise Scale", Range(0.5, 10)) = 7.08
+        _RimBoost ("Rim Boost", Range(0, 3)) = 0.83
+        _NoiseScale ("Noise Scale", Range(0.5, 10)) = 2.37
         _NoiseSpeed ("Noise Speed", Range(0, 5)) = 0.58
         _PatchContrast ("Patch Contrast", Range(0.5, 6)) = 1.18
         _PatchStrength ("Patch Strength", Range(0, 2)) = 1.01
