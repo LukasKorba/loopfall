@@ -380,11 +380,11 @@ public class SceneSetup : MonoBehaviour
         blitzOrbShieldMaterial.SetFloat("_Intensity", 2.5f);
         blitzOrbShieldMaterial.renderQueue = 3000;
 
-        // Blitz shield visual — green glow around ball when shield is active
-        Shader shieldShader = trailGlowShaderRef != null ? trailGlowShaderRef : Shader.Find("Loopfall/TrailGlow");
+        // Blitz shield visual — Fresnel rim + drifting plasma patches around ball when shield is active
+        Shader shieldShader = Shader.Find("Loopfall/Shield");
         blitzShieldVisualMaterial = new Material(shieldShader);
-        blitzShieldVisualMaterial.SetColor("_Color", new Color(0.1f, 1.0f, 0.4f));
-        blitzShieldVisualMaterial.SetFloat("_Intensity", 1.5f);
+        blitzShieldVisualMaterial.SetColor("_Color", new Color(0.2f, 1.0f, 0.4f));
+        blitzShieldVisualMaterial.SetFloat("_Intensity", 5.0f);
 
     }
 

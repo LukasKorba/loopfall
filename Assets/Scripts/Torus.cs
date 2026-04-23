@@ -1541,8 +1541,8 @@ public class Torus : MonoBehaviour
     public bool IsShieldActive() { return mShieldActive; }
 
     /// Debug-only: short-circuit the orb progression so the player starts a Blitz
-    /// run at max cadence + max gun (three beams). Shield is intentionally skipped
-    /// per the stress-test use case. Gated by GameConfig.BlitzDebugMaxPower.
+    /// run at max cadence + max gun (three beams). Shield is primed at 4/5 so one
+    /// more shield orb triggers the pickup. Gated by GameConfig.BlitzDebugMaxPower.
     public void DebugApplyMaxBlitzPower()
     {
         if (!GameConfig.IsBlitz()) return;
@@ -1550,6 +1550,7 @@ public class Torus : MonoBehaviour
         mCadencyOrbCount = ORBS_PER_UPGRADE * 2;
         mGunLevel = 2;
         mCadencyLevel = 2;
+        mShieldOrbCount = ORBS_PER_UPGRADE - 1;
         if (mBlitzBeam != null) mBlitzBeam.SetGunLevel(2);
     }
 

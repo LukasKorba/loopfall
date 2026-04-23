@@ -130,7 +130,7 @@ public class Sphere : MonoBehaviour
             shield.name = "ShieldVisual";
             Object.Destroy(shield.GetComponent<Collider>());
             shield.transform.SetParent(transform, false);
-            shield.transform.localScale = Vector3.one * 1.4f;
+            shield.transform.localScale = Vector3.one * 1.08f;
             MeshRenderer smr = shield.GetComponent<MeshRenderer>();
             smr.material = mBlitzShieldMat;
             smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -774,7 +774,11 @@ public class Sphere : MonoBehaviour
             // Blitz shield absorbs one lethal hit
             if (GameConfig.IsBlitz() && mTorusScript.ConsumeShield())
             {
-                if (mAudio != null) mAudio.PlayShieldAbsorb();
+                if (mAudio != null)
+                {
+                    mAudio.PlayShieldAbsorb();
+                    mAudio.PlayVoiceShieldLost();
+                }
                 // Visual feedback — camera death flash
                 DeathEffect death = mCamera.GetComponent<DeathEffect>();
                 if (death != null) death.TriggerDeath(transform.position);

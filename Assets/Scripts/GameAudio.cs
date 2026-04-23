@@ -107,12 +107,13 @@ public class GameAudio : MonoBehaviour
     private AudioClip wipeOutClip;
     private AudioClip wipeInClip;
 
-    // Blitz upgrade voice lines
-    private AudioClip voiceCannonUpClip;
-    private AudioClip voiceCannonFullClip;
-    private AudioClip voiceCadenceUpClip;
-    private AudioClip voiceCadenceFullClip;
-    private AudioClip voiceShieldOnClip;
+    // Blitz upgrade voice lines — variant arrays; drop voice_*_1.ogg, voice_*_2.ogg etc. into Resources/Audio/Blitz/ and they auto-load.
+    private AudioClip[] voiceCannonUpClips;
+    private AudioClip[] voiceCannonFullClips;
+    private AudioClip[] voiceCadenceUpClips;
+    private AudioClip[] voiceCadenceFullClips;
+    private AudioClip[] voiceShieldOnClips;
+    private AudioClip[] voiceShieldLostClips;
 
     void Awake()
     {
@@ -237,11 +238,12 @@ public class GameAudio : MonoBehaviour
         wipeOutClip          = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_wipe_out");
         wipeInClip           = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_wipe_in");
 
-        voiceCannonUpClip    = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_up_0");
-        voiceCannonFullClip  = Resources.Load<AudioClip>("Audio/Blitz/voice_cannon_full_0");
-        voiceCadenceUpClip   = Resources.Load<AudioClip>("Audio/Blitz/voice_cadence_up_0");
-        voiceCadenceFullClip = Resources.Load<AudioClip>("Audio/Blitz/voice_cadence_full_0");
-        voiceShieldOnClip    = Resources.Load<AudioClip>("Audio/Blitz/voice_shield_on_0");
+        voiceCannonUpClips    = LoadNumberedClips("Audio/Blitz/voice_cannon_up_", 10);
+        voiceCannonFullClips  = LoadNumberedClips("Audio/Blitz/voice_cannon_full_", 10);
+        voiceCadenceUpClips   = LoadNumberedClips("Audio/Blitz/voice_cadence_up_", 10);
+        voiceCadenceFullClips = LoadNumberedClips("Audio/Blitz/voice_cadence_full_", 10);
+        voiceShieldOnClips    = LoadNumberedClips("Audio/Blitz/voice_shield_on_", 10);
+        voiceShieldLostClips  = LoadNumberedClips("Audio/Blitz/voice_shield_lost_", 10);
     }
 
     AudioClip[] LoadVariants(params string[] paths)
@@ -646,11 +648,12 @@ public class GameAudio : MonoBehaviour
         if (wipeInClip != null) sfxSource.PlayOneShot(wipeInClip);
     }
 
-    public void PlayVoiceCannonUp()    { PlayBlitzVoice(voiceCannonUpClip); }
-    public void PlayVoiceCannonFull()  { PlayBlitzVoice(voiceCannonFullClip); }
-    public void PlayVoiceCadenceUp()   { PlayBlitzVoice(voiceCadenceUpClip); }
-    public void PlayVoiceCadenceFull() { PlayBlitzVoice(voiceCadenceFullClip); }
-    public void PlayVoiceShieldOn()    { PlayBlitzVoice(voiceShieldOnClip); }
+    public void PlayVoiceCannonUp()    { PlayBlitzVoice(PickRandom(voiceCannonUpClips)); }
+    public void PlayVoiceCannonFull()  { PlayBlitzVoice(PickRandom(voiceCannonFullClips)); }
+    public void PlayVoiceCadenceUp()   { PlayBlitzVoice(PickRandom(voiceCadenceUpClips)); }
+    public void PlayVoiceCadenceFull() { PlayBlitzVoice(PickRandom(voiceCadenceFullClips)); }
+    public void PlayVoiceShieldOn()    { PlayBlitzVoice(PickRandom(voiceShieldOnClips)); }
+    public void PlayVoiceShieldLost()  { PlayBlitzVoice(PickRandom(voiceShieldLostClips)); }
 
     void PlayBlitzVoice(AudioClip clip)
     {
