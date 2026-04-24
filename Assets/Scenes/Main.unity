@@ -155,14 +155,14 @@ MonoBehaviour:
   halfTubeOnly: 1
   useSplineTrack: 0
   blitzDebugMaxPower: 0
-  depthHueShiftRef: {fileID: 4800000, guid: 26ee0fcdd804f4978ab6d317fe988e75, type: 3}
+  postProcessRef: {fileID: 4800000, guid: 52cd556d4e4364b30a01ab7dbd0df0f5, type: 3}
   gateShaderRef: {fileID: 4800000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
-  blackHoleWarpRef: {fileID: 4800000, guid: 9b20835293459464eb02f234fd3e3457, type: 3}
   obstacleShadowShaderRef: {fileID: 4800000, guid: 5851542be9b704ffcb17461eaca85cca, type: 3}
   ballShaderRef: {fileID: 4800000, guid: db9e510bb4f1a4fcb9c88f1d5da5d368, type: 3}
   trackGridShaderRef: {fileID: 4800000, guid: 68dd14f0d7f2b48949114a0d81606bd7, type: 3}
   railShaderRef: {fileID: 4800000, guid: fae0febebf4044dccacbe667667c6311, type: 3}
   trailGlowShaderRef: {fileID: 4800000, guid: 362124fdcbf95483485885fbe229664e, type: 3}
+  shieldShaderRef: {fileID: 4800000, guid: ea428934f34f74e13b9fdc2493991261, type: 3}
 --- !u!4 &875362060
 Transform:
   m_ObjectHideFlags: 0

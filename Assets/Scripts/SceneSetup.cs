@@ -29,6 +29,7 @@ public class SceneSetup : MonoBehaviour
     public Shader trackGridShaderRef;
     public Shader railShaderRef;
     public Shader trailGlowShaderRef;
+    public Shader shieldShaderRef;
 
     void Awake()
     {
@@ -381,7 +382,7 @@ public class SceneSetup : MonoBehaviour
         blitzOrbShieldMaterial.renderQueue = 3000;
 
         // Blitz shield visual — Fresnel rim + drifting plasma patches around ball when shield is active
-        Shader shieldShader = Shader.Find("Loopfall/Shield");
+        Shader shieldShader = shieldShaderRef != null ? shieldShaderRef : Shader.Find("Loopfall/Shield");
         blitzShieldVisualMaterial = new Material(shieldShader);
         blitzShieldVisualMaterial.SetColor("_Color", new Color(0.2f, 1.0f, 0.4f));
         blitzShieldVisualMaterial.SetFloat("_Intensity", 5.0f);

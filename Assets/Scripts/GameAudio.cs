@@ -91,7 +91,7 @@ public class GameAudio : MonoBehaviour
 
     // ── BLITZ SFX ────────────────────────────────────────────
     private AudioClip[] beamFireClips;
-    private AudioClip beamFireHotClip;
+    private AudioClip[] beamFireHotClips;
     private AudioClip blitzDeathClip;
     private AudioClip boxHitClip;
     private AudioClip buttonDestroyedClip;
@@ -222,7 +222,7 @@ public class GameAudio : MonoBehaviour
     void LoadBlitzSfx()
     {
         beamFireClips = LoadVariants("Audio/Blitz/sfx_beam_fire1", "Audio/Blitz/sfx_beam_fire2", "Audio/Blitz/sfx_beam_fire3");
-        beamFireHotClip      = Resources.Load<AudioClip>("Audio/Blitz/sfx_beam_fire_hot");
+        beamFireHotClips     = LoadNumberedClips("Audio/Blitz/sfx_beam_fire_hot_", 10);
         blitzDeathClip       = Resources.Load<AudioClip>("Audio/Blitz/sfx_blitz_death");
         boxHitClip           = Resources.Load<AudioClip>("Audio/Blitz/sfx_box_hit");
         buttonDestroyedClip  = Resources.Load<AudioClip>("Audio/Blitz/sfx_button_destroyed");
@@ -580,9 +580,9 @@ public class GameAudio : MonoBehaviour
 
     public void PlayBeamFire(int gunLevel)
     {
-        // L2 swaps to the hot variant; L0/L1 rotate through beam_fire1/2/3.
-        AudioClip clip = (gunLevel >= 2 && beamFireHotClip != null)
-            ? beamFireHotClip
+        // L2 rotates through hot variants; L0/L1 rotate through beam_fire1/2/3.
+        AudioClip clip = (gunLevel >= 2 && beamFireHotClips.Length > 0)
+            ? PickRandom(beamFireHotClips)
             : PickRandom(beamFireClips);
         if (clip != null) sfxSource.PlayOneShot(clip, 0.55f);
     }

@@ -21,13 +21,23 @@ public class ICloudKVStore : MonoBehaviour
     // to local-only instead of crashing SceneSetup and leaving the game with no UI.
     private static bool sPluginHealthy = true;
 
+#if (UNITY_IOS || UNITY_TVOS) && !UNITY_EDITOR
+    // iOS/tvOS: plugin is statically linked into the main binary.
+    private const string DLL = "__Internal";
+#elif UNITY_STANDALONE_OSX && !UNITY_EDITOR
+    // macOS: plugin ships as Loopfall.app/Contents/PlugIns/iCloudKV.bundle.
+    // DllImport("__Internal") only resolves statically-linked symbols, so it silently
+    // fails with DllNotFoundException on Mac — use the bundle's executable name instead.
+    private const string DLL = "iCloudKV";
+#endif
+
 #if (UNITY_IOS || UNITY_TVOS || UNITY_STANDALONE_OSX) && !UNITY_EDITOR
-    [DllImport("__Internal")] private static extern void _iCloudKV_Init(string callbackObject);
-    [DllImport("__Internal")] private static extern void _iCloudKV_SetString(string key, string value);
-    [DllImport("__Internal")] private static extern IntPtr _iCloudKV_GetString(string key);
-    [DllImport("__Internal")] private static extern void _iCloudKV_SetLong(string key, long value);
-    [DllImport("__Internal")] private static extern long _iCloudKV_GetLong(string key);
-    [DllImport("__Internal")] private static extern void _iCloudKV_Synchronize();
+    [DllImport(DLL)] private static extern void _iCloudKV_Init(string callbackObject);
+    [DllImport(DLL)] private static extern void _iCloudKV_SetString(string key, string value);
+    [DllImport(DLL)] private static extern IntPtr _iCloudKV_GetString(string key);
+    [DllImport(DLL)] private static extern void _iCloudKV_SetLong(string key, long value);
+    [DllImport(DLL)] private static extern long _iCloudKV_GetLong(string key);
+    [DllImport(DLL)] private static extern void _iCloudKV_Synchronize();
 #endif
 
     void Awake()
