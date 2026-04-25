@@ -524,6 +524,21 @@ public class RewindSystem : MonoBehaviour
             // Start fading the previous segment's taper instead of snapping it off
             if (segments.Count > 0)
             {
+                // Flatten any in-progress taper fade before reassigning — in Blitz
+                // the ball can cross 30° boundaries faster than TAPER_FADE_DURATION,
+                // leaving the abandoned segment with a partial widthCurve/gradient
+                // that renders as a tapered ghost ribbon on the far side of the torus.
+                if (fadingTaper != null)
+                {
+                    fadingTaper.widthCurve = AnimationCurve.Constant(0f, 1f, TRAIL_WIDTH);
+                    Gradient flat = new Gradient();
+                    flat.SetKeys(
+                        new GradientColorKey[] { new GradientColorKey(Color.white, 0f) },
+                        new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f) }
+                    );
+                    fadingTaper.colorGradient = flat;
+                }
+
                 TrailSegment prev = segments[segments.Count - 1];
                 fadingTaper = prev.renderer;
                 fadingTaperTimer = 0f;

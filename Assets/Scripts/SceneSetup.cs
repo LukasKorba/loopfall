@@ -20,6 +20,9 @@ public class SceneSetup : MonoBehaviour
     // DEBUG: start Blitz runs at max gun + max cadency (shield excluded) for
     // stress-testing late-game pacing. Applied at Phase 3 of the start sequence.
     public bool blitzDebugMaxPower = false;
+    // DEBUG: actually play the splash in the editor. Off by default so iterating on
+    // gameplay doesn't eat 4s per play; flip on when tuning the splash visuals.
+    public bool debugPlaySplashInEditor = false;
 
     // Direct references — ensures shaders are included in builds
     public Shader postProcessRef; // Merged BlackHoleWarp + DepthHueShift; was two separate shaders
@@ -767,6 +770,7 @@ public class SceneSetup : MonoBehaviour
         GameObject guiObj = new GameObject("ScoreUI");
         ScoreSync syncer = guiObj.AddComponent<ScoreSync>();
         syncer.source = textMesh;
+        syncer.debugPlaySplashInEditor = debugPlaySplashInEditor;
     }
 
     void CreateBackground()

@@ -234,6 +234,10 @@ public class BlitzBeam : MonoBehaviour
                 mGlowing[i] = false;
             }
             mFireTimer = 0f;
+            // Reset interval to default so the next run doesn't inherit the last run's
+            // faster cadence for the first 1-2 fires before Torus.UpdateBlitzFireRate
+            // recomputes it from the freshly-reset cadency level.
+            mFireInterval = DEFAULT_FIRE_INTERVAL;
         }
     }
 

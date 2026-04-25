@@ -1086,15 +1086,25 @@ public partial class ScoreSync
             SetGlyphAlpha(goBackIcon, 0f);
         }
 
-        // Tap to play — heartbeat flash
-        if (t > 1.8f)
+        // Tap to play — gated on CanRestart() so the prompt only appears when retry
+        // actually works. In Pure Hell the rewind+trail-dismiss+obstacle-swap cinematic
+        // can run well past 1.8s, and the old fixed gate made the prompt lie about it.
+        // Pop in with scale + fade so the player notices "retry unlocked" instead of
+        // having to test-tap to find out.
+        if (CanRestart())
         {
+            if (goTapBecameAvailableAt < 0f) goTapBecameAvailableAt = t;
+            float entrance = Mathf.Clamp01((t - goTapBecameAvailableAt) / 0.35f);
+            float eased = EaseOutBack(entrance);
             float pulse = HeartbeatPulse(Time.time);
-            SetAlpha(goTapText, pulse);
+            SetAlpha(goTapText, eased * pulse);
+            float scale = Mathf.Lerp(0.8f, 1.0f, eased);
+            goTapText.rectTransform.localScale = new Vector3(scale, scale, 1f);
         }
         else
         {
             SetAlpha(goTapText, 0f);
+            goTapText.rectTransform.localScale = new Vector3(0.8f, 0.8f, 1f);
         }
 
         // Golden glitter — loops while on game over screen

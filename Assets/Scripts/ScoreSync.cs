@@ -24,11 +24,7 @@ public partial class ScoreSync : MonoBehaviour
 
     // ── STATE ────────────────────────────────────────────────
     private enum State { Splash, Title, Tutorial, Playing, Rewinding, GameOver }
-#if UNITY_EDITOR
-    private State state = State.Title;
-#else
     private State state = State.Splash;
-#endif
     private float stateTimer = 0f;
     private State prevState = State.Title;
     private string lastScoreText = "0";
@@ -41,6 +37,9 @@ public partial class ScoreSync : MonoBehaviour
     // Toggle in the Inspector to force-play the tutorial on the next run (clears
     // HasSeenTutorial + HasPlayed at Start). Handy for design review without a rebuild.
     [SerializeField] private bool debugForceTutorial = false;
+    // Set by SceneSetup from its Inspector flag (ScoreSync is created at runtime, so its
+    // own SerializeFields never surface in the Inspector). See SceneSetup.debugPlaySplashInEditor.
+    [System.NonSerialized] public bool debugPlaySplashInEditor = false;
     private bool isPaused = false;
     // Set by OnModesTap so the state machine shows the title instead of skipping to Playing.
     private bool forceShowTitle = false;
@@ -212,6 +211,7 @@ public partial class ScoreSync : MonoBehaviour
     private TMP_Text goScoreYellowText;
     private int goLastDisplayScore = -1; // Track count-up ticks for SFX
     private bool goNewBestSfxPlayed = false;
+    private float goTapBecameAvailableAt = -1f; // stateTimer when CanRestart first turned true
 
     // ── NEW BEST GLITTER ─────────────────────────────────────
     private const int GLITTER_COUNT = 120;
@@ -293,6 +293,7 @@ public partial class ScoreSync : MonoBehaviour
     {
 #if UNITY_EDITOR
         PlayerPrefs.DeleteKey("HasPlayed");
+        if (!debugPlaySplashInEditor) state = State.Title;
 #endif
         if (debugForceTutorial)
         {
@@ -595,6 +596,7 @@ public partial class ScoreSync : MonoBehaviour
         isTopFive = (goRank >= 2 && goRank <= 5);
         goLastDisplayScore = -1;
         goNewBestSfxPlayed = false;
+        goTapBecameAvailableAt = -1f;
     }
 
     string FormatModeScore(int score)
