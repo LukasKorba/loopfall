@@ -43,9 +43,6 @@ public class Sphere : MonoBehaviour
     // Rewind
     public RewindSystem mRewindSystem;
 
-    // Spline track (optional — null when using classic torus)
-    public SplineGameController mSplineController;
-
     // Blitz mode beam (optional — null when not in Blitz)
     public BlitzBeam mBlitzBeam;
     public Material mBlitzShieldMat;
@@ -388,9 +385,7 @@ public class Sphere : MonoBehaviour
     }
 
     /// <summary>
-    /// Get the forward vector for force calculation.
-    /// Torus mode: hardcoded ±X. Spline mode: spline tangent direction.
-    /// Sign: +1 = left tap, -1 = right tap.
+    /// Forward vector for tap force. Sign: +1 = left tap, -1 = right tap.
     /// </summary>
     Vector3 GetForwardVector(float sign)
     {
@@ -399,8 +394,6 @@ public class Sphere : MonoBehaviour
             if (sign > 0f) mTutorialLeftFired = true;
             else           mTutorialRightFired = true;
         }
-        if (mSplineController != null)
-            return mSplineController.GetBallForwardDirection() * sign;
         return new Vector3(sign, 0f, 0f);
     }
 
@@ -565,8 +558,7 @@ public class Sphere : MonoBehaviour
         if (!rewindHandled)
             mTorusScript.Reset();
 
-        if (mSplineController == null)
-            mTorusScript.SetPaused(false);
+        mTorusScript.SetPaused(false);
         mGameOver = false;
         mRigid.isKinematic = false;
         mRigid.linearDamping = mOriginalDrag;
@@ -574,19 +566,15 @@ public class Sphere : MonoBehaviour
         mRigid.linearVelocity = Vector3.zero;
         mRigid.angularVelocity = Vector3.zero;
 
-        // In spline mode, reset to spline start; otherwise torus start
-        if (mSplineController != null)
-            mSplineController.ResetBall();
-        else
-            transform.position = mBeginPosition;
+        transform.position = mBeginPosition;
         mPrevPosition = transform.position;
 
-        // In spline mode, SplineCameraFollow handles camera positioning
-        if (mSplineController == null)
-        {
-            mCamera.transform.position = mCameraStartPos;
-            mCamera.transform.rotation = mCameraStartRot;
-        }
+        // Kill the ghost trail so respawn doesn't draw a streak from death pos.
+        TrailRenderer trail = GetComponent<TrailRenderer>();
+        if (trail != null) trail.Clear();
+
+        mCamera.transform.position = mCameraStartPos;
+        mCamera.transform.rotation = mCameraStartRot;
 
         DeathEffect death2 = mCamera.GetComponent<DeathEffect>();
         if (death2 != null)
@@ -598,11 +586,6 @@ public class Sphere : MonoBehaviour
             swing2.mDiff = Vector3.zero;
             swing2.ResetSpring();
         }
-
-        SplineCameraFollow splineCam = mCamera.GetComponent<SplineCameraFollow>();
-        if (splineCam != null)
-            splineCam.ResetSpring();
-
     }
 
     void TriggerGameOver()
@@ -637,6 +620,21 @@ public class Sphere : MonoBehaviour
     public bool IsWaiting() { return mWaitingToStart; }
     public bool IsGameOver() { return mGameOver; }
 
+    /// Re-cache the begin/start positions from the current transforms. Call
+    /// when a runtime transition repositions the ball/camera so subsequent
+    /// reset paths use the new start frame instead of the stale values captured
+    /// in Start().
+    public void RecacheBeginPositions()
+    {
+        mBeginPosition = transform.position;
+        mPrevPosition = transform.position;
+        if (mCamera != null)
+        {
+            mCameraStartPos = mCamera.transform.position;
+            mCameraStartRot = mCamera.transform.rotation;
+        }
+    }
+
     /// <summary>Commit to the selected mode and kick off the three-phase startup
     /// sequence: title dismiss → obstacle spawn → torus rotate. Actual Reset and
     /// SetPaused fire later from TickStartSequence as each phase completes.</summary>
@@ -669,7 +667,7 @@ public class Sphere : MonoBehaviour
         {
             // Phase 2 — spawn obstacles for the committed mode. Torus still paused.
             // Spawn-in anim matches the post-death materialize (staggered _SpawnProgress 0→1).
-            mTorusScript.Reset(true);
+            mTorusScript.Reset();
             mTorusScript.BeginInitialSpawnAnim();
             mStartPhase = StartPhase.Spawning;
             mStartPhaseTimer = 0f;
@@ -681,8 +679,7 @@ public class Sphere : MonoBehaviour
             // real mode arms later when Sphere.ExitTutorial re-enters the spawn phase.
             bool tutorialEntry = GameConfig.IsTutorialActive;
 
-            if (mSplineController == null)
-                mTorusScript.SetPaused(false);
+            mTorusScript.SetPaused(false);
 
             if (!tutorialEntry)
             {

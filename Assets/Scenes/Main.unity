@@ -152,8 +152,6 @@ MonoBehaviour:
   torusMinorRadius: 1
   majorSegments: 64
   minorSegments: 16
-  halfTubeOnly: 1
-  useSplineTrack: 0
   blitzDebugMaxPower: 0
   postProcessRef: {fileID: 4800000, guid: 52cd556d4e4364b30a01ab7dbd0df0f5, type: 3}
   gateShaderRef: {fileID: 4800000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}

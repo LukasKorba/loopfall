@@ -356,12 +356,12 @@ public partial class ScoreSync
 
     void StartWithMode(GameModeType mode)
     {
-        // First-ever run: stash the chosen mode and route into tutorial instead. The
-        // flag stays active until both L and R have fired + the player taps "Ready?".
-        // IsTutorialActive is read by Torus (skip obstacle spawn, freeze rotation) and
-        // Sphere (turn wall/trailing hits into ball-resets instead of game-over).
         if (!GameConfig.HasSeenTutorial())
         {
+            // First-ever run: route into tutorial. The flag stays active until
+            // both L and R have fired + the player taps "Ready?". IsTutorialActive
+            // is read by Torus (skip obstacle spawn, freeze rotation) and Sphere
+            // (turn wall/trailing hits into ball-resets).
             GameConfig.IsTutorialActive = true;
             ResetTutorialState();
             if (mSphere != null) mSphere.ResetTutorialInputs();
@@ -423,17 +423,21 @@ public partial class ScoreSync
         rt.anchoredPosition = pos;
         rt.sizeDelta = size;
 
-        // Circular dark background
+        // Hit target only — the dock strip frames the button area, so there's no
+        // per-button circle anymore. Image stays for raycast + ColorTint hover tile.
         Image bg = btnObj.AddComponent<Image>();
-        if (circleSprite != null) bg.sprite = circleSprite;
-        bg.color = new Color(0.08f, 0.05f, 0.12f, 0f);
+        bg.color = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f);
 
-        // Press feedback
+        // Hover/press: cyan tile fades in, sits within the dock strip. Pressed is
+        // brighter than highlighted so taps register clearly on touch devices.
         Button btn = btnObj.AddComponent<Button>();
         ColorBlock cb = btn.colors;
-        cb.normalColor = Color.white;
-        cb.highlightedColor = new Color(1.2f, 1.2f, 1.3f, 1f);
-        cb.pressedColor = new Color(0.8f, 0.8f, 0.85f, 1f);
+        cb.normalColor      = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f);
+        cb.highlightedColor = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.15f);
+        cb.pressedColor     = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.25f);
+        cb.selectedColor    = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0.15f);
+        cb.disabledColor    = new Color(NEON_CYAN.r, NEON_CYAN.g, NEON_CYAN.b, 0f);
+        cb.colorMultiplier = 1f;
         cb.fadeDuration = 0.08f;
         btn.colors = cb;
         btn.transition = Selectable.Transition.ColorTint;

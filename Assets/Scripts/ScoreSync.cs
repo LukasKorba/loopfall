@@ -13,6 +13,8 @@ public partial class ScoreSync : MonoBehaviour
     static readonly Color NEON_CYAN = new Color(0.0f, 0.75f, 1.0f);
     static readonly Color NEON_MAGENTA = new Color(1.0f, 0.15f, 0.55f);
     static readonly Color NEON_GOLD = new Color(1.0f, 0.92f, 0.2f);
+    static readonly Color NEON_GREEN = new Color(0.25f, 1.0f, 0.55f);
+    static readonly Color NEON_ORANGE = new Color(1.0f, 0.55f, 0.1f);
     static readonly Color DEEP_PURPLE = new Color(0.08f, 0.03f, 0.14f);
     static readonly Color DIM_TEXT = new Color(0.55f, 0.58f, 0.65f);
 
@@ -623,6 +625,9 @@ public partial class ScoreSync : MonoBehaviour
     {
         if (state != State.GameOver || stateTimer < 1.0f) return false;
 
+        // Blitz doesn't use rewind — restart is gated only on the 1s state timer
+        // above. PureHell waits for the rewind animation to play out before
+        // allowing the tap-to-retry prompt.
         if (!GameConfig.IsBlitz())
         {
             if (mSphere != null && mSphere.mRewindSystem != null

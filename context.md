@@ -1,8 +1,8 @@
 # Loopfall — Project Context & Handoff Document
 
-**Last updated:** 2026-04-19
-**Last version tag:** v0.9.2 (refactor branch `refactor/scoresync-split` pending merge as v0.9.3)
-**Current branch:** `refactor/scoresync-split`
+**Last updated:** 2026-04-27
+**Last version tag:** v0.15.1
+**Current branch:** `main`
 **Unity version:** 6000.4.1f1 (Unity 6)
 
 > **Regenerate this doc after:** branch switch, tag bump, >5 new commits, or any architectural change. If you're reading this more than ~2 weeks after the "Last updated" date, spot-check Section 15 (Fact Table) before trusting specifics.
@@ -23,23 +23,20 @@
 
 ## 2. Game Modes
 
-### Pure Hell (original, complete)
+### Pure Hell — "Gates to Hell" (original, complete)
 Endless mode. Gate-count scoring. Full cinematic rewind on death (`RewindSystem.cs` records every frame, plays back with time manipulation + visual effects). The torus IS the challenge.
 
-### Time Warp (complete)
-Time-attack frenzy. Starts with 10s countdown. Green strips (+2s) and red strips (-1s) on the track surface. Speed accelerates over time. Score = elapsed time × 10. Uses `FrenzyTimer.cs`.
-
-### BLITZ (in active development)
+### BLITZ — "Path to Redemption" (in active development)
 Space Invaders on a torus. Ball auto-fires laser beams forward (+X direction). Swing = aim. Destroy targets for points or dodge electric gates. No rewind — pure arcade. This is where all active development is focused.
 
 ### Mode selection
-`Assets/Scripts/GameConfig.cs` — static `GameConfig.ActiveMode` enum (`PureHell | TimeWarp | Blitz`). Title screen writes it before loading a run; `SceneSetup.Awake()` reads it and branches system setup (obstacle spawner, HUD, music, etc.). **There is no scene switch** — everything runs inside `Main.unity`.
+`Assets/Scripts/GameConfig.cs` — static `GameConfig.ActiveMode` enum (`PureHell | Blitz`). Title screen writes it before loading a run; `SceneSetup.Awake()` reads it and branches system setup (obstacle spawner, HUD, music, etc.). **There is no scene switch** — everything runs inside `Main.unity`.
 
 ---
 
 ## 3. Architecture
 
-### Scripts (37 files under `Assets/Scripts/`)
+### Scripts (36 files under `Assets/Scripts/`)
 
 **Core gameplay:**
 - `Torus.cs` — Central hub. Track rotation, obstacle spawning, scoring, all BLITZ logic (spawning, collection, upgrades, difficulty phases). **957 lines.**
@@ -81,8 +78,6 @@ Space Invaders on a torus. Ball auto-fires laser beams forward (+X direction). S
 
 **Systems:**
 - `RewindSystem.cs` — Frame recording + cinematic rewind (Pure Hell only).
-- `FrenzyTimer.cs` — Time Warp countdown logic.
-- `TrackItem.cs` — Time Warp bonus/penalty strips.
 - `DebugPanel.cs` — Dev tools.
 
 **Platform abstraction (5 files):**
@@ -92,10 +87,7 @@ Space Invaders on a torus. Ball auto-fires laser beams forward (+X direction). S
 - `SteamService.cs` — `IPlatformService` implementation for Steam (depends on Steamworks under `#if !DISABLESTEAMWORKS`). Also persists swing stats.
 - `SteamManager.cs` — Steamworks.NET bootstrap (AppID init, callback pump). **Distinct from `SteamService`** — this file is the SDK lifecycle; `SteamService` is the game-facing leaderboard/achievement adapter.
 
-**Spline system (present on current `spline-track` branch, not wired into any released mode):**
-- `SplineTrack.cs`, `SplineGameController.cs`, `SplineCameraFollow.cs` — Infrastructure for future modes with non-torus geometry. Not used by BLITZ, Pure Hell, or Time Warp.
-
-### Shaders (11 project shaders under `Assets/Shaders/`; TextMeshPro shaders excluded)
+### Shaders (10 project shaders under `Assets/Shaders/`; TextMeshPro shaders excluded)
 
 | Shader | Purpose | Key detail |
 |--------|---------|------------|
@@ -103,7 +95,6 @@ Space Invaders on a torus. Ball auto-fires laser beams forward (+X direction). S
 | `TrailGlow.shader` | Beams, gate arcs, orbs, shield | Additive blend (SrcAlpha One), no depth write, Cull Off. `_Color` + `_Intensity`. |
 | `TrackGrid.shader` | Torus surface | Grid lines, traveling sparks, pulse rings. |
 | `Rail.shader` | Edge rails | Distance-based fading. |
-| `TrackItem.shader` | Time Warp pickups | Opaque unlit, Cull Off. |
 | `Ball.shader` | Player ball | Metallic + Fresnel rim glow. |
 | `DepthHueShift.shader` | Post-process | Hue shift + fog by depth. Luminance threshold preserves bright emissive pixels. |
 | `BlackHoleWarp.shader` | Post-process | Gravitational-lens distortion. |
@@ -245,9 +236,8 @@ These are firm — don't violate them:
 2. **Three-color contrast rule.** Track, gates, and trail must be three distinct hue families per theme. Same-hue = unreadable.
 3. **Never remove chromatic aberration.** CMYK channel separation on all text is the game's visual identity.
 4. **No tilt/accelerometer controls.** Tap-only. Fast impulses are the game's identity.
-5. **Pure Hell stays torus.** Spline track is for Time Warp or future modes only.
-6. **No Standard shader.** Custom shaders only for consistent cross-platform visuals.
-7. **Pickup vs obstacle visual language:** pickups use TrailGlow (additive, ethereal, semi-transparent). Obstacles use Gate shader (opaque, solid, lit). This separation is intentional and critical.
+5. **No Standard shader.** Custom shaders only for consistent cross-platform visuals.
+6. **Pickup vs obstacle visual language:** pickups use TrailGlow (additive, ethereal, semi-transparent). Obstacles use Gate shader (opaque, solid, lit). This separation is intentional and critical.
 
 > On conflict between this section and auto-memory, **this section wins.** It's curated per-commit; auto-memory can drift across sessions.
 
@@ -324,7 +314,6 @@ Three independent upgrade tracks powered by collectible orbs. `ORBS_PER_UPGRADE 
 - **Screen shake / juice** — hit feedback beyond haptics.
 
 ### Long-term
-- **Spline track mode** — infrastructure on current branch is the foundation. Could become a progression-based mode.
 - **Steam release** — `SteamService` + `SteamManager` scaffold the integration; needs Steamworks AppID, depot config, build settings.
 - **More game modes** — the mode architecture (`GameConfig`) supports arbitrary additions.
 - **Obstacle parametrization** — Octagon-level variety (70 types) for BLITZ.
@@ -385,7 +374,7 @@ Loopfall has **no save files** — all persistence is via Unity `PlayerPrefs` (p
 
 | Key(s) | Source file | Purpose |
 |---|---|---|
-| `TopScores`, `TopScores_TimeWarp`, `TopScores_Blitz` | `ScoreSync.cs` | Per-mode leaderboard (CSV of `score,timestamp` entries). Key chosen via `GameConfig.GetScoresKey()`. |
+| `TopScores`, `TopScores_Blitz` | `ScoreSync.cs` | Per-mode leaderboard (CSV of `score,timestamp` entries). Key chosen via `GameConfig.GetScoresKey()`. |
 | `PREF_THEME` | `ThemeData.cs` | Selected theme index (0–7) |
 | `PREF_MUSIC`, `PREF_SOUND` | `GameAudio.cs` | Mute toggles |
 | `PREF_FULLSCREEN`, `PREF_VSYNC`, `PREF_RES_W`, `PREF_RES_H` | `DisplaySettings.cs` | Window preferences (desktop / macOS) |
@@ -406,11 +395,10 @@ Re-run these if the doc feels stale:
 | Fact | Value | How to verify |
 |---|---|---|
 | Unity version | `6000.4.1f1` | `cat ProjectSettings/ProjectVersion.txt` |
-| Current branch | `spline-track` | `git branch --show-current` |
-| Last tag | `v0.6.0` | `git tag --sort=-creatordate \| head -1` |
-| Commits since last tag | 4 | `git log v0.6.0..HEAD --oneline \| wc -l` |
-| Scripts | 37 | `find Assets/Scripts -name '*.cs' \| wc -l` |
-| Project shaders | 11 | `find Assets/Shaders -name '*.shader' \| wc -l` |
+| Current branch | `main` | `git branch --show-current` |
+| Last tag | `v0.15.1` | `git tag --sort=-creatordate \| head -1` |
+| Scripts | 36 | `find Assets/Scripts -name '*.cs' \| wc -l` |
+| Project shaders | 10 | `find Assets/Shaders -name '*.shader' \| wc -l` |
 | `Torus.cs` lines | 957 | `wc -l Assets/Scripts/Torus.cs` |
 | `ScoreSync*.cs` lines (7 files) | 4461 | `wc -l Assets/Scripts/ScoreSync*.cs` |
 | Modified working tree | varies | `git status --short \| wc -l` |

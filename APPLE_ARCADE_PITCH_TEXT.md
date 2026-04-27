@@ -35,7 +35,6 @@ LOOPFALL has **no in-app purchases, no ads, no tracking, no third-party analytic
 
 LOOPFALL is architected as a platform for ongoing content:
 
-- **Time Warp** — time-attack mode with bonus/penalty zones along a spline track (in development)
 - Cosmetic skins — balls, trails, color themes (code scaffolding in place)
 - Seasonal challenges — daily and weekly leaderboard events
 - Boss gates, branching paths, moving obstacles

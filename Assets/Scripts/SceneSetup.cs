@@ -13,10 +13,8 @@ public class SceneSetup : MonoBehaviour
     // MANUAL PARAM: Mesh resolution (fewer = more visible facets for flat shading)
     public int majorSegments = 64;
     public int minorSegments = 16;
-    // MANUAL PARAM: Only render bottom hemisphere of tube (the U-shape)
-    public bool halfTubeOnly = true;
-    // MANUAL PARAM: Use spline-extruded track instead of fixed torus
-    public bool useSplineTrack = false;
+
+    public static SceneSetup Instance { get; private set; }
     // DEBUG: start Blitz runs at max gun + max cadency (shield excluded) for
     // stress-testing late-game pacing. Applied at Phase 3 of the start sequence.
     public bool blitzDebugMaxPower = false;
@@ -36,6 +34,7 @@ public class SceneSetup : MonoBehaviour
 
     void Awake()
     {
+        Instance = this;
         GameConfig.BlitzDebugMaxPower = blitzDebugMaxPower;
 
         // Force highest graphics tier — Tier2 on iOS disables HDR, killing emission glow
@@ -57,7 +56,6 @@ public class SceneSetup : MonoBehaviour
         CreateRewindSystem();
         CreateAudio();
         CreateDisplaySettings();
-        if (useSplineTrack) CreateSplineTrack();
 #if UNITY_EDITOR
         CreateDebugPanel();
 #endif
@@ -429,7 +427,6 @@ public class SceneSetup : MonoBehaviour
         // Full-tube overlay — the "other" half of the tube, invisible by default.
         // Blitz mode drives _RevealProgress via MaterialPropertyBlock to fade it in
         // for spectacle sections. No collider, no collisions — pure visual.
-        if (halfTubeOnly)
         {
             GameObject overlay = new GameObject("TorusFullTubeOverlay");
             overlay.transform.parent = torusObj.transform;
@@ -839,67 +836,6 @@ public class SceneSetup : MonoBehaviour
     }
 #endif
 
-    void CreateSplineTrack()
-    {
-        GameObject ball = GameObject.Find("Ball");
-        Camera cam = Camera.main;
-
-        // Create spline controller
-        GameObject splineObj = new GameObject("SplineTrackController");
-        SplineGameController splineCtrl = splineObj.AddComponent<SplineGameController>();
-
-        // Wire score output to the same TextMesh that ScoreSync reads
-        TextMesh scoreLbl = GameObject.Find("ScoreTextMesh").GetComponent<TextMesh>();
-        splineCtrl.scoreLbl = scoreLbl;
-
-        splineCtrl.Initialize(
-            trackMaterial, trackMaterial,
-            ball.transform, cam,
-            obstacleFrontMaterial, obstacleTopMaterial, obstacleShadowMaterial);
-
-        // Wire to Sphere so input uses spline tangent for force direction
-        Sphere sphereScript = ball.GetComponent<Sphere>();
-        sphereScript.mSplineController = splineCtrl;
-
-        // Hide torus mesh and stop its rotation (keep script alive for Sphere.cs calls)
-        GameObject torusObj = GameObject.Find("TorusTrack");
-        if (torusObj != null)
-        {
-            // Hide torus track mesh
-            Transform trackChild = torusObj.transform.Find("Psychokinesis3");
-            if (trackChild != null) trackChild.gameObject.SetActive(false);
-
-            // Hide edge rails
-            foreach (Transform child in torusObj.transform)
-            {
-                if (child.name == "torusObstacle")
-                    child.gameObject.SetActive(false);
-            }
-
-            // Pause torus rotation — prevents obstacle generation
-            Torus torusScript = torusObj.GetComponent<Torus>();
-            torusScript.SetPaused(true);
-        }
-
-        // Disable CameraSwing — SplineCameraFollow handles camera in spline mode
-        CameraSwing swing = cam.GetComponent<CameraSwing>();
-        if (swing != null) swing.enabled = false;
-
-        // Re-initialize RewindSystem for spline mode
-        RewindSystem rewind = FindAnyObjectByType<RewindSystem>();
-        if (rewind != null)
-        {
-            rewind.InitializeSpline(
-                ball.transform,
-                ball.GetComponent<Rigidbody>(),
-                splineCtrl,
-                trailMaterial,
-                cam.transform,
-                cam.transform.position,
-                cam.transform.rotation);
-        }
-    }
-
     void CreateRewindSystem()
     {
         // Rewind exists for both modes — Sphere gates StartRecording() on mode choice.
@@ -927,9 +863,7 @@ public class SceneSetup : MonoBehaviour
 
     Mesh GenerateTorusMesh()
     {
-        float minStart = halfTubeOnly ? -Mathf.PI * 0.5f : 0;
-        float minRange = halfTubeOnly ? Mathf.PI : Mathf.PI * 2;
-        return GenerateTorusArcMesh(minStart, minRange);
+        return GenerateTorusArcMesh(-Mathf.PI * 0.5f, Mathf.PI);
     }
 
     Mesh GenerateTorusArcMesh(float minStart, float minRange)
